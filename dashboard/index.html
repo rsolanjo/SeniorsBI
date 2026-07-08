@@ -6,104 +6,60 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-:root{--brand:#2B4C9B;--accent:#E04622;--bg:#f0f4fa;--card:#ffffff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;--subtle:#94a3b8}
+:root{--brand:#2B4C9B;--accent:#E04622;--bg:#f0f4fa;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;--subtle:#94a3b8}
 body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-::-webkit-scrollbar{width:5px;height:5px}
-::-webkit-scrollbar-track{background:#f1f5f9}
-::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
-
-/* Cards */
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:#f1f5f9}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
 .card{background:var(--card);border-radius:.875rem;padding:1.25rem;border:1px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,.05)}
-.card-flat{background:var(--card);border-radius:.75rem;padding:1rem;border:1px solid var(--border)}
-
-/* KPI */
 .kpi-big{font-size:1.875rem;font-weight:800;color:var(--text);line-height:1.1;letter-spacing:-.02em}
-.kpi-lbl{font-size:.65rem;color:var(--subtle);text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin-top:.25rem}
-
-/* Tabs */
-.tab-btn{padding:.4rem .9rem;border-radius:.5rem;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .15s;color:var(--muted);border:none;background:transparent;white-space:nowrap}
+.kpi-lbl{font-size:.65rem;color:var(--subtle);text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin-top:.2rem}
+.tab-btn{padding:.4rem .85rem;border-radius:.5rem;font-size:.77rem;font-weight:600;cursor:pointer;transition:all .15s;color:var(--muted);border:none;background:transparent;white-space:nowrap}
 .tab-btn.active{background:var(--brand);color:#fff;box-shadow:0 2px 8px rgba(43,76,155,.25)}
 .tab-btn:hover:not(.active){background:#f1f5f9;color:var(--text)}
-
-/* Sub-tabs */
-.sub-tab{padding:.35rem .9rem;border-radius:.4rem;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .15s;color:var(--muted);border:none;background:transparent}
+.sub-tab{padding:.3rem .85rem;border-radius:.4rem;font-size:.77rem;font-weight:600;cursor:pointer;transition:all .15s;color:var(--muted);border:none;background:transparent}
 .sub-tab.active{background:#dbeafe;color:var(--brand)}
-
-/* Company filter buttons */
-.comp-btn{padding:.35rem .85rem;border-radius:.5rem;font-size:.72rem;font-weight:700;border:1px solid var(--border);background:white;color:var(--muted);cursor:pointer;transition:all .15s}
+.comp-btn{padding:.32rem .8rem;border-radius:.45rem;font-size:.72rem;font-weight:700;border:1px solid var(--border);background:white;color:var(--muted);cursor:pointer;transition:all .15s}
 .comp-btn.active{background:var(--brand);border-color:var(--brand);color:white;box-shadow:0 2px 6px rgba(43,76,155,.2)}
-
-/* Time filter pills */
-.time-btn{padding:.3rem .7rem;border-radius:.4rem;font-size:.72rem;font-weight:600;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.time-btn{padding:.28rem .65rem;border-radius:.4rem;font-size:.72rem;font-weight:600;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
 .time-btn.active{background:var(--brand);color:white}
-
-/* Badges */
-.badge{display:inline-flex;align-items:center;gap:.2rem;padding:.15rem .5rem;border-radius:9999px;font-size:.67rem;font-weight:700}
-.badge-g{background:#dcfce7;color:#166534}
-.badge-y{background:#fef9c3;color:#854d0e}
-.badge-r{background:#fee2e2;color:#991b1b}
-.badge-b{background:#dbeafe;color:#1e40af}
-.badge-o{background:#ffedd5;color:#9a3412}
-
-/* Bars */
-.bar{height:.4rem;border-radius:9999px;background:var(--brand);transition:width .6s ease}
-.bar-warn{background:#f59e0b}
-.bar-danger{background:#ef4444}
-
-/* Tags */
-.tag{display:inline-block;padding:.1rem .4rem;border-radius:.25rem;font-size:.65rem;background:#f1f5f9;border:1px solid var(--border);color:var(--muted);font-weight:500}
-
-/* Heatmap */
+.badge{display:inline-flex;align-items:center;gap:.2rem;padding:.13rem .45rem;border-radius:9999px;font-size:.67rem;font-weight:700}
+.badge-g{background:#dcfce7;color:#166534}.badge-y{background:#fef9c3;color:#854d0e}.badge-r{background:#fee2e2;color:#991b1b}
+.badge-b{background:#dbeafe;color:#1e40af}.badge-o{background:#ffedd5;color:#9a3412}.badge-p{background:#ede9fe;color:#6d28d9}
+.bar{height:.4rem;border-radius:9999px;background:var(--brand);transition:width .6s}.bar-warn{background:#f59e0b}.bar-danger{background:#ef4444}
+.tag{display:inline-block;padding:.1rem .35rem;border-radius:.25rem;font-size:.65rem;background:#f1f5f9;border:1px solid var(--border);color:var(--muted);font-weight:500}
+.tech-tag{display:inline-block;padding:.1rem .35rem;border-radius:.25rem;font-size:.63rem;background:#ede9fe;border:1px solid #ddd6fe;color:#6d28d9;font-weight:600;margin:.1rem .1rem 0 0}
 .hcell{width:2rem;height:2rem;border-radius:.3rem;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800}
-
-/* SPOF */
 .spof-badge{background:#fee2e2;color:#991b1b;padding:.1rem .35rem;border-radius:.25rem;font-size:.6rem;font-weight:800}
-
-/* Pulse */
 .pulse{width:.55rem;height:.55rem;border-radius:50%;background:#22c55e;animation:pulse 2s infinite;flex-shrink:0}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-
-/* Loader */
 #loading{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:99;flex-direction:column;gap:1rem}
 .spinner{width:2.25rem;height:2.25rem;border:3px solid #e2e8f0;border-top-color:var(--brand);border-radius:50%;animation:spin .75s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-
-/* Tables */
 table{width:100%;border-collapse:collapse}
-th{text-align:left;padding:.5rem .75rem;font-size:.67rem;color:var(--subtle);border-bottom:2px solid var(--border);white-space:nowrap;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-td{padding:.55rem .75rem;font-size:.8rem;border-bottom:1px solid #f1f5f9;color:var(--text)}
-tr:last-child td{border:none}
-tr:hover td{background:#fafbfd}
-
-/* Modal overlay */
+th{text-align:left;padding:.45rem .7rem;font-size:.65rem;color:var(--subtle);border-bottom:2px solid var(--border);white-space:nowrap;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+td{padding:.5rem .7rem;font-size:.8rem;border-bottom:1px solid #f1f5f9;color:var(--text);vertical-align:middle}
+tr:last-child td{border:none}tr:hover td{background:#fafbfd}
 .modal-ov{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(3px);z-index:60;display:flex;align-items:center;justify-content:center;padding:1rem}
-.modal-box{background:white;border-radius:1rem;max-width:30rem;width:100%;padding:1.5rem;position:relative;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,.18)}
-
-/* Form elements */
+.modal-box{background:white;border-radius:1rem;max-width:32rem;width:100%;padding:1.5rem;position:relative;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,.18)}
 .fi{background:#f8fafc;border:1px solid var(--border);border-radius:.5rem;padding:.55rem .75rem;font-size:.85rem;color:var(--text);width:100%;outline:none;font-family:inherit}
 .fi:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(43,76,155,.08)}
-.fl{display:block;font-size:.67rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem}
-
-/* Toast */
-#toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:70;background:white;border:1px solid var(--border);border-radius:.875rem;padding:.75rem 1.25rem;box-shadow:0 12px 40px rgba(0,0,0,.12);display:flex;align-items:center;gap:.75rem;transform:translateY(120px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);pointer-events:none}
+textarea.fi{resize:vertical;min-height:3rem}
+.fl{display:block;font-size:.67rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.28rem}
+#toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:70;background:white;border:1px solid var(--border);border-radius:.875rem;padding:.7rem 1.2rem;box-shadow:0 12px 40px rgba(0,0,0,.12);display:flex;align-items:center;gap:.7rem;transform:translateY(120px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);pointer-events:none}
 #toast.show{transform:translateY(0);opacity:1}
-
-/* Logo cards */
 .logo-pill{background:white;border:1px solid var(--border);border-radius:.625rem;padding:.3rem .55rem;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;align-items:center;justify-content:center}
-
-/* Action buttons in tables */
-.act-btn{background:none;border:none;cursor:pointer;font-size:.72rem;font-weight:600;padding:.2rem .45rem;border-radius:.3rem;transition:all .12s}
-.act-edit{color:var(--brand)} .act-edit:hover{background:#dbeafe}
-.act-arch{color:var(--subtle)} .act-arch:hover{background:#f1f5f9}
-.act-del{color:#ef4444} .act-del:hover{background:#fee2e2}
+.act-btn{background:none;border:none;cursor:pointer;font-size:.72rem;font-weight:600;padding:.2rem .4rem;border-radius:.3rem;transition:all .12s}
+.act-edit{color:var(--brand)}.act-edit:hover{background:#dbeafe}
+.act-arch{color:var(--subtle)}.act-arch:hover{background:#f1f5f9}
+.act-del{color:#ef4444}.act-del:hover{background:#fee2e2}
+.alrt-c{border-radius:.5rem;padding:.6rem .875rem;display:flex;align-items:flex-start;gap:.65rem;border-left:3px solid}
+input[type=radio],input[type=checkbox]{accent-color:var(--brand)}
+.vh-display{font-size:.72rem;color:#166534;font-weight:700;margin-top:.3rem}
 </style>
 </head>
 <body>
 
-<!-- LOADING -->
 <div id="loading">
   <svg width="52" height="40" viewBox="0 0 80 56" xmlns="http://www.w3.org/2000/svg">
     <ellipse cx="40" cy="28" rx="38" ry="24" fill="#2B4C9B" stroke="#E04622" stroke-width="3"/>
@@ -114,63 +70,31 @@ tr:hover td{background:#fafbfd}
   <p style="color:#64748b;font-size:.85rem;margin-top:.25rem">Conectando ao SeniorsBI…</p>
 </div>
 
-<!-- APP -->
 <div id="app" class="hidden min-h-screen flex flex-col">
 
-<!-- ═══ HEADER ═══════════════════════════════════════════════════════════════ -->
+<!-- HEADER -->
 <header style="background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:40;" class="px-5 py-2.5">
   <div class="flex items-center justify-between gap-4">
-
-    <!-- Logos + título -->
     <div class="flex items-center gap-3">
-      <!-- 4Seniors -->
-      <div class="logo-pill">
-        <svg width="52" height="30" viewBox="0 0 80 48" xmlns="http://www.w3.org/2000/svg">
-          <ellipse cx="40" cy="24" rx="38" ry="21" fill="#2B4C9B" stroke="#E04622" stroke-width="3"/>
-          <text x="40" y="24" text-anchor="middle" font-size="18" font-weight="900" fill="#fff" font-family="Arial Black,Arial" dominant-baseline="middle">4</text>
-          <text x="40" y="38" text-anchor="middle" font-size="8.5" font-weight="700" fill="#93c5fd" font-family="Arial">SENIORS</text>
-        </svg>
-      </div>
-      <!-- S4SYS -->
-      <div class="logo-pill">
-        <svg width="56" height="30" viewBox="0 0 90 48" xmlns="http://www.w3.org/2000/svg">
-          <rect width="90" height="48" rx="7" fill="#1a3a6b"/>
-          <text x="45" y="31" text-anchor="middle" font-size="17" font-weight="900" fill="#fff" font-family="Arial Black,Arial" letter-spacing="1">S4SYS</text>
-        </svg>
-      </div>
-      <!-- Porto Virtual -->
-      <div class="logo-pill">
-        <svg width="76" height="30" viewBox="0 0 120 48" xmlns="http://www.w3.org/2000/svg">
-          <rect width="120" height="48" rx="7" fill="#0f4c81"/>
-          <text x="60" y="19" text-anchor="middle" font-size="10" font-weight="700" fill="#7dd3fc" font-family="Arial" letter-spacing=".5">PORTO</text>
-          <text x="60" y="35" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" font-family="Arial" letter-spacing=".5">VIRTUAL</text>
-        </svg>
-      </div>
-
-      <!-- Divisor + título -->
+      <div class="logo-pill"><svg width="52" height="30" viewBox="0 0 80 48" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="24" rx="38" ry="21" fill="#2B4C9B" stroke="#E04622" stroke-width="3"/><text x="40" y="24" text-anchor="middle" font-size="18" font-weight="900" fill="#fff" font-family="Arial Black,Arial" dominant-baseline="middle">4</text><text x="40" y="38" text-anchor="middle" font-size="8.5" font-weight="700" fill="#93c5fd" font-family="Arial">SENIORS</text></svg></div>
+      <div class="logo-pill"><svg width="56" height="30" viewBox="0 0 90 48" xmlns="http://www.w3.org/2000/svg"><rect width="90" height="48" rx="7" fill="#1a3a6b"/><text x="45" y="31" text-anchor="middle" font-size="17" font-weight="900" fill="#fff" font-family="Arial Black,Arial" letter-spacing="1">S4SYS</text></svg></div>
+      <div class="logo-pill"><svg width="76" height="30" viewBox="0 0 120 48" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="48" rx="7" fill="#0f4c81"/><text x="60" y="19" text-anchor="middle" font-size="10" font-weight="700" fill="#7dd3fc" font-family="Arial" letter-spacing=".5">PORTO</text><text x="60" y="35" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" font-family="Arial" letter-spacing=".5">VIRTUAL</text></svg></div>
       <div style="border-left:2px solid #e2e8f0;padding-left:.875rem;">
         <div style="font-size:1.05rem;font-weight:900;color:#1e293b;letter-spacing:-.03em;line-height:1.1">SeniorsBI</div>
         <div style="font-size:.62rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.09em;margin-top:.1rem">Painel de Operações</div>
       </div>
     </div>
-
-    <!-- Direita: status + última atualização -->
     <div class="flex items-center gap-4">
-      <div class="flex items-center gap-2">
-        <div class="pulse" id="liveDot"></div>
-        <span style="font-size:.72rem;color:#64748b;font-weight:500;" id="liveStatus">Conectando…</span>
-      </div>
+      <div class="flex items-center gap-2"><div class="pulse" id="liveDot"></div><span style="font-size:.72rem;color:#64748b;font-weight:500;" id="liveStatus">Conectando…</span></div>
       <span style="font-size:.67rem;color:#94a3b8;" id="lastUpdate"></span>
     </div>
   </div>
 </header>
 
-<!-- ═══ FILTRO ROTATIVO ═══════════════════════════════════════════════════════ -->
-<div style="background:white;border-bottom:1px solid #e2e8f0;padding:.55rem 1.25rem;">
-  <div class="flex items-center gap-4 flex-wrap">
-
-    <!-- Status rotativo -->
-    <div class="flex items-center gap-2.5" style="min-width:14rem;">
+<!-- ROTATING FILTER + TIME -->
+<div style="background:white;border-bottom:1px solid #e2e8f0;padding:.5rem 1.25rem;">
+  <div class="flex items-center gap-3 flex-wrap">
+    <div class="flex items-center gap-2.5">
       <div id="rotDot" style="width:.55rem;height:.55rem;border-radius:50%;background:#2B4C9B;animation:pulse 2s infinite;flex-shrink:0;"></div>
       <div>
         <div style="font-size:.6rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.09em;">Filtro Rotativo</div>
@@ -180,45 +104,34 @@ tr:hover td{background:#fafbfd}
         </div>
       </div>
     </div>
-
-    <!-- Barra de progresso -->
-    <div style="flex:1;max-width:16rem;height:.3rem;background:#f1f5f9;border-radius:9999px;overflow:hidden;border:1px solid #e2e8f0;">
+    <div style="flex:1;max-width:14rem;height:.3rem;background:#f1f5f9;border-radius:9999px;overflow:hidden;border:1px solid #e2e8f0;">
       <div id="rotProgress" style="height:100%;background:#2B4C9B;width:100%;transition:width 1s linear;"></div>
     </div>
-
-    <!-- Botões empresa -->
     <div class="flex items-center gap-1.5">
       <button class="comp-btn active" onclick="selectCompany('all')" id="cbAll">Todos</button>
       <button class="comp-btn" onclick="selectCompany('4Seniors')" id="cb4S">4Seniors</button>
       <button class="comp-btn" onclick="selectCompany('S4SYS')" id="cbS4">S4SYS</button>
       <button class="comp-btn" onclick="selectCompany('Porto Virtual')" id="cbPV">Porto Virtual</button>
-      <button onclick="toggleRot()" id="btnRot" style="padding:.3rem .5rem;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.4rem;cursor:pointer;color:#64748b;display:flex;align-items:center;" title="Pausar/Retomar">
-        <i data-lucide="pause" style="width:.875rem;height:.875rem;" id="rotIcon"></i>
+      <button onclick="toggleRot()" id="btnRot" style="padding:.28rem .5rem;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.4rem;cursor:pointer;color:#64748b;display:flex;align-items:center;" title="Pausar/Retomar">
+        <i data-lucide="pause" style="width:.85rem;height:.85rem;" id="rotIcon"></i>
       </button>
     </div>
-
-    <!-- Separador -->
-    <div style="width:1px;height:1.5rem;background:#e2e8f0;flex-shrink:0;"></div>
-
-    <!-- Filtro temporal -->
-    <div style="display:flex;align-items:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.5rem;padding:.15rem;">
+    <div style="width:1px;height:1.4rem;background:#e2e8f0;flex-shrink:0;"></div>
+    <div style="display:flex;align-items:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.5rem;padding:.12rem;">
       <button class="time-btn active" onclick="setTime('atual')" id="t-atual">Atual</button>
       <button class="time-btn" onclick="setTime('7d')" id="t-7d">Últ. semana</button>
       <button class="time-btn" onclick="setTime('30d')" id="t-30d">30 dias</button>
       <button class="time-btn" onclick="setTime('12m')" id="t-12m">12 meses</button>
       <button class="time-btn" onclick="setTime('picker')" id="t-picker">Mês/Ano</button>
     </div>
-
-    <!-- Month picker (visível só em 'picker') -->
-    <select id="selMes" class="hidden fi" style="width:auto;padding:.3rem .65rem;font-size:.78rem;">
-      <option value="">Carregando…</option>
-    </select>
+    <select id="selMes" class="hidden fi" style="width:auto;padding:.28rem .65rem;font-size:.78rem;"></select>
   </div>
 </div>
 
-<!-- ═══ TABS ══════════════════════════════════════════════════════════════════ -->
+<!-- TABS -->
 <nav style="background:white;border-bottom:1px solid #e2e8f0;" class="flex gap-0.5 px-4 py-1.5 overflow-x-auto">
   <button class="tab-btn active" onclick="setTab('exec')">Executivo</button>
+  <button class="tab-btn" onclick="setTab('alertas')" style="color:#E04622;font-weight:700;">Alertas &amp; Ops</button>
   <button class="tab-btn" onclick="setTab('prod')">Produtividade</button>
   <button class="tab-btn" onclick="setTab('custo')">Custos &amp; Margem</button>
   <button class="tab-btn" onclick="setTab('cli')">Clientes</button>
@@ -226,53 +139,65 @@ tr:hover td{background:#fafbfd}
   <button class="tab-btn" onclick="setTab('eq')">Equipe</button>
   <button class="tab-btn" onclick="setTab('trend')">Tendência</button>
   <button class="tab-btn" onclick="setTab('ingest')">Ingestão</button>
-  <button class="tab-btn" onclick="setTab('gestao')" style="border-left:1px solid #e2e8f0;margin-left:.25rem;padding-left:1.1rem;">
-    <i data-lucide="settings" style="width:.75rem;height:.75rem;display:inline;margin-right:.25rem;"></i>Gestão
-  </button>
+  <button class="tab-btn" onclick="setTab('gestao')" style="border-left:1px solid #e2e8f0;margin-left:.25rem;padding-left:1rem;">⚙ Gestão</button>
 </nav>
 
-<!-- ═══ MAIN ══════════════════════════════════════════════════════════════════ -->
 <main class="flex-1 p-5 overflow-auto" id="main"></main>
+</div>
 
-</div><!-- /app -->
-
-<!-- ═══ MODAL: Contrato ═══════════════════════════════════════════════════════ -->
+<!-- MODAL: Contrato (expandido) -->
 <div id="modalContract" class="modal-ov hidden">
-  <div class="modal-box">
+  <div class="modal-box" style="max-width:36rem;">
     <button onclick="closeModal('modalContract')" style="position:absolute;top:1rem;right:1rem;background:none;border:none;cursor:pointer;color:#94a3b8;"><i data-lucide="x" style="width:1.1rem;height:1.1rem;"></i></button>
-    <h3 id="mCTitle" style="font-size:.95rem;font-weight:800;color:#1e293b;margin-bottom:1rem;">Editar Contrato</h3>
-    <form onsubmit="saveContract(event)" class="space-y-4">
-      <input type="hidden" id="cOld">
-      <div><label class="fl">Cliente / Empresa</label><input type="text" id="cCliente" class="fi" required placeholder="Nome do cliente"></div>
+    <h3 id="mCTitle" style="font-size:.95rem;font-weight:800;color:#1e293b;margin-bottom:1rem;">Novo Contrato</h3>
+    <form onsubmit="saveContract(event)" class="space-y-3">
+      <input type="hidden" id="cId">
       <div class="grid grid-cols-2 gap-3">
-        <div><label class="fl">Franquia (h/mês)</label><input type="number" id="cFranquia" class="fi" min="0" required placeholder="0"></div>
+        <div><label class="fl">Empresa do Grupo</label>
+          <select id="cEmpresa" class="fi">
+            <option value="">— selecionar —</option>
+            <option value="4Seniors">4Seniors</option>
+            <option value="S4SYS">S4SYS</option>
+            <option value="Porto Virtual">Porto Virtual</option>
+          </select>
+        </div>
+        <div><label class="fl">Cliente</label><input type="text" id="cCliente" class="fi" required placeholder="Nome do cliente"></div>
+      </div>
+      <div><label class="fl">Nome / Identificador do Contrato</label><input type="text" id="cNome" class="fi" required placeholder="ex: Suporte N2/N3, Projetos Cloud…"></div>
+      <div><label class="fl">Resumo do Escopo</label><textarea id="cResumo" class="fi" rows="2" placeholder="Escopo, observações, SLA principal…"></textarea></div>
+      <div><label class="fl">Tecnologias</label>
+        <input type="text" id="cTecnologias" class="fi" placeholder="AWS, Azure, Linux, Active Directory…">
+        <div style="font-size:.65rem;color:#94a3b8;margin-top:.2rem;">Separe por vírgula</div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
         <div><label class="fl">Valor Mensal (R$)</label><input type="number" id="cValor" class="fi" min="0" step="0.01" required placeholder="0,00"></div>
+        <div><label class="fl">Franquia (h/mês)</label><input type="number" id="cFranquia" class="fi" min="0" required placeholder="0"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="fl">SLA Atendimento (h)</label><input type="number" id="cSlaAtend" class="fi" min="0" step=".5" placeholder="4" value="4"></div>
+        <div><label class="fl">SLA Resolução (h)</label><input type="number" id="cSlaResol" class="fi" min="0" step=".5" placeholder="24" value="24"></div>
       </div>
       <div><label class="fl">Status</label>
-        <select id="cStatus" class="fi">
-          <option value="ativo">Ativo</option>
-          <option value="pausado">Pausado</option>
-          <option value="arquivado">Arquivado</option>
-        </select>
+        <select id="cStatus" class="fi"><option value="ativo">Ativo</option><option value="pausado">Pausado</option><option value="arquivado">Arquivado</option></select>
       </div>
       <div style="display:flex;justify-content:flex-end;gap:.5rem;padding-top:.75rem;border-top:1px solid #f1f5f9;">
         <button type="button" onclick="closeModal('modalContract')" style="padding:.45rem 1rem;background:#f1f5f9;border:none;border-radius:.5rem;font-size:.78rem;font-weight:700;color:#64748b;cursor:pointer;">Cancelar</button>
-        <button type="submit" style="padding:.45rem 1.1rem;background:var(--brand);border:none;border-radius:.5rem;font-size:.78rem;font-weight:700;color:white;cursor:pointer;">Salvar</button>
+        <button type="submit" style="padding:.45rem 1.1rem;background:var(--brand);border:none;border-radius:.5rem;font-size:.78rem;font-weight:700;color:white;cursor:pointer;">Salvar Contrato</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- ═══ MODAL: Funcionário ════════════════════════════════════════════════════ -->
+<!-- MODAL: Funcionário (expandido) -->
 <div id="modalFunc" class="modal-ov hidden">
   <div class="modal-box">
     <button onclick="closeModal('modalFunc')" style="position:absolute;top:1rem;right:1rem;background:none;border:none;cursor:pointer;color:#94a3b8;"><i data-lucide="x" style="width:1.1rem;height:1.1rem;"></i></button>
     <h3 id="mFTitle" style="font-size:.95rem;font-weight:800;color:#1e293b;margin-bottom:.5rem;">Editar Funcionário</h3>
-    <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:.5rem;padding:.55rem .75rem;margin-bottom:1rem;font-size:.75rem;color:#854d0e;line-height:1.4;">
-      <strong>Atenção:</strong> Esta alteração não modifica registros históricos de horas. Novos valores valem apenas para cálculos futuros.
+    <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:.5rem;padding:.5rem .75rem;margin-bottom:.875rem;font-size:.75rem;color:#854d0e;line-height:1.4;">
+      <strong>Atenção:</strong> Edições não alteram registros históricos de horas. Novos valores aplicam-se apenas a cálculos futuros.
     </div>
-    <form onsubmit="saveFunc(event)" class="space-y-4">
-      <input type="hidden" id="fOld">
+    <form onsubmit="saveFunc(event)" class="space-y-3">
+      <input type="hidden" id="fId">
       <div><label class="fl">Nome</label><input type="text" id="fNome" class="fi" required></div>
       <div class="grid grid-cols-2 gap-3">
         <div><label class="fl">Nível</label>
@@ -283,7 +208,27 @@ tr:hover td{background:#fafbfd}
         </div>
         <div><label class="fl">Equipe</label><input type="text" id="fEquipe" class="fi" placeholder="ex: Suporte, Cloud…"></div>
       </div>
-      <div><label class="fl">Capacidade Mensal (h)</label><input type="number" id="fCap" class="fi" min="1" required placeholder="168"></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="fl">Salário CLT (R$/mês)</label>
+          <input type="number" id="fSalario" class="fi" min="0" placeholder="0" oninput="updateVH()">
+        </div>
+        <div><label class="fl">Capacidade (h/mês)</label>
+          <input type="number" id="fCap" class="fi" min="1" placeholder="168" value="168" oninput="updateVH()">
+        </div>
+      </div>
+      <div id="vhDisplay" class="vh-display"></div>
+      <div>
+        <label class="fl">Alocação de Clientes</label>
+        <div style="display:flex;gap:1rem;margin-bottom:.5rem;">
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.8rem;cursor:pointer;">
+            <input type="radio" name="fAloc" value="todos" id="fAlocTodos" checked onchange="toggleAlocList()"> Todos os clientes
+          </label>
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.8rem;cursor:pointer;">
+            <input type="radio" name="fAloc" value="especifico" id="fAlocEsp" onchange="toggleAlocList()"> Clientes específicos
+          </label>
+        </div>
+        <div id="fClientesList" class="hidden" style="max-height:9rem;overflow-y:auto;background:#f8fafc;border:1px solid var(--border);border-radius:.5rem;padding:.5rem .6rem;"></div>
+      </div>
       <div style="display:flex;justify-content:flex-end;gap:.5rem;padding-top:.75rem;border-top:1px solid #f1f5f9;">
         <button type="button" onclick="closeModal('modalFunc')" style="padding:.45rem 1rem;background:#f1f5f9;border:none;border-radius:.5rem;font-size:.78rem;font-weight:700;color:#64748b;cursor:pointer;">Cancelar</button>
         <button type="submit" style="padding:.45rem 1.1rem;background:var(--brand);border:none;border-radius:.5rem;font-size:.78rem;font-weight:700;color:white;cursor:pointer;">Salvar</button>
@@ -292,7 +237,30 @@ tr:hover td{background:#fafbfd}
   </div>
 </div>
 
-<!-- ═══ MODAL: Confirmar ══════════════════════════════════════════════════════ -->
+<!-- MODAL: Editar SLA -->
+<div id="modalSLA" class="modal-ov hidden">
+  <div class="modal-box" style="max-width:28rem;">
+    <button onclick="closeModal('modalSLA')" style="position:absolute;top:1rem;right:1rem;background:none;border:none;cursor:pointer;color:#94a3b8;"><i data-lucide="x" style="width:1.1rem;height:1.1rem;"></i></button>
+    <h3 id="mSLATitle" style="font-size:.95rem;font-weight:800;color:#1e293b;margin-bottom:1rem;">Editar SLA</h3>
+    <form onsubmit="saveSLA(event)" class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="fl">TMA (horas decimais)</label><input type="number" id="slaTMA" class="fi" min="0" step=".1" placeholder="ex: 1.5 = 1h30m"></div>
+        <div><label class="fl">TMR (horas decimais)</label><input type="number" id="slaTMR" class="fi" min="0" step=".1" placeholder="ex: 8.0"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="fl">Dentro do SLA (%)</label><input type="number" id="slaPct" class="fi" min="0" max="100" placeholder="95"></div>
+        <div><label class="fl">Chamados dentro do SLA</label><input type="number" id="slaCh" class="fi" min="0" placeholder="0"></div>
+      </div>
+      <div><label class="fl">Chamados fora do SLA</label><input type="number" id="slaFora" class="fi" min="0" placeholder="0"></div>
+      <div style="display:flex;justify-content:flex-end;gap:.5rem;padding-top:.75rem;border-top:1px solid #f1f5f9;">
+        <button type="button" onclick="closeModal('modalSLA')" style="padding:.45rem 1rem;background:#f1f5f9;border:none;border-radius:.5rem;font-size:.78rem;font-weight:700;color:#64748b;cursor:pointer;">Cancelar</button>
+        <button type="submit" style="padding:.45rem 1.1rem;background:var(--brand);border:none;border-radius:.5rem;font-size:.78rem;font-weight:700;color:white;cursor:pointer;">Salvar SLA</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Confirmar exclusão -->
 <div id="modalConfirm" class="modal-ov hidden">
   <div class="modal-box" style="max-width:24rem;">
     <h3 style="font-size:.95rem;font-weight:800;color:#1e293b;margin-bottom:.5rem;">Confirmar exclusão</h3>
@@ -304,141 +272,150 @@ tr:hover td{background:#fafbfd}
   </div>
 </div>
 
-<!-- ═══ TOAST ═════════════════════════════════════════════════════════════════ -->
-<div id="toast">
-  <span id="toastIcon" style="width:.55rem;height:.55rem;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
-  <span id="toastMsg" style="font-size:.8rem;font-weight:600;color:#1e293b;"></span>
-</div>
+<div id="toast"><span id="toastIcon" style="width:.55rem;height:.55rem;border-radius:50%;background:#22c55e;flex-shrink:0;"></span><span id="toastMsg" style="font-size:.8rem;font-weight:600;color:#1e293b;"></span></div>
 
 <script>
 const SUPABASE_URL = 'https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY = 'sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
 
-// ── State ───────────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
 let D = {}, MES = null, TAB = 'exec', MESES_LIST = []
 let COMPANY = 'all', TIME = 'atual', GESTAO_SUB = 'contratos'
 let ROT_PAUSED = false, rotTimer = null, rotSec = 30, rotIdx = 0
+let FUNCS = [], CONTRACTS = []
 const ROT_SEQ = ['all','4Seniors','S4SYS','Porto Virtual']
 const ROT_LABELS = {all:'Todas as Empresas','4Seniors':'4Seniors','S4SYS':'S4SYS','Porto Virtual':'Porto Virtual'}
-const TABS = ['exec','prod','custo','cli','sla','eq','trend','ingest','gestao']
-const custo = {N1:6000,N2:9000,N3:14000,'Gestão':20000,'LGPD':15000}
+const TABS = ['exec','alertas','prod','custo','cli','sla','eq','trend','ingest','gestao']
 
-// ── Utils ───────────────────────────────────────────────────────────────────
+// ── Utils ─────────────────────────────────────────────────────────────────────
+const uid = () => Math.random().toString(36).slice(2,9)
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 const minToHM = m => { m=+m||0; return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}` }
 const pct = (a,b) => b ? Math.round(a/b*100) : 0
 const fmt = n => n==null ? '—' : (+n).toLocaleString('pt-BR')
-const fmtR = n => n==null ? '—' : 'R$ '+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0})
+const fmtR = n => n==null ? '—' : 'R$ '+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0})
 const severity = {baixa:'badge-b',media:'badge-y',alta:'badge-o',critica:'badge-r'}
+const empresaBadge = e => e==='4Seniors'?'<span class="badge badge-b">4Seniors</span>':e==='S4SYS'?'<span class="badge badge-p">S4SYS</span>':e==='Porto Virtual'?'<span class="badge badge-g">Porto Virtual</span>':'<span style="color:#94a3b8">—</span>'
+const techTags = t => (t||[]).length ? t.map(x=>`<span class="tech-tag">${esc(x)}</span>`).join('') : '—'
 
+// Salary / cost helpers (localStorage → fallback to level defaults)
+const NIVEL_DEFAULTS = {N1:6000,N2:9000,N3:14000,'Gestão':20000,'LGPD':15000}
+function getFunc(nome) { return FUNCS.find(f=>f.nome===nome) || null }
+function getSalario(nome,nivel) { const f=getFunc(nome); return (f&&f.salario>0)?f.salario:(NIVEL_DEFAULTS[nivel]||8000) }
+function getCapH(nome) { const f=getFunc(nome); return (f&&f.cap_horas>0)?f.cap_horas:168 }
+function getVH(nome,nivel) { const s=getSalario(nome,nivel),c=getCapH(nome); return c>0?s/c:0 }
+function getAlocLabel(f) { if(!f||f.alocacao_tipo!=='especifico') return 'Todos'; const n=f.alocacao_clientes?.length||0; return n===0?'Todos':n===1?f.alocacao_clientes[0]:n+' clientes' }
+
+// Contract helpers
+function getClientContracts(nome) {
+  const lc = CONTRACTS.filter(c=>c.cliente===nome&&c.status!=='arquivado')
+  if (lc.length) return lc
+  const p = D.premissas?.find(x=>x.cliente===nome)
+  if (p) return [{id:'_p_'+nome,empresa:'',cliente:nome,nome:nome,resumo:'',tecnologias:[],valor_mensal:p.valor_mensal||0,franquia_horas:p.franquia_horas||0,sla_atend_h:4,sla_resol_h:24,status:'ativo'}]
+  return []
+}
+function cliValor(nome) { return getClientContracts(nome).reduce((s,c)=>s+(c.valor_mensal||0),0) }
+function cliFranquia(nome) { return getClientContracts(nome).reduce((s,c)=>s+(c.franquia_horas||0),0) }
 function matchesCompany(nome) {
-  if (COMPANY === 'all') return true
-  const n = (nome||'').toLowerCase()
-  if (COMPANY === '4Seniors') return n.includes('4seniors')||n.includes('4 seniors')||n.includes('seniors brasil')
-  if (COMPANY === 'S4SYS') return n.includes('smart 4')||n.includes('s4sys')
-  if (COMPANY === 'Porto Virtual') return n.includes('porto virtual')
+  if (COMPANY==='all') return true
+  const n=(nome||'').toLowerCase()
+  if (COMPANY==='4Seniors') return n.includes('4seniors')||n.includes('4 seniors')||n.includes('seniors brasil')
+  if (COMPANY==='S4SYS') return n.includes('smart 4')||n.includes('s4sys')
+  if (COMPANY==='Porto Virtual') return n.includes('porto virtual')
   return true
 }
 
-// ── LocalStorage helpers ────────────────────────────────────────────────────
+// ── LocalStorage ──────────────────────────────────────────────────────────────
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)||'null') } catch { return null } }
 const lsSet = (k,v) => localStorage.setItem(k,JSON.stringify(v))
-const getContractStatus = () => lsGet('sbi_cs') || {}
-const setContractStatus = v => lsSet('sbi_cs',v)
-const getFuncOv = () => lsGet('sbi_fo') || {}
-const setFuncOv = v => lsSet('sbi_fo',v)
+const getFuncs = () => lsGet('sbi_funcs') || []
+const setFuncs = v => { FUNCS=v; lsSet('sbi_funcs',v) }
+const getContracts = () => lsGet('sbi_contracts') || []
+const setContracts = v => { CONTRACTS=v; lsSet('sbi_contracts',v) }
+const getAlertCfg = () => lsGet('sbi_acfg') || {fte_min:60,fte_max:90,franquia_warn:85,dias_inat:3,tickets_rec:3,dias_rec:30,sobrecarga:10}
 
-// ── Toast ───────────────────────────────────────────────────────────────────
-let _toastT = null
-function toast(msg, ok=true) {
-  document.getElementById('toastMsg').textContent = msg
-  document.getElementById('toastIcon').style.background = ok ? '#22c55e' : '#ef4444'
-  const t = document.getElementById('toast')
-  t.classList.add('show'); clearTimeout(_toastT)
-  _toastT = setTimeout(() => t.classList.remove('show'), 3200)
-}
-
-// ── Modals ──────────────────────────────────────────────────────────────────
-const closeModal = id => { document.getElementById(id).classList.add('hidden'); lucide.createIcons() }
-const openModal  = id => { document.getElementById(id).classList.remove('hidden'); lucide.createIcons() }
-
-function confirmAction(msg, fn) {
-  document.getElementById('confirmMsg').textContent = msg
-  document.getElementById('confirmOk').onclick = () => { closeModal('modalConfirm'); fn() }
-  openModal('modalConfirm')
-}
-
-// ── Rotating filter ─────────────────────────────────────────────────────────
-function startRot() { clearInterval(rotTimer); rotTimer = setInterval(tickRot, 1000) }
-
-function tickRot() {
-  if (ROT_PAUSED) return
-  rotSec--
-  if (rotSec <= 0) { rotIdx=(rotIdx+1)%ROT_SEQ.length; applyCompany(ROT_SEQ[rotIdx]); rotSec=30 }
-  document.getElementById('rotCount').textContent = rotSec+'s'
-  document.getElementById('rotProgress').style.width = (rotSec/30*100)+'%'
-}
-
-function selectCompany(c) {
-  rotIdx = Math.max(0, ROT_SEQ.indexOf(c))
-  rotSec = 30
-  document.getElementById('rotCount').textContent = '30s'
-  document.getElementById('rotProgress').style.width = '100%'
-  applyCompany(c)
-}
-
-function applyCompany(c) {
-  COMPANY = c
-  document.getElementById('cbAll').classList.toggle('active', c==='all')
-  document.getElementById('cb4S').classList.toggle('active', c==='4Seniors')
-  document.getElementById('cbS4').classList.toggle('active', c==='S4SYS')
-  document.getElementById('cbPV').classList.toggle('active', c==='Porto Virtual')
-  document.getElementById('rotLabel').textContent = ROT_LABELS[c]||c
-  render()
-}
-
-function toggleRot() {
-  ROT_PAUSED = !ROT_PAUSED
-  const icon = document.getElementById('rotIcon')
-  const dot  = document.getElementById('rotDot')
-  icon.setAttribute('data-lucide', ROT_PAUSED ? 'play' : 'pause')
-  dot.style.animation  = ROT_PAUSED ? 'none' : 'pulse 2s infinite'
-  dot.style.background = ROT_PAUSED ? '#94a3b8' : '#2B4C9B'
-  lucide.createIcons()
-}
-
-// ── Time filter ─────────────────────────────────────────────────────────────
-function setTime(t) {
-  TIME = t
-  document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'))
-  document.getElementById('t-'+t)?.classList.add('active')
-  document.getElementById('selMes').classList.toggle('hidden', t!=='picker')
-
-  if (t === '12m') {
-    // Vai direto para a aba de tendência
-    setTabDirect('trend')
-  } else if (t !== 'picker' && MESES_LIST.length) {
-    MES = MESES_LIST[0].slug
-    document.getElementById('selMes').value = MES
-    loadMonth(MES)
+function seedLocalData() {
+  FUNCS = getFuncs()
+  CONTRACTS = getContracts()
+  if (!FUNCS.length && D.recursos?.length) {
+    const names = [...new Set(D.recursos.map(r=>r.nome))]
+    FUNCS = names.map(nome => {
+      const r = D.recursos.filter(x=>x.nome===nome).sort((a,b)=>b.mes_slug?.localeCompare(a.mes_slug))[0]
+      return {id:uid(),nome,nivel:r?.nivel||'N1',equipe:r?.equipe||'',salario:0,cap_horas:r?.cap_minutos?Math.round(r.cap_minutos/60):168,alocacao_tipo:'todos',alocacao_clientes:[]}
+    })
+    setFuncs(FUNCS)
+  }
+  if (!CONTRACTS.length && D.premissas?.length) {
+    CONTRACTS = D.premissas.map(p => ({id:uid(),empresa:'',cliente:p.cliente,nome:p.cliente,resumo:'',tecnologias:[],valor_mensal:p.valor_mensal||0,franquia_horas:p.franquia_horas||0,sla_atend_h:4,sla_resol_h:24,status:'ativo'}))
+    setContracts(CONTRACTS)
   }
 }
 
-// ── Data loading ─────────────────────────────────────────────────────────────
-async function loadMeses() {
-  const {data} = await sb.from('meses').select('slug,competencia,updated_at').order('slug',{ascending:false})
-  MESES_LIST = data || []
-  const sel = document.getElementById('selMes')
-  sel.innerHTML = MESES_LIST.length
-    ? MESES_LIST.map(m=>`<option value="${m.slug}">${m.competencia}</option>`).join('')
-    : '<option value="">Sem dados</option>'
-  if (MESES_LIST.length) { MES=MESES_LIST[0].slug; sel.value=MES }
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let _tt = null
+function toast(msg,ok=true) {
+  document.getElementById('toastMsg').textContent=msg
+  document.getElementById('toastIcon').style.background=ok?'#22c55e':'#ef4444'
+  const t=document.getElementById('toast'); t.classList.add('show'); clearTimeout(_tt)
+  _tt=setTimeout(()=>t.classList.remove('show'),3200)
 }
 
-async function loadMonth(slug) {
-  if (!slug) return
-  MES = slug; D = {}
-  const [rec,cli,sla,sat,prem,sk,alt] = await Promise.all([
+// ── Modals ────────────────────────────────────────────────────────────────────
+const closeModal = id => { document.getElementById(id).classList.add('hidden'); lucide.createIcons() }
+const openModal  = id => { document.getElementById(id).classList.remove('hidden'); lucide.createIcons() }
+function confirmAction(msg,fn) {
+  document.getElementById('confirmMsg').textContent=msg
+  document.getElementById('confirmOk').onclick=()=>{closeModal('modalConfirm');fn()}
+  openModal('modalConfirm')
+}
+
+// ── Rotating filter ───────────────────────────────────────────────────────────
+function startRot() { clearInterval(rotTimer); rotTimer=setInterval(tickRot,1000) }
+function tickRot() {
+  if (ROT_PAUSED) return
+  rotSec--
+  if (rotSec<=0){rotIdx=(rotIdx+1)%ROT_SEQ.length;applyCompany(ROT_SEQ[rotIdx]);rotSec=30}
+  document.getElementById('rotCount').textContent=rotSec+'s'
+  document.getElementById('rotProgress').style.width=(rotSec/30*100)+'%'
+}
+function selectCompany(c){rotIdx=Math.max(0,ROT_SEQ.indexOf(c));rotSec=30;document.getElementById('rotCount').textContent='30s';document.getElementById('rotProgress').style.width='100%';applyCompany(c)}
+function applyCompany(c){
+  COMPANY=c
+  document.getElementById('cbAll').classList.toggle('active',c==='all')
+  document.getElementById('cb4S').classList.toggle('active',c==='4Seniors')
+  document.getElementById('cbS4').classList.toggle('active',c==='S4SYS')
+  document.getElementById('cbPV').classList.toggle('active',c==='Porto Virtual')
+  document.getElementById('rotLabel').textContent=ROT_LABELS[c]||c; render()
+}
+function toggleRot(){
+  ROT_PAUSED=!ROT_PAUSED
+  document.getElementById('rotIcon').setAttribute('data-lucide',ROT_PAUSED?'play':'pause')
+  const dot=document.getElementById('rotDot'); dot.style.animation=ROT_PAUSED?'none':'pulse 2s infinite'; dot.style.background=ROT_PAUSED?'#94a3b8':'#2B4C9B'
+  lucide.createIcons()
+}
+
+// ── Time filter ───────────────────────────────────────────────────────────────
+function setTime(t){
+  TIME=t
+  document.querySelectorAll('.time-btn').forEach(b=>b.classList.remove('active'))
+  document.getElementById('t-'+t)?.classList.add('active')
+  document.getElementById('selMes').classList.toggle('hidden',t!=='picker')
+  if(t==='12m'){setTabDirect('trend')}
+  else if(t!=='picker'&&MESES_LIST.length){MES=MESES_LIST[0].slug;document.getElementById('selMes').value=MES;loadMonth(MES)}
+}
+
+// ── Data loading ──────────────────────────────────────────────────────────────
+async function loadMeses(){
+  const {data}=await sb.from('meses').select('slug,competencia,updated_at').order('slug',{ascending:false})
+  MESES_LIST=data||[]
+  const sel=document.getElementById('selMes')
+  sel.innerHTML=MESES_LIST.length?MESES_LIST.map(m=>`<option value="${m.slug}">${m.competencia}</option>`).join(''):'<option>Sem dados</option>'
+  if(MESES_LIST.length){MES=MESES_LIST[0].slug;sel.value=MES}
+}
+async function loadMonth(slug){
+  if(!slug) return; MES=slug; D={}
+  const [rec,cli,sla,sat,prem,sk,alt]=await Promise.all([
     sb.from('recursos').select('*').eq('mes_slug',slug),
     sb.from('clientes').select('*').eq('mes_slug',slug),
     sb.from('sla').select('*').eq('mes_slug',slug).maybeSingle(),
@@ -447,518 +424,401 @@ async function loadMonth(slug) {
     sb.from('skills').select('*'),
     sb.from('alertas').select('*').eq('mes_slug',slug).eq('resolvido',false)
   ])
-  D.recursos  = rec.data  || []
-  D.clientes  = (cli.data||[]).sort((a,b)=>b.horas_minutos-a.horas_minutos)
+  D.recursos=(rec.data||[]); D.clientes=(cli.data||[]).sort((a,b)=>b.horas_minutos-a.horas_minutos)
   D.sla=sla.data||null; D.sat=sat.data||null; D.premissas=prem.data||[]; D.skills=sk.data||[]; D.alertas=alt.data||[]
-  D.totalHoras   = D.recursos.reduce((s,r)=>s+r.trab_minutos,0)
-  D.totalCap     = D.recursos.reduce((s,r)=>s+r.cap_minutos,0)
-  D.totalChamados= D.clientes.reduce((s,c)=>s+c.chamados,0)
-  D.fte          = pct(D.totalHoras,D.totalCap)
-  const m = MESES_LIST.find(x=>x.slug===slug)
-  if (m) document.getElementById('lastUpdate').textContent = 'Atualizado: '+new Date(m.updated_at).toLocaleString('pt-BR')
-  render()
+  D.totalHoras=D.recursos.reduce((s,r)=>s+r.trab_minutos,0)
+  D.totalCap=D.recursos.reduce((s,r)=>s+r.cap_minutos,0)
+  D.totalChamados=D.clientes.reduce((s,c)=>s+c.chamados,0)
+  D.fte=pct(D.totalHoras,D.totalCap)
+  const m=MESES_LIST.find(x=>x.slug===slug)
+  if(m) document.getElementById('lastUpdate').textContent='Atualizado: '+new Date(m.updated_at).toLocaleString('pt-BR')
+  seedLocalData(); render()
 }
+const fCli = () => COMPANY==='all'?D.clientes:D.clientes.filter(c=>matchesCompany(c.nome))
+const fRec = () => COMPANY==='all'?D.recursos:D.recursos.filter(r=>matchesCompany(r.nome)||matchesCompany(r.equipe))
 
-// ── Filtered views ───────────────────────────────────────────────────────────
-const fCli = () => COMPANY==='all' ? D.clientes : D.clientes.filter(c=>matchesCompany(c.nome))
-const fRec = () => COMPANY==='all' ? D.recursos  : D.recursos.filter(r=>matchesCompany(r.nome)||matchesCompany(r.equipe))
-
-// ── Tabs ─────────────────────────────────────────────────────────────────────
-function setTabDirect(t) {
-  TAB = t
+// ── Tab management ────────────────────────────────────────────────────────────
+function setTabDirect(t){
+  TAB=t
   document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',TABS[i]===t))
-  if (t==='trend'||t==='ingest') {
-    ;(t==='trend'?rTrend():rIngest()).then(html=>{document.getElementById('main').innerHTML=html;lucide.createIcons()})
+  if(t==='trend'||t==='ingest'){
+    ;(t==='trend'?rTrend():rIngest()).then(h=>{document.getElementById('main').innerHTML=h;lucide.createIcons()})
       .catch(e=>{document.getElementById('main').innerHTML=`<div class="card" style="color:#ef4444;">${e}</div>`})
+  } else if(t==='alertas'){
+    rAlertas().then(h=>{document.getElementById('main').innerHTML=h;lucide.createIcons()})
   } else render()
 }
+window.setTab=setTabDirect
 
-window.setTab = setTabDirect
-
-function render() {
-  const el = document.getElementById('main')
-  if (!MES||!D.recursos) { el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;">Selecione um mês acima.</div>'; return }
+function render(){
+  const el=document.getElementById('main')
+  if(!MES||!D.recursos){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;">Selecione um mês acima.</div>';return}
   const fn={exec:rExec,prod:rProd,custo:rCusto,cli:rCli,sla:rSLA,eq:rEquipe,gestao:rGestao}
-  el.innerHTML=(fn[TAB]||rExec)()
-  lucide.createIcons()
+  el.innerHTML=(fn[TAB]||rExec)(); lucide.createIcons()
 }
 
-// ── HELPERS de UI ────────────────────────────────────────────────────────────
-const kpiCard = (val,lbl,col,icon) => `
-  <div class="card" style="border-left:3px solid ${col};">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-      <div>
-        <div class="kpi-lbl">${lbl}</div>
-        <div class="kpi-big" style="color:${col};margin-top:.15rem;">${val}</div>
-      </div>
-      <div style="background:${col}18;border-radius:.5rem;padding:.45rem;color:${col};flex-shrink:0;">
-        <i data-lucide="${icon}" style="width:1rem;height:1rem;"></i>
-      </div>
-    </div>
-  </div>`
-
-const sectionTitle = t => `<div style="font-size:.67rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem;">${t}</div>`
+// ── UI helpers ────────────────────────────────────────────────────────────────
+const ST = t=>`<div style="font-size:.67rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem;">${t}</div>`
+const kpiCard=(val,lbl,col,icon)=>`<div class="card" style="border-left:3px solid ${col};">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+    <div><div class="kpi-lbl">${lbl}</div><div class="kpi-big" style="color:${col};margin-top:.15rem;">${val}</div></div>
+    <div style="background:${col}18;border-radius:.5rem;padding:.4rem;color:${col};flex-shrink:0;"><i data-lucide="${icon}" style="width:.95rem;height:.95rem;"></i></div>
+  </div></div>`
 
 // ── ABA: EXECUTIVO ────────────────────────────────────────────────────────────
-function rExec() {
-  const clis = fCli()
-  const totH  = clis.reduce((s,c)=>s+c.horas_minutos,0)||D.totalHoras
-  const totCh = clis.reduce((s,c)=>s+c.chamados,0)||D.totalChamados
-  const fte   = D.fte
-  const csat  = D.sat?.csat ?? null
-  const fteC  = fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e'
-  const csatC = csat==null?'#94a3b8':csat>=85?'#22c55e':csat>=70?'#f59e0b':'#ef4444'
-
-  const alertPanel = D.alertas.length
-    ? D.alertas.slice(0,5).map(a=>`
-      <div style="display:flex;align-items:flex-start;gap:.65rem;padding:.65rem;border-radius:.5rem;background:#f8fafc;border:1px solid #f1f5f9;">
-        <span class="badge ${severity[a.severidade]||'badge-b'}" style="flex-shrink:0;margin-top:.1rem;">${a.tipo}</span>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:.82rem;font-weight:600;">${a.titulo||''}</div>
-          <div style="font-size:.73rem;color:#64748b;margin-top:.1rem;">${a.descricao||''}</div>
-        </div>
-        <button onclick="dismissAlerta('${a.id}')" style="background:none;border:none;cursor:pointer;color:#cbd5e1;font-size:.8rem;flex-shrink:0;">✕</button>
-      </div>`).join('')
-    : `<div style="color:#94a3b8;font-size:.82rem;padding:.75rem;text-align:center;">Sem alertas ativos</div>`
-
-  const topCli = clis.slice(0,6).map(c=>{
-    const prem=D.premissas.find(p=>p.cliente===c.nome); const fran=prem?.franquia_horas||0
-    const h=Math.round(c.horas_minutos/60); const uso=fran?pct(h,fran):null
-    const cor=uso!=null?(uso>110?'#ef4444':uso>90?'#f59e0b':'#2B4C9B'):'#2B4C9B'
-    const w=Math.min(uso??pct(c.horas_minutos,totH/100+1),100)
-    return `<div>
-      <div style="display:flex;justify-content:space-between;font-size:.73rem;margin-bottom:.3rem;">
-        <span style="font-weight:600;color:#1e293b;">${c.nome}</span>
-        <span style="color:#64748b;">${minToHM(c.horas_minutos)}h${fran?' / '+fran+'h':''}</span>
-      </div>
-      <div style="width:100%;height:.35rem;background:#f1f5f9;border-radius:9999px;overflow:hidden;">
-        <div style="height:100%;background:${cor};width:${w}%;transition:width .6s;"></div>
-      </div>
-    </div>`
+function rExec(){
+  const clis=fCli(); const totH=clis.reduce((s,c)=>s+c.horas_minutos,0)||D.totalHoras; const totCh=clis.reduce((s,c)=>s+c.chamados,0)||D.totalChamados
+  const fte=D.fte; const csat=D.sat?.csat??null; const fteC=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e'; const csatC=csat==null?'#94a3b8':csat>=85?'#22c55e':csat>=70?'#f59e0b':'#ef4444'
+  const alertPanel=D.alertas.length?D.alertas.slice(0,5).map(a=>`<div style="display:flex;align-items:flex-start;gap:.65rem;padding:.6rem;border-radius:.5rem;background:#f8fafc;border:1px solid #f1f5f9;"><span class="badge ${severity[a.severidade]||'badge-b'}" style="flex-shrink:0;margin-top:.1rem;">${a.tipo}</span><div style="flex:1;min-width:0;"><div style="font-size:.82rem;font-weight:600;">${esc(a.titulo||'')}</div><div style="font-size:.73rem;color:#64748b;margin-top:.1rem;">${esc(a.descricao||'')}</div></div><button onclick="dismissAlerta('${a.id}')" style="background:none;border:none;cursor:pointer;color:#cbd5e1;font-size:.8rem;flex-shrink:0;">✕</button></div>`).join(''):`<div style="color:#94a3b8;font-size:.82rem;padding:.75rem;text-align:center;">Sem alertas ativos</div>`
+  const topCli=clis.slice(0,6).map(c=>{
+    const fran=cliFranquia(c.nome); const h=Math.round(c.horas_minutos/60); const uso=fran?pct(h,fran):null; const cor=uso!=null?(uso>110?'#ef4444':uso>90?'#f59e0b':'#2B4C9B'):'#2B4C9B'
+    return `<div><div style="display:flex;justify-content:space-between;font-size:.73rem;margin-bottom:.3rem;"><span style="font-weight:600;">${esc(c.nome)}</span><span style="color:#64748b;">${minToHM(c.horas_minutos)}h${fran?' / '+fran+'h':''}</span></div><div style="width:100%;height:.35rem;background:#f1f5f9;border-radius:9999px;overflow:hidden;"><div style="height:100%;background:${cor};width:${Math.min(uso??50,100)}%;transition:width .6s;"></div></div></div>`
   }).join('')
+  return `<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">${kpiCard(minToHM(totH)+'h','Horas produtivas','#2B4C9B','clock')}${kpiCard(fte+'%','Utilização FTE',fteC,'activity')}${kpiCard(fmt(totCh),'Chamados','#E04622','ticket')}${kpiCard(csat!=null?csat+'%':'—','CSAT',csatC,'star')}</div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5"><div class="card">${ST('Alertas ativos ('+D.alertas.length+')')}<div style="display:flex;flex-direction:column;gap:.4rem;">${alertPanel}</div></div><div class="card">${ST('Top clientes — horas')}<div style="display:flex;flex-direction:column;gap:.7rem;">${topCli||'<div style="color:#94a3b8;font-size:.82rem;">Nenhum cliente neste filtro.</div>'}</div></div></div>`
+}
+
+// ── ABA: ALERTAS & OPS ────────────────────────────────────────────────────────
+async function rAlertas(){
+  const cfg=getAlertCfg(); const auto=[]
+  // FTE
+  D.recursos.forEach(r=>{const f=pct(r.trab_minutos,r.cap_minutos);if(f>cfg.fte_max)auto.push({lv:'critica',cat:'FTE',msg:`${r.nome}: FTE ${f}% — sobrecarga`,det:'Risco de burnout e queda de qualidade'});else if(f<cfg.fte_min)auto.push({lv:'media',cat:'FTE',msg:`${r.nome}: FTE ${f}% — subutilizado`,det:'Capacidade ociosa'})})
+  // Franquia
+  D.clientes.forEach(c=>{const fran=cliFranquia(c.nome);if(!fran) return;const uso=pct(Math.round(c.horas_minutos/60),fran);if(uso>100)auto.push({lv:'critica',cat:'Franquia',msg:`${c.nome}: ${uso}% — franquia extrapolada`,det:`${Math.round(c.horas_minutos/60)}h vs ${fran}h contratadas`});else if(uso>cfg.franquia_warn)auto.push({lv:'media',cat:'Franquia',msg:`${c.nome}: ${uso}% da franquia`,det:'Risco de extrapolar no mês'})})
+  // SLA
+  if(D.sla&&D.sla.dentro_sla_pct<90)auto.push({lv:'alta',cat:'SLA',msg:`SLA: ${D.sla.dentro_sla_pct}% dentro do prazo`,det:`${D.sla.chamados_fora} chamados vencidos`})
+  // CSAT
+  if(D.sat){if(D.sat.csat<75)auto.push({lv:'critica',cat:'CSAT',msg:`CSAT: ${D.sat.csat}% — crítico`,det:'Satisfação comprometida'});else if(D.sat.csat<85)auto.push({lv:'media',cat:'CSAT',msg:`CSAT: ${D.sat.csat}%`,det:'Monitorar tendência'})}
+
+  // Custo total
+  let totalCusto=0; D.recursos.forEach(r=>{totalCusto+=getSalario(r.nome,r.nivel)})
+  const custoPorCh=D.totalChamados>0?totalCusto/D.totalChamados:0
+
+  // Color map
+  const aC={critica:'#ef4444',alta:'#f97316',media:'#f59e0b',baixa:'#3b82f6'}
+  const aB={critica:'#fee2e2',alta:'#ffedd5',media:'#fef9c3',baixa:'#dbeafe'}
+  const aI={critica:'triangle-alert',alta:'alert-circle',media:'info',baixa:'info'}
+
+  const alertCards=auto.length?auto.map(a=>`<div class="alrt-c" style="background:${aB[a.lv]};border-color:${aC[a.lv]};"><i data-lucide="${aI[a.lv]}" style="width:.85rem;height:.85rem;color:${aC[a.lv]};flex-shrink:0;margin-top:.1rem;"></i><div style="flex:1;"><div style="font-size:.8rem;font-weight:700;color:#1e293b;">${esc(a.msg)}</div><div style="font-size:.72rem;color:#64748b;margin-top:.1rem;">${esc(a.det)}</div></div><span class="badge" style="background:${aB[a.lv]};color:${aC[a.lv]};font-size:.62rem;margin-left:auto;flex-shrink:0;">${a.cat}</span></div>`).join(''):`<div style="color:#94a3b8;font-size:.82rem;padding:1rem;text-align:center;">Nenhum alerta automático para este mês.</div>`
+
+  // Tech rows
+  const techRows=D.recursos.map(r=>{
+    const fte=pct(r.trab_minutos,r.cap_minutos); const fteC=fte>cfg.fte_max?'#ef4444':fte<cfg.fte_min?'#f59e0b':'#22c55e'
+    const sal=getSalario(r.nome,r.nivel); const vh=getVH(r.nome,r.nivel)
+    const custoReal=vh>0?Math.round(r.trab_minutos/60*vh):sal
+    const aloc=getAlocLabel(getFunc(r.nome))
+    return `<tr><td style="font-weight:600;">${esc(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td>${minToHM(r.trab_minutos)}h</td><td style="color:${fteC};font-weight:800;">${fte}%</td><td style="color:#854d0e;">${fmtR(sal)}</td><td style="color:#64748b;">${vh>0?fmtR(Math.round(vh)):NIVEL_DEFAULTS[r.nivel]?'(est. nível)':'—'}/h</td><td style="color:#166534;font-weight:700;">${fmtR(custoReal)}</td><td style="font-size:.72rem;color:#64748b;max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(aloc)}</td></tr>`
+  }).join('')
+
+  // Contract rows
+  const cliRows=fCli().map(c=>{
+    const contracts=getClientContracts(c.nome); const fran=contracts.reduce((s,x)=>s+(x.franquia_horas||0),0); const receita=contracts.reduce((s,x)=>s+(x.valor_mensal||0),0)
+    const uso=fran?pct(Math.round(c.horas_minutos/60),fran):null; const usC=uso==null?'#64748b':uso>100?'#ef4444':uso>85?'#f59e0b':'#22c55e'
+    const empresa=contracts[0]?.empresa; const alloc=totalCusto&&D.totalHoras?Math.round(c.horas_minutos/D.totalHoras*totalCusto):0
+    const mg=receita&&alloc?pct(receita-alloc,receita):null; const mgC=mg==null?'#64748b':mg<0?'#ef4444':mg<20?'#f59e0b':'#22c55e'
+    const slaAtend=contracts[0]?.sla_atend_h; const slaResol=contracts[0]?.sla_resol_h
+    return `<tr><td>${empresaBadge(empresa)}</td><td style="font-weight:600;">${esc(c.nome)}</td><td>${minToHM(c.horas_minutos)}h</td><td style="color:#64748b;">${fran||'—'}h</td><td style="color:${usC};font-weight:800;">${uso!=null?uso+'%':'—'}</td><td>${fmt(c.chamados)}</td><td style="color:#166534;font-weight:700;">${receita?fmtR(receita):'—'}</td><td style="color:${mgC};font-weight:800;">${mg!=null?mg+'%':'—'}</td><td style="font-size:.72rem;color:#64748b;">${slaAtend!=null?slaAtend+'h / '+slaResol+'h':'—'}</td></tr>`
+  }).join('')
+
+  // Alert config thresholds
+  const cfgHTML=`<div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+    <div><label class="fl">FTE mínimo (%)</label><input type="number" class="fi" value="${cfg.fte_min}" min="0" max="100" onchange="saveAC('fte_min',+this.value)" style="padding:.4rem .6rem;font-size:.8rem;"></div>
+    <div><label class="fl">FTE máximo (%)</label><input type="number" class="fi" value="${cfg.fte_max}" min="0" max="100" onchange="saveAC('fte_max',+this.value)" style="padding:.4rem .6rem;font-size:.8rem;"></div>
+    <div><label class="fl">Franquia — alerta em (%)</label><input type="number" class="fi" value="${cfg.franquia_warn}" min="0" max="100" onchange="saveAC('franquia_warn',+this.value)" style="padding:.4rem .6rem;font-size:.8rem;"></div>
+    <div><label class="fl">Chamado inativo após (dias)</label><input type="number" class="fi" value="${cfg.dias_inat}" min="1" onchange="saveAC('dias_inat',+this.value)" style="padding:.4rem .6rem;font-size:.8rem;"></div>
+    <div><label class="fl">Recorrência (N tickets em X dias)</label><div style="display:flex;gap:.4rem;"><input type="number" class="fi" value="${cfg.tickets_rec}" min="1" onchange="saveAC('tickets_rec',+this.value)" style="padding:.4rem .5rem;font-size:.8rem;width:4.5rem;"><input type="number" class="fi" value="${cfg.dias_rec}" min="1" onchange="saveAC('dias_rec',+this.value)" style="padding:.4rem .5rem;font-size:.8rem;"></div></div>
+    <div><label class="fl">Sobrecarga (max chamados abertos)</label><input type="number" class="fi" value="${cfg.sobrecarga}" min="1" onchange="saveAC('sobrecarga',+this.value)" style="padding:.4rem .6rem;font-size:.8rem;"></div>
+  </div>`
 
   return `
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-    ${kpiCard(minToHM(totH)+'h','Horas produtivas','#2B4C9B','clock')}
-    ${kpiCard(fte+'%','Utilização FTE',fteC,'activity')}
-    ${kpiCard(fmt(totCh),'Chamados','#E04622','ticket')}
-    ${kpiCard(csat!=null?csat+'%':'—','CSAT',csatC,'star')}
+    ${kpiCard(fmtR(totalCusto),'Custo Total Equipe (est.)','#854d0e','users')}
+    ${kpiCard(fmt(D.totalChamados)+' ch.','Total Chamados','#E04622','ticket')}
+    ${kpiCard(custoPorCh>0?fmtR(Math.round(custoPorCh)):'—','Custo Estimado / Chamado','#2B4C9B','calculator')}
+    ${kpiCard(auto.length,'Alertas Ativos',auto.some(a=>a.lv==='critica')?'#ef4444':auto.length?'#f59e0b':'#22c55e','triangle-alert')}
   </div>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-    <div class="card">
-      ${sectionTitle(`Alertas ativos (${D.alertas.length})`)}
-      <div style="display:flex;flex-direction:column;gap:.4rem;">${alertPanel}</div>
+
+  <div class="card mb-5">
+    ${ST('Alertas Automáticos')}
+    <div style="display:flex;flex-direction:column;gap:.4rem;">${alertCards}</div>
+    ${D.alertas.length?`<div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid #f1f5f9;">${ST('Alertas Manuais ('+D.alertas.length+')')}<div style="display:flex;flex-direction:column;gap:.3rem;">${D.alertas.map(a=>`<div style="display:flex;align-items:center;gap:.5rem;font-size:.78rem;"><span class="badge ${severity[a.severidade]||'badge-b'}">${a.tipo}</span><span>${esc(a.titulo||'')}${a.descricao?' — '+esc(a.descricao):''}</span><button onclick="dismissAlerta('${a.id}')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#cbd5e1;font-size:.75rem;">✕</button></div>`).join('')}</div></div>`:''}
+  </div>
+
+  <div class="card mb-5 overflow-x-auto">
+    ${ST('Horas e Custo por Técnico')}
+    <table><thead><tr><th>Técnico</th><th>Nível</th><th>H. Trabalhadas</th><th>FTE</th><th>Salário</th><th>Valor/h</th><th>Custo Realizado</th><th>Alocação</th></tr></thead>
+    <tbody>${techRows||'<tr><td colspan="8" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum técnico.</td></tr>'}</tbody></table>
+    <div style="font-size:.67rem;color:#94a3b8;margin-top:.5rem;">* Salário (est.) = padrão de nível quando não informado em Gestão. Custo Realizado = horas × valor/h.</div>
+  </div>
+
+  <div class="card mb-5 overflow-x-auto">
+    ${ST('Consumo por Contrato')}
+    <table><thead><tr><th>Empresa</th><th>Cliente</th><th>H. Real</th><th>Franquia</th><th>Uso %</th><th>Chamados</th><th>Receita</th><th>Margem est.</th><th>SLA Atend./Resol.</th></tr></thead>
+    <tbody>${cliRows||'<tr><td colspan="9" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum cliente neste filtro.</td></tr>'}</tbody></table>
+    <div style="font-size:.67rem;color:#94a3b8;margin-top:.5rem;">* Margem estimada: (Receita − Custo Alocado Proporcional) / Receita.</div>
+  </div>
+
+  <div class="card" style="border-left:3px solid #94a3b8;">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;">
+      ${ST('Configuração de Limites de Alerta')}
+      <span class="badge badge-y" style="margin-left:auto;margin-top:-.5rem;flex-shrink:0;">Salvo automaticamente</span>
     </div>
-    <div class="card">
-      ${sectionTitle('Top clientes — horas')}
-      <div style="display:flex;flex-direction:column;gap:.7rem;">${topCli||'<div style="color:#94a3b8;font-size:.82rem;">Nenhum cliente neste filtro.</div>'}</div>
+    ${cfgHTML}
+    <div style="margin-top:1rem;background:#f8fafc;border-radius:.5rem;border:1px solid #e2e8f0;padding:.75rem;border-left:3px solid #e2e8f0;">
+      <div style="font-size:.78rem;font-weight:700;color:#64748b;margin-bottom:.25rem;">Alertas de chamados individuais — requer integração Milldesk</div>
+      <div style="font-size:.72rem;color:#94a3b8;line-height:1.6;">Os limites acima (inatividade, recorrência, sobrecarga) estarão ativos assim que o pipeline de tickets individuais for integrado via API Milldesk. Atualmente disponíveis apenas totais mensais agregados.</div>
     </div>
   </div>`
 }
 
+window.saveAC = function(key,val){const c=getAlertCfg();c[key]=val;lsSet('sbi_acfg',c)}
+
 // ── ABA: PRODUTIVIDADE ────────────────────────────────────────────────────────
-function rProd() {
-  const recs = fRec()
-  const rows = recs.map(r=>{
-    const fte=pct(r.trab_minutos,r.cap_minutos)
-    const cor=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e'
-    return `<tr>
-      <td style="font-weight:600;">${r.nome}</td>
-      <td><span class="tag">${r.nivel}</span></td>
-      <td style="color:#64748b;">${r.equipe||'—'}</td>
-      <td>${minToHM(r.trab_minutos)}h</td>
-      <td style="color:#94a3b8;">${minToHM(r.avulsa_minutos)}h</td>
-      <td style="color:${cor};font-weight:800;">${fte}%</td>
-    </tr>`
-  }).join('')
-  return `<div class="card overflow-x-auto">
-    ${sectionTitle('Produtividade por Técnico')}
-    <table><thead><tr><th>Técnico</th><th>Nível</th><th>Equipe</th><th>H. Trabalhadas</th><th>H. Avulsas</th><th>FTE %</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum técnico neste filtro.</td></tr>'}</tbody></table>
-  </div>`
+function rProd(){
+  const rows=fRec().map(r=>{const fte=pct(r.trab_minutos,r.cap_minutos);const cor=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e';return `<tr><td style="font-weight:600;">${esc(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td style="color:#64748b;">${esc(r.equipe||'—')}</td><td>${minToHM(r.trab_minutos)}h</td><td style="color:#94a3b8;">${minToHM(r.avulsa_minutos)}h</td><td style="color:${cor};font-weight:800;">${fte}%</td></tr>`}).join('')
+  return `<div class="card overflow-x-auto">${ST('Produtividade por Técnico')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Equipe</th><th>H. Trabalhadas</th><th>H. Avulsas</th><th>FTE %</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum técnico neste filtro.</td></tr>'}</tbody></table></div>`
 }
 
 // ── ABA: CUSTOS & MARGEM ──────────────────────────────────────────────────────
-function rCusto() {
+function rCusto(){
   let totalCusto=0
-  const recs=fRec()
-  const techRows=recs.map(r=>{
-    const c=custo[r.nivel]||8000; totalCusto+=c
-    const chh=(r.trab_minutos/60)>0?c/(r.trab_minutos/60):0
-    return `<tr>
-      <td style="font-weight:600;">${r.nome}</td>
-      <td><span class="tag">${r.nivel}</span></td>
-      <td>${minToHM(r.trab_minutos)}h</td>
-      <td style="color:#854d0e;font-weight:700;">${fmtR(c)} <span style="font-size:.65rem;color:#94a3b8;font-weight:400;">(est.)</span></td>
-      <td style="color:#94a3b8;">${fmtR(Math.round(chh))}/h</td>
-    </tr>`
-  }).join('')
-  const clis=fCli(); let totalRec=0
-  const cliRows=clis.map(c=>{
-    const p=D.premissas.find(x=>x.cliente===c.nome); const val=p?.valor_mensal||0; totalRec+=val
-    const alloc=totalCusto>0&&D.totalHoras>0?(c.horas_minutos/D.totalHoras)*totalCusto:0
-    const mg=val&&alloc?pct(val-alloc,val):null
-    const mc=mg==null?'#94a3b8':mg<0?'#ef4444':mg<20?'#f59e0b':'#22c55e'
-    return `<tr>
-      <td style="font-weight:600;">${c.nome}</td><td>${minToHM(c.horas_minutos)}h</td>
-      <td>${fmt(c.chamados)}</td>
-      <td style="color:#166534;font-weight:600;">${val?fmtR(val):`<span style="color:#94a3b8">(a def.)</span>`}</td>
-      <td style="color:${mc};font-weight:800;">${mg!=null?mg+'%':'—'}</td>
-    </tr>`
-  }).join('')
-  return `
-  <div class="grid grid-cols-2 gap-4 mb-5">
-    ${kpiCard(fmtR(totalCusto),'Custo equipe (est.)','#854d0e','users')}
-    ${kpiCard(totalRec?fmtR(totalRec):'(a definir)','Receita contratos (est.)','#166534','dollar-sign')}
-  </div>
-  <div class="card mb-4 overflow-x-auto">
-    ${sectionTitle('Custo por Técnico')}
-    <table><thead><tr><th>Técnico</th><th>Nível</th><th>H. Trab.</th><th>Custo/mês</th><th>Custo/h</th></tr></thead><tbody>${techRows}</tbody></table>
-    <div style="font-size:.67rem;color:#94a3b8;margin-top:.5rem;">* Valores estimados — atualize salários reais em Gestão → Funcionários.</div>
-  </div>
-  <div class="card overflow-x-auto">
-    ${sectionTitle('Margem por Cliente')}
-    <table><thead><tr><th>Cliente</th><th>Horas</th><th>Chamados</th><th>Receita</th><th>Margem est.</th></tr></thead><tbody>${cliRows}</tbody></table>
-  </div>`
+  const techRows=fRec().map(r=>{const c=getSalario(r.nome,r.nivel);totalCusto+=c;const vh=getVH(r.nome,r.nivel);const custoReal=vh>0?Math.round(r.trab_minutos/60*vh):c;const isEst=!getFunc(r.nome)?.salario;return `<tr><td style="font-weight:600;">${esc(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td>${minToHM(r.trab_minutos)}h</td><td style="color:#854d0e;font-weight:700;">${fmtR(c)}${isEst?' <span style="font-size:.65rem;color:#94a3b8;">(est.)</span>':''}</td><td style="color:#64748b;">${vh>0?fmtR(Math.round(vh)):'(nível)'}/ h</td><td style="color:#166534;font-weight:700;">${fmtR(custoReal)}</td></tr>`}).join('')
+  let totalRec=0
+  const cliRows=fCli().map(c=>{const receita=cliValor(c.nome);totalRec+=receita;const aloc=totalCusto&&D.totalHoras?c.horas_minutos/D.totalHoras*totalCusto:0;const mg=receita&&aloc?pct(receita-aloc,receita):null;const mc=mg==null?'#94a3b8':mg<0?'#ef4444':mg<20?'#f59e0b':'#22c55e';return `<tr><td style="font-weight:600;">${esc(c.nome)}</td><td>${minToHM(c.horas_minutos)}h</td><td>${fmt(c.chamados)}</td><td style="color:#166534;font-weight:700;">${receita?fmtR(receita):`<span style="color:#94a3b8">(a def.)</span>`}</td><td style="color:${mc};font-weight:800;">${mg!=null?mg+'%':'—'}</td></tr>`}).join('')
+  return `<div class="grid grid-cols-2 gap-4 mb-5">${kpiCard(fmtR(totalCusto),'Custo equipe (est.)','#854d0e','users')}${kpiCard(totalRec?fmtR(totalRec):'(a definir)','Receita contratos','#166534','dollar-sign')}</div>
+  <div class="card mb-4 overflow-x-auto">${ST('Custo por Técnico')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>H. Trab.</th><th>Salário/mês</th><th>Valor/h</th><th>Custo Realizado</th></tr></thead><tbody>${techRows}</tbody></table><div style="font-size:.67rem;color:#94a3b8;margin-top:.5rem;">* Atualize salários reais em Gestão → Funcionários para eliminar estimativas.</div></div>
+  <div class="card overflow-x-auto">${ST('Margem por Cliente')}<table><thead><tr><th>Cliente</th><th>Horas</th><th>Chamados</th><th>Receita</th><th>Margem est.</th></tr></thead><tbody>${cliRows}</tbody></table></div>`
 }
 
 // ── ABA: CLIENTES ─────────────────────────────────────────────────────────────
-function rCli() {
-  const clis=fCli()
-  const rows=clis.map(c=>{
-    const p=D.premissas.find(x=>x.cliente===c.nome); const fran=p?.franquia_horas||0
-    const h=c.horas_minutos/60; const uso=fran?pct(Math.round(h),fran):null
-    const cor=uso==null?'#64748b':uso>110?'#ef4444':uso>90?'#f59e0b':'#22c55e'
-    return `<tr>
-      <td style="font-weight:600;">${c.nome}</td>
-      <td>${minToHM(c.horas_minutos)}h</td>
-      <td style="color:#64748b;">${fran||'—'}h</td>
-      <td style="color:${cor};font-weight:800;">${uso!=null?uso+'%':'—'}</td>
-      <td>${fmt(c.chamados)}</td>
-    </tr>`
-  }).join('')
-  return `<div class="card overflow-x-auto">
-    ${sectionTitle('Clientes — Horas vs Franquia')}
-    <table><thead><tr><th>Cliente</th><th>H. Real</th><th>Franquia</th><th>Uso %</th><th>Chamados</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="5" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum cliente neste filtro.</td></tr>'}</tbody></table>
-  </div>`
+function rCli(){
+  const rows=fCli().map(c=>{const fran=cliFranquia(c.nome);const uso=fran?pct(Math.round(c.horas_minutos/60),fran):null;const cor=uso==null?'#64748b':uso>110?'#ef4444':uso>90?'#f59e0b':'#22c55e';return `<tr><td style="font-weight:600;">${esc(c.nome)}</td><td>${minToHM(c.horas_minutos)}h</td><td style="color:#64748b;">${fran||'—'}h</td><td style="color:${cor};font-weight:800;">${uso!=null?uso+'%':'—'}</td><td>${fmt(c.chamados)}</td></tr>`}).join('')
+  return `<div class="card overflow-x-auto">${ST('Clientes — Horas vs Franquia')}<table><thead><tr><th>Cliente</th><th>H. Real</th><th>Franquia</th><th>Uso %</th><th>Chamados</th></tr></thead><tbody>${rows||'<tr><td colspan="5" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum cliente neste filtro.</td></tr>'}</tbody></table></div>`
 }
 
 // ── ABA: SLA ──────────────────────────────────────────────────────────────────
-function rSLA() {
-  if (!D.sla) return `<div class="card" style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">SLA não carregado para este mês.</div>`
-  const s=D.sla; const slC=s.dentro_sla_pct>=90?'#22c55e':s.dentro_sla_pct>=75?'#f59e0b':'#ef4444'
-  return `<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-    ${kpiCard(minToHM(s.tma_minutos)+'h','TMA (Tempo Médio Atend.)','#2B4C9B','clock')}
-    ${kpiCard(minToHM(s.tmr_minutos)+'h','TMR (Tempo Médio Resolução)','#E04622','timer')}
-    ${kpiCard(s.dentro_sla_pct+'%','Dentro do SLA',slC,'shield-check')}
-    ${kpiCard(fmt(s.chamados_fora),'Chamados fora do SLA','#ef4444','shield-alert')}
-  </div>`
+function rSLA(){
+  if(!D.sla) return `<div class="card" style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">SLA não carregado para este mês.<br><button onclick="openSLAEdit()" style="margin-top:.75rem;padding:.4rem .875rem;background:var(--brand);color:white;border:none;border-radius:.5rem;font-size:.78rem;font-weight:700;cursor:pointer;">Inserir SLA manualmente</button></div>`
+  const s=D.sla;const slC=s.dentro_sla_pct>=90?'#22c55e':s.dentro_sla_pct>=75?'#f59e0b':'#ef4444'
+  return `<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">${kpiCard(minToHM(s.tma_minutos)+'h','TMA','#2B4C9B','clock')}${kpiCard(minToHM(s.tmr_minutos)+'h','TMR','#E04622','timer')}${kpiCard(s.dentro_sla_pct+'%','Dentro do SLA',slC,'shield-check')}${kpiCard(fmt(s.chamados_fora),'Fora do SLA','#ef4444','shield-alert')}</div>
+  <div style="text-align:right;"><button onclick="openSLAEdit()" style="padding:.4rem .875rem;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:.5rem;font-size:.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem;"><i data-lucide="pencil" style="width:.8rem;height:.8rem;"></i> Editar SLA</button></div>`
 }
 
 // ── ABA: EQUIPE ───────────────────────────────────────────────────────────────
-function rEquipe() {
-  if (!D.skills.length) return `<div class="card" style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Matriz de skills não carregada.</div>`
-  const tecnicos=[...new Set(D.skills.map(s=>s.tecnico))]
-  const skills=[...new Set(D.skills.map(s=>s.skill))]
+function rEquipe(){
+  if(!D.skills.length) return `<div class="card" style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Matriz de skills não carregada.</div>`
+  const tecnicos=[...new Set(D.skills.map(s=>s.tecnico))]; const skills=[...new Set(D.skills.map(s=>s.skill))]
   const bg={1:'#dbeafe',2:'#fef9c3',3:'#dcfce7'}; const tx={1:'#1e40af',2:'#854d0e',3:'#166534'}
   const spofs=skills.filter(sk=>D.skills.filter(s=>s.skill===sk&&s.nivel===3).length<2)
   const header=tecnicos.map(t=>`<th style="text-align:center;min-width:2.5rem;">${t.split(' ')[0]}</th>`).join('')
-  const rows=skills.map(sk=>{
-    const cells=tecnicos.map(t=>{
-      const e=D.skills.find(s=>s.tecnico===t&&s.skill===sk); const n=e?.nivel||0
-      return `<td style="text-align:center;"><div class="hcell mx-auto" style="background:${n?bg[n]:'#f8fafc'};color:${n?tx[n]:'#cbd5e1'};">${n||''}</div></td>`
-    }).join('')
-    const isSpof=spofs.includes(sk)
-    return `<tr><td style="font-size:.8rem;padding-right:.75rem;white-space:nowrap;font-weight:${isSpof?700:400};">${sk} ${isSpof?'<span class="spof-badge">SPOF</span>':''}</td>${cells}</tr>`
-  }).join('')
-  return `
-  <div class="card overflow-x-auto mb-4">
-    ${sectionTitle('Matriz de Conhecimento — 1 básico · 2 pleno · 3 especialista')}
-    <table><thead><tr><th>Skill</th>${header}</tr></thead><tbody>${rows}</tbody></table>
-  </div>
-  ${spofs.length?`<div class="card" style="border-left:3px solid #ef4444;">
-    <div style="font-size:.67rem;font-weight:800;color:#ef4444;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem;">Riscos SPOF — Single Point of Failure</div>
-    <div style="display:flex;flex-wrap:wrap;gap:.4rem;">${spofs.map(s=>`<span class="badge badge-r">${s}</span>`).join('')}</div>
-  </div>`:''}`
+  const rows=skills.map(sk=>{const isSpof=spofs.includes(sk);const cells=tecnicos.map(t=>{const e=D.skills.find(s=>s.tecnico===t&&s.skill===sk);const n=e?.nivel||0;return `<td style="text-align:center;"><div class="hcell mx-auto" style="background:${n?bg[n]:'#f8fafc'};color:${n?tx[n]:'#cbd5e1'};">${n||''}</div></td>`}).join('');return `<tr><td style="font-size:.8rem;padding-right:.75rem;white-space:nowrap;font-weight:${isSpof?700:400};">${esc(sk)} ${isSpof?'<span class="spof-badge">SPOF</span>':''}</td>${cells}</tr>`}).join('')
+  return `<div class="card overflow-x-auto mb-4">${ST('Matriz de Conhecimento — 1 básico · 2 pleno · 3 especialista')}<table><thead><tr><th>Skill</th>${header}</tr></thead><tbody>${rows}</tbody></table></div>${spofs.length?`<div class="card" style="border-left:3px solid #ef4444;">${ST('Riscos SPOF')}<div style="display:flex;flex-wrap:wrap;gap:.4rem;">${spofs.map(s=>`<span class="badge badge-r">${esc(s)}</span>`).join('')}</div></div>`:''}`
 }
 
 // ── ABA: TENDÊNCIA ────────────────────────────────────────────────────────────
-async function rTrend() {
+async function rTrend(){
   const {data}=await sb.from('meses').select('slug,competencia,total_chamados').order('slug')
-  if (!data?.length) return `<div class="card" style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Dados insuficientes para tendência.</div>`
+  if(!data?.length) return `<div class="card" style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Dados insuficientes.</div>`
   const {data:recs}=await sb.from('recursos').select('mes_slug,trab_minutos,cap_minutos').in('mes_slug',data.map(m=>m.slug))
-  const rows=data.map(m=>{
-    const r=(recs||[]).filter(x=>x.mes_slug===m.slug)
-    const trab=r.reduce((s,x)=>s+x.trab_minutos,0); const cap=r.reduce((s,x)=>s+x.cap_minutos,0)
-    const fte=pct(trab,cap); const cor=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e'
-    return `<tr>
-      <td style="font-weight:600;">${m.competencia}</td>
-      <td>${minToHM(trab)}h</td><td>${fmt(m.total_chamados)}</td>
-      <td style="color:${cor};font-weight:800;">${fte}%</td>
-    </tr>`
-  }).join('')
-  return `<div class="card overflow-x-auto">
-    ${sectionTitle('Série Histórica')}
-    <table><thead><tr><th>Mês</th><th>Horas</th><th>Chamados</th><th>FTE %</th></tr></thead><tbody>${rows}</tbody></table>
-  </div>`
+  const rows=data.map(m=>{const r=(recs||[]).filter(x=>x.mes_slug===m.slug);const trab=r.reduce((s,x)=>s+x.trab_minutos,0);const cap=r.reduce((s,x)=>s+x.cap_minutos,0);const fte=pct(trab,cap);const cor=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e';return `<tr><td style="font-weight:600;">${esc(m.competencia)}</td><td>${minToHM(trab)}h</td><td>${fmt(m.total_chamados)}</td><td style="color:${cor};font-weight:800;">${fte}%</td></tr>`}).join('')
+  return `<div class="card overflow-x-auto">${ST('Série Histórica')}<table><thead><tr><th>Mês</th><th>Horas</th><th>Chamados</th><th>FTE %</th></tr></thead><tbody>${rows}</tbody></table></div>`
 }
 
 // ── ABA: INGESTÃO ─────────────────────────────────────────────────────────────
-async function rIngest() {
+async function rIngest(){
   const {data}=await sb.from('ingest_log').select('*').order('created_at',{ascending:false}).limit(30)
-  const {data:mList}=await sb.from('meses').select('slug,competencia,updated_at').order('slug',{ascending:false})
-  const mRows=(mList||[]).map(m=>`<tr>
-    <td style="font-weight:600;">${m.competencia}</td>
-    <td style="font-family:monospace;font-size:.72rem;color:#64748b;">${m.slug}</td>
-    <td style="font-size:.72rem;color:#94a3b8;">${new Date(m.updated_at).toLocaleString('pt-BR')}</td>
-  </tr>`).join('')
-  const logRows=(data||[]).length?(data||[]).map(l=>{
-    const cor=l.status==='processado'?'badge-g':l.status==='erro'?'badge-r':'badge-y'
-    return `<tr>
-      <td style="font-family:monospace;font-size:.7rem;color:#64748b;">${new Date(l.created_at).toLocaleString('pt-BR')}</td>
-      <td style="font-size:.75rem;max-width:15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.arquivo?.split('\\').pop()||l.arquivo}</td>
-      <td><span class="badge ${cor}">${l.status}</span></td>
-      <td style="font-size:.73rem;color:#94a3b8;">${l.tipo||'—'}</td>
-    </tr>`
-  }).join(''):`<tr><td colspan="4" style="color:#94a3b8;font-size:.82rem;padding:1.5rem;text-align:center;">Nenhum arquivo ingerido ainda.</td></tr>`
-  return `
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-    <div class="card"><div style="font-size:.67rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem;">Meses no banco</div>
-      <table><thead><tr><th>Competência</th><th>Slug</th><th>Atualizado</th></tr></thead><tbody>${mRows}</tbody></table></div>
-    <div class="card"><div style="font-size:.67rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem;">Log de ingestão (últimos 30)</div>
-      <div class="overflow-x-auto"><table><thead><tr><th>Data</th><th>Arquivo</th><th>Status</th><th>Tipo</th></tr></thead><tbody>${logRows}</tbody></table></div></div>
-  </div>
-  <div class="card mt-4" style="border-left:3px solid var(--brand);">
-    <div style="font-size:.75rem;font-weight:700;color:var(--brand);margin-bottom:.5rem;">Como adicionar dados</div>
-    <ol style="font-size:.8rem;color:#64748b;padding-left:1.25rem;display:flex;flex-direction:column;gap:.25rem;line-height:1.5;">
-      <li>Salve PDFs do Milldesk em <code style="background:#f1f5f9;padding:.1rem .3rem;border-radius:.25rem;font-size:.72rem;">Base/[mês]/</code> no OneDrive</li>
-      <li>O <code style="background:#f1f5f9;padding:.1rem .3rem;border-radius:.25rem;font-size:.72rem;">watch.ps1</code> detecta e registra aqui automaticamente</li>
-      <li>Abra o Claude Code → PDFs são processados → <code style="background:#f1f5f9;padding:.1rem .3rem;border-radius:.25rem;font-size:.72rem;">push-mes.ps1</code> é executado</li>
-      <li>Dashboard atualiza em tempo real via Supabase Realtime</li>
-    </ol>
-  </div>`
+  const {data:ml}=await sb.from('meses').select('slug,competencia,updated_at').order('slug',{ascending:false})
+  const mRows=(ml||[]).map(m=>`<tr><td style="font-weight:600;">${esc(m.competencia)}</td><td style="font-family:monospace;font-size:.72rem;color:#64748b;">${m.slug}</td><td style="font-size:.72rem;color:#94a3b8;">${new Date(m.updated_at).toLocaleString('pt-BR')}</td></tr>`).join('')
+  const logRows=(data||[]).length?(data||[]).map(l=>{const cor=l.status==='processado'?'badge-g':l.status==='erro'?'badge-r':'badge-y';return `<tr><td style="font-family:monospace;font-size:.7rem;color:#64748b;">${new Date(l.created_at).toLocaleString('pt-BR')}</td><td style="font-size:.75rem;max-width:15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.arquivo?.split('\\').pop()||l.arquivo||'')}</td><td><span class="badge ${cor}">${l.status}</span></td><td style="font-size:.73rem;color:#94a3b8;">${l.tipo||'—'}</td></tr>`}).join(''):`<tr><td colspan="4" style="color:#94a3b8;font-size:.82rem;padding:1.5rem;text-align:center;">Nenhum arquivo ainda.</td></tr>`
+  return `<div class="grid grid-cols-1 md:grid-cols-2 gap-5"><div class="card">${ST('Meses no banco')}<table><thead><tr><th>Competência</th><th>Slug</th><th>Atualizado</th></tr></thead><tbody>${mRows}</tbody></table></div><div class="card">${ST('Log de ingestão (últimos 30)')}<div class="overflow-x-auto"><table><thead><tr><th>Data</th><th>Arquivo</th><th>Status</th><th>Tipo</th></tr></thead><tbody>${logRows}</tbody></table></div></div></div>
+  <div class="card mt-4" style="border-left:3px solid var(--brand);"><div style="font-size:.75rem;font-weight:700;color:var(--brand);margin-bottom:.5rem;">Como adicionar dados</div><ol style="font-size:.8rem;color:#64748b;padding-left:1.25rem;line-height:1.7;"><li>PDFs do Milldesk em <code style="background:#f1f5f9;padding:.1rem .3rem;border-radius:.25rem;">Base/[mês]/</code> no OneDrive</li><li><code style="background:#f1f5f9;padding:.1rem .3rem;border-radius:.25rem;">watch.ps1</code> detecta automaticamente</li><li>Claude Code processa → <code style="background:#f1f5f9;padding:.1rem .3rem;border-radius:.25rem;">push-mes.ps1 -Slug AAAA-MM</code></li><li>Dashboard atualiza via Supabase Realtime</li></ol></div>`
 }
 
 // ── ABA: GESTÃO ───────────────────────────────────────────────────────────────
-function rGestao() {
-  const subNav=`<div style="display:flex;gap:.2rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.5rem;padding:.15rem;width:fit-content;margin-bottom:1.25rem;">
-    <button class="sub-tab ${GESTAO_SUB==='contratos'?'active':''}" onclick="setGSub('contratos')">Contratos</button>
-    <button class="sub-tab ${GESTAO_SUB==='funcionarios'?'active':''}" onclick="setGSub('funcionarios')">Funcionários</button>
+function rGestao(){
+  const subNav=`<div style="display:flex;gap:.2rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.5rem;padding:.15rem;width:fit-content;margin-bottom:1.25rem;"><button class="sub-tab ${GESTAO_SUB==='contratos'?'active':''}" onclick="setGSub('contratos')">Contratos</button><button class="sub-tab ${GESTAO_SUB==='funcionarios'?'active':''}" onclick="setGSub('funcionarios')">Funcionários</button></div>`
+  return subNav+(GESTAO_SUB==='contratos'?rContratos():rFuncionarios())
+}
+window.setGSub=function(s){GESTAO_SUB=s;render()}
+
+function rContratos(){
+  const sBadge=s=>s==='ativo'?'badge-g':s==='pausado'?'badge-y':'badge-r'
+  const rows=CONTRACTS.map(c=>`<tr>
+    <td>${empresaBadge(c.empresa)}</td>
+    <td style="font-weight:600;">${esc(c.cliente)}</td>
+    <td style="color:#64748b;">${esc(c.nome)}</td>
+    <td style="font-size:.72rem;max-width:14rem;color:#64748b;">${c.resumo?esc(c.resumo.slice(0,60))+(c.resumo.length>60?'…':''):'—'}</td>
+    <td>${techTags(c.tecnologias)}</td>
+    <td style="color:#166534;font-weight:700;">${c.valor_mensal?fmtR(c.valor_mensal):'—'}</td>
+    <td style="color:#64748b;">${c.franquia_horas||'—'}h</td>
+    <td style="font-size:.72rem;color:#64748b;">${c.sla_atend_h!=null?c.sla_atend_h+'h / '+c.sla_resol_h+'h':'—'}</td>
+    <td><span class="badge ${sBadge(c.status)}">${c.status}</span></td>
+    <td style="display:flex;gap:.2rem;align-items:center;">
+      <button class="act-btn act-edit" data-id="${c.id}" onclick="openContractEdit(this.dataset.id)">Editar</button>
+      <button class="act-btn act-arch" data-id="${c.id}" onclick="archiveContract(this.dataset.id)">Arq.</button>
+      <button class="act-btn act-del" data-id="${c.id}" onclick="deleteContract(this.dataset.id)">✕</button>
+    </td>
+  </tr>`).join('')
+  return `<div class="card overflow-x-auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">${ST('Contratos')}<button onclick="openContractNew()" style="display:flex;align-items:center;gap:.35rem;background:var(--brand);color:white;border:none;border-radius:.5rem;padding:.4rem .85rem;font-size:.72rem;font-weight:700;cursor:pointer;margin-top:-.4rem;"><i data-lucide="plus" style="width:.8rem;height:.8rem;"></i> Novo Contrato</button></div>
+    <table><thead><tr><th>Empresa</th><th>Cliente</th><th>Contrato</th><th>Resumo</th><th>Tecnologias</th><th>Valor Mensal</th><th>Franquia</th><th>SLA At./Res.</th><th>Status</th><th>Ações</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="10" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum contrato. Clique em "Novo Contrato" para adicionar.</td></tr>'}</tbody></table>
   </div>`
-  return subNav + (GESTAO_SUB==='contratos'?rContratos():rFuncionarios())
 }
 
-window.setGSub = function(sub) { GESTAO_SUB=sub; render() }
-
-function rContratos() {
-  const st=getContractStatus()
-  const sBadge=s=>s==='ativo'?'badge-g':s==='pausado'?'badge-y':'badge-r'
-  const rows=(D.premissas||[]).map(p=>{
-    const s=st[p.cliente]||'ativo'
+function rFuncionarios(){
+  const rows=FUNCS.filter(f=>!f._removed).map(f=>{
+    const vh=getVH(f.nome,f.nivel); const aloc=getAlocLabel(f)
     return `<tr>
-      <td style="font-weight:600;">${p.cliente}</td>
-      <td style="color:#64748b;">${p.franquia_horas||'—'}h</td>
-      <td style="color:#166534;font-weight:700;">${p.valor_mensal?fmtR(p.valor_mensal):'—'}</td>
-      <td><span class="badge ${sBadge(s)}">${s}</span></td>
+      <td style="font-weight:600;">${esc(f.nome)}</td>
+      <td><span class="tag">${f.nivel}</span></td>
+      <td style="color:#64748b;">${esc(f.equipe||'—')}</td>
+      <td style="color:#854d0e;font-weight:700;">${f.salario>0?fmtR(f.salario):'<span style="color:#94a3b8;">(a def.)</span>'}</td>
+      <td style="color:#166534;font-weight:700;">${vh>0?fmtR(Math.round(vh))+'/h':'<span style="color:#94a3b8;">(est. nível)</span>'}</td>
+      <td style="color:#64748b;">${f.cap_horas||168}h/mês</td>
+      <td style="font-size:.72rem;color:#64748b;max-width:10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(aloc)}</td>
       <td style="display:flex;gap:.2rem;align-items:center;">
-        <button class="act-btn act-edit" onclick="openContractEdit('${p.cliente.replace(/'/g,"\\'")}')">Editar</button>
-        <button class="act-btn act-arch" onclick="archiveContract('${p.cliente.replace(/'/g,"\\'")}')">Arquivar</button>
-        <button class="act-btn act-del" onclick="deleteContract('${p.cliente.replace(/'/g,"\\'")}')">✕</button>
+        <button class="act-btn act-edit" data-id="${f.id}" onclick="openFuncEdit(this.dataset.id)">Editar</button>
+        <button class="act-btn act-del" data-id="${f.id}" onclick="removeFunc(this.dataset.id)">✕</button>
       </td>
     </tr>`
   }).join('')
-  return `<div class="card overflow-x-auto">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
-      ${sectionTitle('Contratos / Premissas')}
-      <button onclick="openContractNew()" style="display:flex;align-items:center;gap:.35rem;background:var(--brand);color:white;border:none;border-radius:.5rem;padding:.4rem .85rem;font-size:.72rem;font-weight:700;cursor:pointer;margin-top:-.4rem;">
-        <i data-lucide="plus" style="width:.8rem;height:.8rem;"></i> Novo Contrato
-      </button>
-    </div>
-    <table><thead><tr><th>Cliente</th><th>Franquia</th><th>Valor Mensal</th><th>Status</th><th>Ações</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="5" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum contrato cadastrado.</td></tr>'}</tbody></table>
-  </div>`
-}
-
-function rFuncionarios() {
-  const ov=getFuncOv()
-  const names=[...new Set(D.recursos.map(r=>r.nome))].filter(n=>!ov[n]?._removed)
-  const funcs=names.map(nome=>{
-    const last=D.recursos.filter(r=>r.nome===nome).sort((a,b)=>b.mes_slug.localeCompare(a.mes_slug))[0]
-    const o=ov[nome]||{}
-    return {nome, nivel:o.nivel||last?.nivel||'—', equipe:o.equipe||last?.equipe||'—', cap:o.cap||(last?.cap_minutos?Math.round(last.cap_minutos/60):0)}
-  })
-  const rows=funcs.map(f=>`<tr>
-    <td style="font-weight:600;">${f.nome}</td>
-    <td><span class="tag">${f.nivel}</span></td>
-    <td style="color:#64748b;">${f.equipe}</td>
-    <td style="color:#64748b;">${f.cap}h/mês</td>
-    <td style="display:flex;gap:.2rem;align-items:center;">
-      <button class="act-btn act-edit" onclick="openFuncEdit('${f.nome.replace(/'/g,"\\'")}')">Editar</button>
-      <button class="act-btn act-del" onclick="removeFunc('${f.nome.replace(/'/g,"\\'")}')">✕</button>
-    </td>
-  </tr>`).join('')
   return `
-  <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:.5rem;padding:.6rem .875rem;margin-bottom:1rem;font-size:.78rem;color:#854d0e;line-height:1.45;">
-    <strong>Atenção:</strong> Edições não alteram registros históricos de horas. Novos valores aplicam-se apenas a cálculos futuros.
+  <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:.5rem;padding:.55rem .875rem;margin-bottom:1rem;font-size:.78rem;color:#854d0e;line-height:1.4;">
+    <strong>Atenção:</strong> Edições não alteram histórico de horas. Salário e valor/hora aplicam-se apenas a cálculos futuros.
   </div>
   <div class="card overflow-x-auto">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
-      ${sectionTitle('Funcionários Ativos')}
-      <button onclick="openFuncNew()" style="display:flex;align-items:center;gap:.35rem;background:var(--brand);color:white;border:none;border-radius:.5rem;padding:.4rem .85rem;font-size:.72rem;font-weight:700;cursor:pointer;margin-top:-.4rem;">
-        <i data-lucide="plus" style="width:.8rem;height:.8rem;"></i> Novo Funcionário
-      </button>
-    </div>
-    <table><thead><tr><th>Nome</th><th>Nível</th><th>Equipe</th><th>Capacidade</th><th>Ações</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="5" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum funcionário encontrado.</td></tr>'}</tbody></table>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">${ST('Funcionários Ativos')}<button onclick="openFuncNew()" style="display:flex;align-items:center;gap:.35rem;background:var(--brand);color:white;border:none;border-radius:.5rem;padding:.4rem .85rem;font-size:.72rem;font-weight:700;cursor:pointer;margin-top:-.4rem;"><i data-lucide="plus" style="width:.8rem;height:.8rem;"></i> Novo Funcionário</button></div>
+    <table><thead><tr><th>Nome</th><th>Nível</th><th>Equipe</th><th>Salário</th><th>Valor/hora</th><th>Capacidade</th><th>Alocação</th><th>Ações</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="8" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum funcionário cadastrado.</td></tr>'}</tbody></table>
   </div>`
 }
 
 // ── CRUD: Contratos ───────────────────────────────────────────────────────────
-function openContractNew() {
+function openContractNew(){
   document.getElementById('mCTitle').textContent='Novo Contrato'
-  document.getElementById('cOld').value=''
-  document.getElementById('cCliente').value=''
-  document.getElementById('cFranquia').value=''
-  document.getElementById('cValor').value=''
-  document.getElementById('cStatus').value='ativo'
-  openModal('modalContract')
+  document.getElementById('cId').value=''; document.getElementById('cEmpresa').value=''
+  document.getElementById('cCliente').value=''; document.getElementById('cNome').value=''
+  document.getElementById('cResumo').value=''; document.getElementById('cTecnologias').value=''
+  document.getElementById('cValor').value=''; document.getElementById('cFranquia').value=''
+  document.getElementById('cSlaAtend').value='4'; document.getElementById('cSlaResol').value='24'
+  document.getElementById('cStatus').value='ativo'; openModal('modalContract')
 }
-
-function openContractEdit(cliente) {
-  const p=D.premissas.find(x=>x.cliente===cliente); if(!p) return
+function openContractEdit(id){
+  const c=CONTRACTS.find(x=>x.id===id); if(!c) return
   document.getElementById('mCTitle').textContent='Editar Contrato'
-  document.getElementById('cOld').value=cliente
-  document.getElementById('cCliente').value=p.cliente
-  document.getElementById('cFranquia').value=p.franquia_horas||''
-  document.getElementById('cValor').value=p.valor_mensal||''
-  document.getElementById('cStatus').value=getContractStatus()[cliente]||'ativo'
-  openModal('modalContract')
+  document.getElementById('cId').value=c.id; document.getElementById('cEmpresa').value=c.empresa||''
+  document.getElementById('cCliente').value=c.cliente; document.getElementById('cNome').value=c.nome
+  document.getElementById('cResumo').value=c.resumo||''; document.getElementById('cTecnologias').value=(c.tecnologias||[]).join(', ')
+  document.getElementById('cValor').value=c.valor_mensal||''; document.getElementById('cFranquia').value=c.franquia_horas||''
+  document.getElementById('cSlaAtend').value=c.sla_atend_h??4; document.getElementById('cSlaResol').value=c.sla_resol_h??24
+  document.getElementById('cStatus').value=c.status||'ativo'; openModal('modalContract')
 }
-
-async function saveContract(e) {
+function saveContract(e){
   e.preventDefault()
-  const old=document.getElementById('cOld').value
-  const cliente=document.getElementById('cCliente').value.trim()
-  const franquia=parseInt(document.getElementById('cFranquia').value)||0
-  const valor=parseFloat(document.getElementById('cValor').value)||0
-  const status=document.getElementById('cStatus').value
-  try {
-    if (old && old!==cliente) await sb.from('premissas').delete().eq('cliente',old)
-    await sb.from('premissas').upsert({cliente,franquia_horas:franquia,valor_mensal:valor},{onConflict:'cliente'})
-    const st=getContractStatus(); st[cliente]=status; if(old&&old!==cliente) delete st[old]; setContractStatus(st)
-    closeModal('modalContract')
-    await loadMonth(MES)
-    toast('Contrato salvo com sucesso!')
-  } catch(err) { toast('Erro: '+err.message, false) }
+  const id=document.getElementById('cId').value||uid()
+  const row={id,empresa:document.getElementById('cEmpresa').value,cliente:document.getElementById('cCliente').value.trim(),nome:document.getElementById('cNome').value.trim(),resumo:document.getElementById('cResumo').value.trim(),tecnologias:document.getElementById('cTecnologias').value.split(',').map(t=>t.trim()).filter(Boolean),valor_mensal:parseFloat(document.getElementById('cValor').value)||0,franquia_horas:parseInt(document.getElementById('cFranquia').value)||0,sla_atend_h:parseFloat(document.getElementById('cSlaAtend').value)||4,sla_resol_h:parseFloat(document.getElementById('cSlaResol').value)||24,status:document.getElementById('cStatus').value}
+  const idx=CONTRACTS.findIndex(x=>x.id===id); if(idx>=0) CONTRACTS[idx]=row; else CONTRACTS.push(row)
+  setContracts(CONTRACTS); closeModal('modalContract'); render(); toast('Contrato salvo com sucesso!')
+  // Sync to Supabase premissas (core financial data)
+  sb.from('premissas').upsert({cliente:row.cliente,franquia_horas:row.franquia_horas,valor_mensal:row.valor_mensal},{onConflict:'cliente'}).catch(()=>{})
 }
-
-function archiveContract(cliente) {
-  const st=getContractStatus(); st[cliente]='arquivado'; setContractStatus(st)
-  render(); toast('Contrato arquivado.')
-}
-
-function deleteContract(cliente) {
-  confirmAction(`Remover o contrato de "${cliente}"? Esta ação não pode ser desfeita.`, async()=>{
-    await sb.from('premissas').delete().eq('cliente',cliente)
-    await loadMonth(MES)
-    toast('Contrato removido.')
-  })
-}
+function archiveContract(id){ const c=CONTRACTS.find(x=>x.id===id); if(!c) return; c.status='arquivado'; setContracts(CONTRACTS); render(); toast('Contrato arquivado.') }
+function deleteContract(id){ const c=CONTRACTS.find(x=>x.id===id); if(!c) return; confirmAction(`Remover o contrato "${c.nome}" (${c.cliente})?`,()=>{ CONTRACTS=CONTRACTS.filter(x=>x.id!==id); setContracts(CONTRACTS); render(); toast('Contrato removido.') }) }
 
 // ── CRUD: Funcionários ────────────────────────────────────────────────────────
-function openFuncNew() {
+function updateVH(){
+  const sal=parseFloat(document.getElementById('fSalario').value)||0
+  const cap=parseFloat(document.getElementById('fCap').value)||168
+  const vh=cap>0&&sal>0?sal/cap:0
+  document.getElementById('vhDisplay').textContent=vh>0?'Valor/hora estimado: '+fmtR(Math.round(vh)):''
+}
+function toggleAlocList(){
+  const isEsp=document.getElementById('fAlocEsp').checked
+  const list=document.getElementById('fClientesList'); list.classList.toggle('hidden',!isEsp)
+  if(isEsp&&!list.innerHTML.trim()){
+    list.innerHTML=(D.clientes||[]).map(c=>`<label style="display:flex;align-items:center;gap:.4rem;padding:.2rem .25rem;cursor:pointer;font-size:.78rem;color:#1e293b;"><input type="checkbox" name="fCli" value="${esc(c.nome)}" style="width:.85rem;height:.85rem;accent-color:var(--brand);"> ${esc(c.nome)}</label>`).join('')
+  }
+}
+function openFuncNew(){
   document.getElementById('mFTitle').textContent='Novo Funcionário'
-  document.getElementById('fOld').value=''
-  document.getElementById('fNome').value=''
-  document.getElementById('fNivel').value='N1'
-  document.getElementById('fEquipe').value=''
-  document.getElementById('fCap').value='168'
+  document.getElementById('fId').value=''; document.getElementById('fNome').value=''
+  document.getElementById('fNivel').value='N1'; document.getElementById('fEquipe').value=''
+  document.getElementById('fSalario').value=''; document.getElementById('fCap').value='168'
+  document.getElementById('vhDisplay').textContent=''
+  document.getElementById('fAlocTodos').checked=true; document.getElementById('fClientesList').classList.add('hidden')
   openModal('modalFunc')
 }
-
-function openFuncEdit(nome) {
-  const ov=getFuncOv()
-  const rec=D.recursos.filter(r=>r.nome===nome).sort((a,b)=>b.mes_slug.localeCompare(a.mes_slug))[0]
-  const o={...rec,...(ov[nome]||{})}
+function openFuncEdit(id){
+  const f=FUNCS.find(x=>x.id===id); if(!f) return
   document.getElementById('mFTitle').textContent='Editar Funcionário'
-  document.getElementById('fOld').value=nome
-  document.getElementById('fNome').value=nome
-  document.getElementById('fNivel').value=o.nivel||'N1'
-  document.getElementById('fEquipe').value=o.equipe||''
-  document.getElementById('fCap').value=o.cap||(rec?.cap_minutos?Math.round(rec.cap_minutos/60):168)
+  document.getElementById('fId').value=f.id; document.getElementById('fNome').value=f.nome
+  document.getElementById('fNivel').value=f.nivel||'N1'; document.getElementById('fEquipe').value=f.equipe||''
+  document.getElementById('fSalario').value=f.salario||''; document.getElementById('fCap').value=f.cap_horas||168
+  updateVH()
+  const isEsp=f.alocacao_tipo==='especifico'
+  document.getElementById(isEsp?'fAlocEsp':'fAlocTodos').checked=true
+  const list=document.getElementById('fClientesList'); list.classList.toggle('hidden',!isEsp)
+  if(isEsp){list.innerHTML=(D.clientes||[]).map(c=>`<label style="display:flex;align-items:center;gap:.4rem;padding:.2rem .25rem;cursor:pointer;font-size:.78rem;color:#1e293b;"><input type="checkbox" name="fCli" value="${esc(c.nome)}"${(f.alocacao_clientes||[]).includes(c.nome)?' checked':''} style="width:.85rem;height:.85rem;accent-color:var(--brand);"> ${esc(c.nome)}</label>`).join('')}
   openModal('modalFunc')
 }
-
-function saveFunc(e) {
+function saveFunc(e){
   e.preventDefault()
-  const old=document.getElementById('fOld').value
-  const nome=document.getElementById('fNome').value.trim()
-  const nivel=document.getElementById('fNivel').value
-  const equipe=document.getElementById('fEquipe').value.trim()
-  const cap=parseInt(document.getElementById('fCap').value)||168
-  const ov=getFuncOv()
-  if(old&&old!==nome) delete ov[old]
-  ov[nome]={nivel,equipe,cap}; setFuncOv(ov)
-  closeModal('modalFunc'); render()
-  toast('Funcionário atualizado. Dados históricos preservados.')
+  const id=document.getElementById('fId').value||uid()
+  const isEsp=document.getElementById('fAlocEsp').checked
+  const clientes=[...document.querySelectorAll('[name="fCli"]:checked')].map(x=>x.value)
+  const row={id,nome:document.getElementById('fNome').value.trim(),nivel:document.getElementById('fNivel').value,equipe:document.getElementById('fEquipe').value.trim(),salario:parseFloat(document.getElementById('fSalario').value)||0,cap_horas:parseInt(document.getElementById('fCap').value)||168,alocacao_tipo:isEsp?'especifico':'todos',alocacao_clientes:isEsp?clientes:[]}
+  const idx=FUNCS.findIndex(x=>x.id===id); if(idx>=0) FUNCS[idx]=row; else FUNCS.push(row)
+  setFuncs(FUNCS); closeModal('modalFunc'); render(); toast('Funcionário salvo. Dados históricos preservados.')
 }
+function removeFunc(id){ const f=FUNCS.find(x=>x.id===id); if(!f) return; confirmAction(`Remover "${f.nome}" da listagem futura?`,()=>{ f._removed=true; setFuncs(FUNCS); render(); toast('Funcionário ocultado.') }) }
 
-function removeFunc(nome) {
-  confirmAction(`Remover "${nome}" da listagem futura? O histórico de horas é preservado.`, ()=>{
-    const ov=getFuncOv(); ov[nome]={_removed:true}; setFuncOv(ov)
-    render(); toast('Funcionário ocultado da listagem.')
-  })
+// ── SLA edit ──────────────────────────────────────────────────────────────────
+window.openSLAEdit=function(){
+  const s=D.sla||{}
+  document.getElementById('mSLATitle').textContent='Editar SLA — '+(MESES_LIST.find(m=>m.slug===MES)?.competencia||MES)
+  document.getElementById('slaTMA').value=s.tma_minutos!=null?(s.tma_minutos/60).toFixed(1):''
+  document.getElementById('slaTMR').value=s.tmr_minutos!=null?(s.tmr_minutos/60).toFixed(1):''
+  document.getElementById('slaPct').value=s.dentro_sla_pct??''
+  document.getElementById('slaCh').value=s.chamados_sla??''
+  document.getElementById('slaFora').value=s.chamados_fora??''
+  openModal('modalSLA')
+}
+async function saveSLA(e){
+  e.preventDefault()
+  const row={mes_slug:MES,tma_minutos:Math.round(parseFloat(document.getElementById('slaTMA').value)*60),tmr_minutos:Math.round(parseFloat(document.getElementById('slaTMR').value)*60),dentro_sla_pct:parseInt(document.getElementById('slaPct').value)||0,chamados_sla:parseInt(document.getElementById('slaCh').value)||0,chamados_fora:parseInt(document.getElementById('slaFora').value)||0}
+  try{const {error}=await sb.from('sla').upsert(row,{onConflict:'mes_slug'});if(error) throw error;closeModal('modalSLA');await loadMonth(MES);toast('SLA atualizado!')}catch(err){toast('Erro: '+err.message,false)}
 }
 
 // ── Dismiss alerta ────────────────────────────────────────────────────────────
-async function dismissAlerta(id) {
-  await sb.from('alertas').update({resolvido:true}).eq('id',id)
-  D.alertas=D.alertas.filter(a=>a.id!==id); render()
-}
+async function dismissAlerta(id){ await sb.from('alertas').update({resolvido:true}).eq('id',id); D.alertas=D.alertas.filter(a=>a.id!==id); render() }
 
 // ── Realtime ──────────────────────────────────────────────────────────────────
-function initRealtime() {
+function initRealtime(){
   sb.channel('seniorsbi-live')
-    .on('postgres_changes',{event:'*',schema:'public',table:'meses'},async()=>{
-      await loadMeses()
-      if(!MESES_LIST.find(m=>m.slug===MES)&&MESES_LIST.length){MES=MESES_LIST[0].slug;document.getElementById('selMes').value=MES}
-      await loadMonth(MES)
-    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'meses'},async()=>{await loadMeses();if(!MESES_LIST.find(m=>m.slug===MES)&&MESES_LIST.length){MES=MESES_LIST[0].slug;document.getElementById('selMes').value=MES}await loadMonth(MES)})
     .on('postgres_changes',{event:'*',schema:'public',table:'recursos'},()=>loadMonth(MES))
     .on('postgres_changes',{event:'*',schema:'public',table:'clientes'},()=>loadMonth(MES))
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'ingest_log'},()=>{
-      if(TAB==='ingest') rIngest().then(h=>{document.getElementById('main').innerHTML=h;lucide.createIcons()})
-    })
-    .subscribe(status=>{
-      const dot=document.getElementById('liveDot'),lbl=document.getElementById('liveStatus')
-      if(status==='SUBSCRIBED'){dot.style.background='#22c55e';lbl.textContent='Live'}
-      else{dot.style.background='#f59e0b';lbl.textContent='Reconectando…'}
-    })
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'ingest_log'},()=>{if(TAB==='ingest') rIngest().then(h=>{document.getElementById('main').innerHTML=h;lucide.createIcons()})})
+    .subscribe(st=>{const dot=document.getElementById('liveDot'),lbl=document.getElementById('liveStatus');if(st==='SUBSCRIBED'){dot.style.background='#22c55e';lbl.textContent='Live'}else{dot.style.background='#f59e0b';lbl.textContent='Reconectando…'}})
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-async function boot() {
-  try {
+async function boot(){
+  try{
     await loadMeses()
-    if (MES) await loadMonth(MES)
-    else document.getElementById('main').innerHTML=`
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:18rem;gap:.75rem;">
-        <div style="color:#94a3b8;font-size:.875rem;">Banco ainda vazio.</div>
-        <div style="color:#cbd5e1;font-size:.78rem;">Rode <code style="background:#f1f5f9;padding:.1rem .4rem;border-radius:.25rem;">push-mes.ps1 -Slug 2026-06</code> para carregar os dados.</div>
-      </div>`
+    if(MES) await loadMonth(MES)
+    else document.getElementById('main').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:18rem;gap:.75rem;"><div style="color:#94a3b8;font-size:.875rem;">Banco ainda vazio.</div><div style="font-size:.78rem;color:#cbd5e1;">Rode <code style="background:#f1f5f9;padding:.1rem .4rem;border-radius:.25rem;">push-mes.ps1 -Slug 2026-06</code></div></div>`
     initRealtime(); startRot()
-  } catch(e) {
-    document.getElementById('main').innerHTML=`<div class="card" style="border-left:3px solid #ef4444;color:#ef4444;font-size:.875rem;padding:1.25rem;">Erro ao conectar no Supabase: ${e.message}</div>`
-  } finally {
+  }catch(e){
+    document.getElementById('main').innerHTML=`<div class="card" style="border-left:3px solid #ef4444;color:#ef4444;font-size:.875rem;padding:1.25rem;">Erro ao conectar: ${esc(e.message)}</div>`
+  }finally{
     document.getElementById('loading').style.display='none'
     document.getElementById('app').classList.remove('hidden')
     lucide.createIcons()
   }
 }
-
-document.getElementById('selMes').addEventListener('change',e=>{ if(e.target.value) loadMonth(e.target.value) })
-
+document.getElementById('selMes').addEventListener('change',e=>{if(e.target.value)loadMonth(e.target.value)})
 boot()
 </script>
 </body>
