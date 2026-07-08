@@ -1,0 +1,4 @@
+.env
+*.pdf
+data/meses/*.json
+node_modules/

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SeniorsBI — Cockpit Live</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  :root{--brand:#1e40af;--accent:#f97316}
+  body{background:#0f172a;color:#e2e8f0;font-family:'Inter',system-ui,sans-serif}
+  .tab-btn{padding:.5rem 1rem;border-radius:.5rem;font-size:.8rem;font-weight:500;cursor:pointer;transition:all .15s;color:#94a3b8}
+  .tab-btn.active{background:#1e40af;color:#fff}
+  .tab-btn:hover:not(.active){background:#1e293b;color:#e2e8f0}
+  .card{background:#1e293b;border-radius:.75rem;padding:1.25rem;border:1px solid #334155}
+  .card-sm{background:#1e293b;border-radius:.5rem;padding:.75rem;border:1px solid #334155}
+  .kpi-big{font-size:2rem;font-weight:700;color:#f8fafc}
+  .kpi-lbl{font-size:.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em}
+  .badge{display:inline-flex;align-items:center;gap:.25rem;padding:.15rem .5rem;border-radius:9999px;font-size:.7rem;font-weight:600}
+  .badge-g{background:#14532d;color:#86efac} .badge-y{background:#78350f;color:#fcd34d}
+  .badge-r{background:#7f1d1d;color:#fca5a5} .badge-b{background:#1e3a5f;color:#93c5fd}
+  .pulse{width:.6rem;height:.6rem;border-radius:50%;background:#22c55e;animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .bar{height:.5rem;border-radius:.25rem;background:#1e40af;transition:width .6s}
+  .bar-warn{background:#f97316} .bar-danger{background:#ef4444}
+  .heatmap-cell{width:2rem;height:2rem;border-radius:.25rem;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700}
+  .tag{display:inline-block;padding:.1rem .4rem;border-radius:.25rem;font-size:.65rem;background:#1e293b;border:1px solid #334155;color:#94a3b8}
+  #loading{position:fixed;inset:0;background:#0f172a;display:flex;align-items:center;justify-content:center;z-index:99;flex-direction:column;gap:1rem}
+  .spinner{width:2.5rem;height:2.5rem;border:3px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;padding:.5rem .75rem;font-size:.7rem;color:#64748b;border-bottom:1px solid #334155;white-space:nowrap}
+  td{padding:.5rem .75rem;font-size:.8rem;border-bottom:1px solid #1e293b}
+  tr:last-child td{border:none}
+  tr:hover td{background:#1e293b80}
+  .spof-badge{background:#7f1d1d;color:#fca5a5;padding:.1rem .4rem;border-radius:.25rem;font-size:.65rem;font-weight:700}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p class="text-slate-400 text-sm">Conectando ao SeniorsBI…</p>
+</div>
+
+<div id="app" class="hidden min-h-screen flex flex-col">
+
+<!-- TOP BAR -->
+<header class="flex items-center justify-between px-6 py-3 border-b border-slate-800 bg-slate-900/80 sticky top-0 z-10">
+  <div class="flex items-center gap-3">
+    <!-- Logo 4SR -->
+    <svg width="36" height="36" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="40" cy="40" rx="38" ry="30" fill="#1e3a8a" stroke="#f97316" stroke-width="4"/>
+      <text x="40" y="38" text-anchor="middle" font-size="22" font-weight="900" fill="#fff" font-family="Arial">4</text>
+      <text x="40" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#93c5fd" font-family="Arial">SENIORS</text>
+    </svg>
+    <div>
+      <div class="text-sm font-bold text-white">SeniorsBI</div>
+      <div class="text-xs text-slate-500">Cockpit Operacional Live</div>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-4">
+    <!-- Seletor de mês -->
+    <select id="selMes" class="text-sm bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-blue-500">
+      <option value="">Carregando…</option>
+    </select>
+
+    <!-- Status live -->
+    <div class="flex items-center gap-2">
+      <div class="pulse" id="liveDot"></div>
+      <span class="text-xs text-slate-400" id="liveStatus">Conectando…</span>
+    </div>
+
+    <!-- Última atualização -->
+    <span class="text-xs text-slate-500" id="lastUpdate"></span>
+  </div>
+</header>
+
+<!-- TABS -->
+<nav class="flex gap-1 px-6 py-2 border-b border-slate-800 bg-slate-900/60 overflow-x-auto">
+  <button class="tab-btn active" onclick="setTab('exec')">Executivo</button>
+  <button class="tab-btn" onclick="setTab('prod')">Produtividade</button>
+  <button class="tab-btn" onclick="setTab('custo')">Custos &amp; Margem</button>
+  <button class="tab-btn" onclick="setTab('cli')">Clientes</button>
+  <button class="tab-btn" onclick="setTab('sla')">SLA &amp; Op.</button>
+  <button class="tab-btn" onclick="setTab('eq')">Equipe</button>
+  <button class="tab-btn" onclick="setTab('trend')">Tendência</button>
+  <button class="tab-btn" onclick="setTab('ingest')">Ingestão</button>
+</nav>
+
+<!-- MAIN -->
+<main class="flex-1 p-6 overflow-auto" id="main"></main>
+
+</div><!-- /app -->
+
+<script>
+const SUPABASE_URL = 'https://ovciyobdpcawghdynqiw.supabase.co'
+const SUPABASE_KEY = 'sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+
+let D = {}       // dados do mês selecionado
+let MES = null   // slug atual
+let TAB = 'exec'
+let MESES_LIST = []
+
+// ── Utilidades ─────────────────────────────────────────────────────────────
+const minToHM = m => { m=+m||0; return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}` }
+const pct = (a,b) => b ? Math.round(a/b*100) : 0
+const fmt = n => n==null ? '—' : (+n).toLocaleString('pt-BR')
+const fmtR = n => n==null ? '—' : 'R$ '+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0})
+const barColor = p => p>=90?'bar-danger':p>=75?'bar-warn':''
+const severity = {baixa:'badge-b',media:'badge-y',alta:'badge-y',critica:'badge-r'}
+
+// ── Carregamento de dados ───────────────────────────────────────────────────
+async function loadMeses() {
+  const {data} = await sb.from('meses').select('slug,competencia,updated_at').order('slug',{ascending:false})
+  MESES_LIST = data || []
+  const sel = document.getElementById('selMes')
+  sel.innerHTML = MESES_LIST.length
+    ? MESES_LIST.map(m=>`<option value="${m.slug}">${m.competencia}</option>`).join('')
+    : '<option value="">Sem dados ainda</option>'
+  if (MESES_LIST.length) { MES = MESES_LIST[0].slug; sel.value = MES }
+}
+
+async function loadMonth(slug) {
+  if (!slug) return
+  MES = slug
+  D = {}
+
+  const [rec, cli, sla, sat, prem, sk, alt] = await Promise.all([
+    sb.from('recursos').select('*').eq('mes_slug',slug),
+    sb.from('clientes').select('*').eq('mes_slug',slug),
+    sb.from('sla').select('*').eq('mes_slug',slug).maybeSingle(),
+    sb.from('satisfacao').select('*').eq('mes_slug',slug).maybeSingle(),
+    sb.from('premissas').select('*'),
+    sb.from('skills').select('*'),
+    sb.from('alertas').select('*').eq('mes_slug',slug).eq('resolvido',false)
+  ])
+
+  D.recursos  = rec.data  || []
+  D.clientes  = (cli.data || []).sort((a,b)=>b.horas_minutos-a.horas_minutos)
+  D.sla       = sla.data  || null
+  D.sat       = sat.data  || null
+  D.premissas = prem.data || []
+  D.skills    = sk.data   || []
+  D.alertas   = alt.data  || []
+
+  D.totalHoras   = D.recursos.reduce((s,r)=>s+r.trab_minutos,0)
+  D.totalCap     = D.recursos.reduce((s,r)=>s+r.cap_minutos,0)
+  D.totalChamados = D.clientes.reduce((s,c)=>s+c.chamados,0)
+  D.fte          = pct(D.totalHoras, D.totalCap)
+
+  const m = MESES_LIST.find(x=>x.slug===slug)
+  if (m) document.getElementById('lastUpdate').textContent = 'Atualizado: '+new Date(m.updated_at).toLocaleString('pt-BR')
+
+  render()
+}
+
+// ── Tabs ────────────────────────────────────────────────────────────────────
+function setTab(t) {
+  TAB = t
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    const tabs=['exec','prod','custo','cli','sla','eq','trend','ingest']
+    b.classList.toggle('active', tabs[i]===t)
+  })
+  render()
+}
+
+function render() {
+  const el = document.getElementById('main')
+  if (!MES || !D.recursos) { el.innerHTML='<div class="text-slate-500 text-sm p-8">Selecione um mês acima.</div>'; return }
+  const fn = {exec:rExec,prod:rProd,custo:rCusto,cli:rCli,sla:rSLA,eq:rEquipe,trend:rTrend,ingest:rIngest}
+  el.innerHTML = (fn[TAB]||rExec)()
+  lucide.createIcons()
+}
+
+// ── ABA: EXECUTIVO ──────────────────────────────────────────────────────────
+function rExec() {
+  const totalH   = minToHM(D.totalHoras)
+  const fte      = D.fte
+  const alertas  = D.alertas.length
+  const csat     = D.sat?.csat ?? '—'
+  const cli      = D.clientes.length
+  const chamados = D.totalChamados
+
+  const alertPanel = D.alertas.length ? D.alertas.slice(0,5).map(a=>`
+    <div class="flex items-start gap-3 p-3 rounded-lg bg-slate-900 border border-slate-700">
+      <span class="badge ${severity[a.severidade]||'badge-b'} mt-0.5">${a.tipo}</span>
+      <div>
+        <div class="text-sm font-medium text-slate-200">${a.titulo||''}</div>
+        <div class="text-xs text-slate-400 mt-0.5">${a.descricao||''}</div>
+      </div>
+      <button onclick="dismissAlerta('${a.id}')" class="ml-auto text-slate-600 hover:text-slate-300 text-xs">✕</button>
+    </div>`).join('') : '<div class="text-slate-500 text-sm p-4">Sem alertas ativos.</div>'
+
+  const topCli = D.clientes.slice(0,5).map(c=>{
+    const prem = D.premissas.find(p=>p.cliente===c.nome)
+    const fran = prem?.franquia_horas||0
+    const h    = Math.round(c.horas_minutos/60)
+    const uso  = fran ? pct(h,fran) : null
+    const cor  = uso!=null?(uso>110?'bar-danger':uso>90?'bar-warn':'bar'):'bar'
+    return `<div>
+      <div class="flex justify-between text-xs mb-1">
+        <span class="text-slate-300">${c.nome}</span>
+        <span class="text-slate-400">${minToHM(c.horas_minutos)}h ${fran?`/ ${fran}h fran.`:''}</span>
+      </div>
+      <div class="w-full h-2 bg-slate-700 rounded-full"><div class="h-2 rounded-full ${cor} bar" style="width:${uso??pct(h,D.totalHoras/60*10)}%"></div></div>
+    </div>`
+  }).join('')
+
+  return `
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="card text-center"><div class="kpi-big">${totalH}h</div><div class="kpi-lbl">Horas produtivas</div></div>
+    <div class="card text-center"><div class="kpi-big ${fte<60?'text-red-400':fte<80?'text-yellow-400':'text-green-400'}">${fte}%</div><div class="kpi-lbl">Utilização FTE</div></div>
+    <div class="card text-center"><div class="kpi-big">${fmt(chamados)}</div><div class="kpi-lbl">Chamados</div></div>
+    <div class="card text-center"><div class="kpi-big ${csat==='—'?'text-slate-500':csat>=85?'text-green-400':csat>=70?'text-yellow-400':'text-red-400'}">${csat}${csat!=='—'?'%':''}</div><div class="kpi-lbl">CSAT</div></div>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="card">
+      <div class="text-xs text-slate-400 font-semibold mb-3 flex items-center gap-2">
+        <i data-lucide="triangle-alert" class="w-3.5 h-3.5 text-yellow-400"></i> ALERTAS ATIVOS (${alertas})
+      </div>
+      <div class="space-y-2">${alertPanel}</div>
+    </div>
+    <div class="card">
+      <div class="text-xs text-slate-400 font-semibold mb-3">TOP CLIENTES — HORAS</div>
+      <div class="space-y-3">${topCli}</div>
+    </div>
+  </div>`
+}
+
+// ── ABA: PRODUTIVIDADE ──────────────────────────────────────────────────────
+function rProd() {
+  const rows = D.recursos.map(r=>{
+    const fte = pct(r.trab_minutos, r.cap_minutos)
+    const cor = fte<60?'text-red-400':fte<80?'text-yellow-400':'text-green-400'
+    return `<tr>
+      <td class="font-medium text-slate-200">${r.nome}</td>
+      <td><span class="tag">${r.nivel}</span></td>
+      <td>${r.equipe||'—'}</td>
+      <td>${minToHM(r.trab_minutos)}h</td>
+      <td>${minToHM(r.avulsa_minutos)}h</td>
+      <td class="${cor} font-bold">${fte}%</td>
+    </tr>`
+  }).join('')
+
+  return `<div class="card overflow-x-auto">
+    <div class="text-xs text-slate-400 font-semibold mb-3">PRODUTIVIDADE POR TÉCNICO</div>
+    <table><thead><tr>
+      <th>Técnico</th><th>Nível</th><th>Equipe</th><th>H. Trabalhadas</th><th>H. Avulsas</th><th>FTE %</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+  </div>`
+}
+
+// ── ABA: CUSTOS & MARGEM ────────────────────────────────────────────────────
+function rCusto() {
+  const custo = {N1:6000,N2:9000,N3:14000,'Gestão':20000,'LGPD':15000}
+  let totalCusto=0, totalRec=0
+
+  const rows = D.recursos.map(r=>{
+    const c = custo[r.nivel]||8000
+    totalCusto += c
+    const h = r.trab_minutos/60
+    const chh = h>0 ? c/h : 0
+    return `<tr>
+      <td class="text-slate-200 font-medium">${r.nome}</td>
+      <td><span class="tag">${r.nivel}</span></td>
+      <td>${minToHM(r.trab_minutos)}h</td>
+      <td class="text-yellow-300">${fmtR(c)}<span class="text-slate-500 text-xs ml-1">(est.)</span></td>
+      <td class="text-slate-400">${fmtR(Math.round(chh))}/h</td>
+    </tr>`
+  }).join('')
+
+  // Receita estimada por cliente
+  let totalRec2=0
+  const recCli = D.clientes.map(c=>{
+    const p = D.premissas.find(x=>x.cliente===c.nome)
+    const val = p?.valor_mensal||0
+    totalRec2 += val
+    const horas = c.horas_minutos/60
+    const custoAlloc = totalCusto>0 && D.totalHoras>0 ? (c.horas_minutos/D.totalHoras)*totalCusto : 0
+    const margem = val && custoAlloc ? pct(val-custoAlloc,val) : null
+    const mCor = margem==null?'text-slate-500':margem<0?'text-red-400':margem<20?'text-yellow-400':'text-green-400'
+    return `<tr>
+      <td class="text-slate-200">${c.nome}</td>
+      <td>${minToHM(c.horas_minutos)}h</td>
+      <td>${fmt(c.chamados)}</td>
+      <td class="text-yellow-300">${val?fmtR(val):'<span class="text-slate-600">(a def.)</span>'}</td>
+      <td class="${mCor} font-bold">${margem!=null?margem+'%':'—'}</td>
+    </tr>`
+  }).join('')
+
+  return `
+  <div class="grid grid-cols-2 gap-4 mb-6">
+    <div class="card text-center"><div class="kpi-big text-yellow-400">${fmtR(totalCusto)}</div><div class="kpi-lbl">Custo equipe (est.)</div></div>
+    <div class="card text-center"><div class="kpi-big text-green-400">${totalRec2?fmtR(totalRec2):'(a definir)'}</div><div class="kpi-lbl">Receita contratos (est.)</div></div>
+  </div>
+  <div class="card mb-4 overflow-x-auto">
+    <div class="text-xs text-slate-400 font-semibold mb-3">CUSTO POR TÉCNICO</div>
+    <table><thead><tr><th>Técnico</th><th>Nível</th><th>H. Trab.</th><th>Custo/mês</th><th>Custo/h</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <div class="text-xs text-slate-500 mt-2">* Valores salariais são estimativas — substitua por dados reais em Premissas.</div>
+  </div>
+  <div class="card overflow-x-auto">
+    <div class="text-xs text-slate-400 font-semibold mb-3">MARGEM POR CLIENTE</div>
+    <table><thead><tr><th>Cliente</th><th>Horas</th><th>Chamados</th><th>Receita</th><th>Margem est.</th></tr></thead>
+    <tbody>${recCli}</tbody></table>
+  </div>`
+}
+
+// ── ABA: CLIENTES ───────────────────────────────────────────────────────────
+function rCli() {
+  const rows = D.clientes.map(c=>{
+    const p = D.premissas.find(x=>x.cliente===c.nome)
+    const fran = p?.franquia_horas||0
+    const h = c.horas_minutos/60
+    const uso = fran ? pct(Math.round(h),fran) : null
+    const cor = uso==null?'text-slate-400':uso>110?'text-red-400':uso>90?'text-yellow-400':'text-green-400'
+    return `<tr>
+      <td class="text-slate-200 font-medium">${c.nome}</td>
+      <td>${minToHM(c.horas_minutos)}h</td>
+      <td>${fran||'—'}h</td>
+      <td class="${cor} font-bold">${uso!=null?uso+'%':'—'}</td>
+      <td>${fmt(c.chamados)}</td>
+    </tr>`
+  }).join('')
+
+  return `<div class="card overflow-x-auto">
+    <div class="text-xs text-slate-400 font-semibold mb-3">CLIENTES — HORAS vs FRANQUIA</div>
+    <table><thead><tr>
+      <th>Cliente</th><th>H. Real</th><th>Franquia</th><th>Uso %</th><th>Chamados</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+  </div>`
+}
+
+// ── ABA: SLA ────────────────────────────────────────────────────────────────
+function rSLA() {
+  if (!D.sla) return `<div class="card text-slate-500 text-sm p-8">SLA ainda não carregado para este mês. Faça upload do relatório de SLA na pasta Base/.</div>`
+  const s = D.sla
+  return `
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="card text-center"><div class="kpi-big">${minToHM(s.tma_minutos)}h</div><div class="kpi-lbl">TMA</div></div>
+    <div class="card text-center"><div class="kpi-big">${minToHM(s.tmr_minutos)}h</div><div class="kpi-lbl">TMR</div></div>
+    <div class="card text-center"><div class="kpi-big ${s.dentro_sla_pct>=90?'text-green-400':s.dentro_sla_pct>=75?'text-yellow-400':'text-red-400'}">${s.dentro_sla_pct}%</div><div class="kpi-lbl">Dentro do SLA</div></div>
+    <div class="card text-center"><div class="kpi-big text-red-400">${fmt(s.chamados_fora)}</div><div class="kpi-lbl">Fora do SLA</div></div>
+  </div>`
+}
+
+// ── ABA: EQUIPE ─────────────────────────────────────────────────────────────
+function rEquipe() {
+  if (!D.skills.length) return `<div class="card text-slate-500 text-sm p-8">Matriz de skills não carregada.</div>`
+
+  const tecnicos = [...new Set(D.skills.map(s=>s.tecnico))]
+  const skills   = [...new Set(D.skills.map(s=>s.skill))]
+
+  const nivelColor={1:'#1e3a5f',2:'#78350f',3:'#14532d'}
+  const nivelText ={0:'',1:'1',2:'2',3:'3'}
+
+  const spofs = skills.filter(sk=>{
+    const experts = D.skills.filter(s=>s.skill===sk && s.nivel===3)
+    return experts.length<2
+  })
+
+  const header = tecnicos.map(t=>`<th class="text-center text-xs">${t.split(' ')[0]}</th>`).join('')
+  const rowsSk = skills.map(sk=>{
+    const isSpof = spofs.includes(sk)
+    const cells = tecnicos.map(t=>{
+      const e = D.skills.find(s=>s.tecnico===t && s.skill===sk)
+      const n = e?.nivel||0
+      return `<td class="text-center"><div class="heatmap-cell mx-auto" style="background:${n?nivelColor[n]:'#1e293b'};color:${n?'#fff':'#475569'}">${nivelText[n]||''}</div></td>`
+    }).join('')
+    return `<tr><td class="text-sm text-slate-300 pr-4 whitespace-nowrap">${sk} ${isSpof?'<span class="spof-badge">SPOF</span>':''}</td>${cells}</tr>`
+  }).join('')
+
+  return `
+  <div class="card overflow-x-auto mb-4">
+    <div class="text-xs text-slate-400 font-semibold mb-3">MATRIZ DE CONHECIMENTO — <span class="text-slate-600">1=básico 2=pleno 3=especialista</span></div>
+    <table><thead><tr><th>Skill</th>${header}</tr></thead><tbody>${rowsSk}</tbody></table>
+  </div>
+  ${spofs.length?`<div class="card border-red-900/50">
+    <div class="text-xs text-red-400 font-semibold mb-2">RISCOS SPOF (single point of failure)</div>
+    <div class="flex flex-wrap gap-2">${spofs.map(s=>`<span class="badge badge-r">${s}</span>`).join('')}</div>
+  </div>`:''}
+  `
+}
+
+// ── ABA: TENDÊNCIA ──────────────────────────────────────────────────────────
+async function rTrend() {
+  const {data} = await sb.from('meses').select('slug,competencia,total_chamados,updated_at').order('slug')
+  if (!data?.length) return `<div class="card text-slate-500 text-sm p-8">Dados insuficientes para tendência.</div>`
+
+  // Buscar recursos por mês para calcular FTE
+  const slugs = data.map(m=>m.slug)
+  const {data:recs} = await sb.from('recursos').select('mes_slug,trab_minutos,cap_minutos').in('mes_slug',slugs)
+
+  const rows = data.map(m=>{
+    const r = (recs||[]).filter(x=>x.mes_slug===m.slug)
+    const trab = r.reduce((s,x)=>s+x.trab_minutos,0)
+    const cap  = r.reduce((s,x)=>s+x.cap_minutos,0)
+    const fte  = pct(trab,cap)
+    const cor  = fte<60?'text-red-400':fte<80?'text-yellow-400':'text-green-400'
+    return `<tr>
+      <td class="text-slate-300">${m.competencia}</td>
+      <td>${minToHM(trab)}h</td>
+      <td>${fmt(m.total_chamados)}</td>
+      <td class="${cor} font-bold">${fte}%</td>
+    </tr>`
+  }).join('')
+
+  return `<div class="card overflow-x-auto">
+    <div class="text-xs text-slate-400 font-semibold mb-3">SÉRIE HISTÓRICA</div>
+    <table><thead><tr><th>Mês</th><th>Horas</th><th>Chamados</th><th>FTE %</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+  </div>`
+}
+
+// ── ABA: INGESTÃO ───────────────────────────────────────────────────────────
+async function rIngest() {
+  const {data} = await sb.from('ingest_log').select('*').order('created_at',{ascending:false}).limit(30)
+  const {data:mList} = await sb.from('meses').select('slug,competencia,updated_at').order('slug',{ascending:false})
+
+  const mRows = (mList||[]).map(m=>`<tr>
+    <td class="text-slate-300">${m.competencia}</td>
+    <td class="text-slate-400 font-mono text-xs">${m.slug}</td>
+    <td class="text-xs text-slate-500">${new Date(m.updated_at).toLocaleString('pt-BR')}</td>
+  </tr>`).join('')
+
+  const logRows = (data||[]).length ? (data||[]).map(l=>{
+    const cor = l.status==='processado'?'badge-g':l.status==='erro'?'badge-r':'badge-y'
+    return `<tr>
+      <td class="text-xs text-slate-400 font-mono">${new Date(l.created_at).toLocaleString('pt-BR')}</td>
+      <td class="text-xs text-slate-300 max-w-xs truncate">${l.arquivo?.split('\\').pop()||l.arquivo}</td>
+      <td><span class="badge ${cor}">${l.status}</span></td>
+      <td class="text-xs text-slate-500">${l.tipo||'—'}</td>
+    </tr>`
+  }).join('') : '<tr><td colspan="4" class="text-slate-500 text-sm py-4">Nenhum arquivo ingerido ainda.</td></tr>'
+
+  return `
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="card">
+      <div class="text-xs text-slate-400 font-semibold mb-3">MESES NO BANCO</div>
+      <table><thead><tr><th>Competência</th><th>Slug</th><th>Última atualização</th></tr></thead>
+      <tbody>${mRows}</tbody></table>
+    </div>
+    <div class="card">
+      <div class="text-xs text-slate-400 font-semibold mb-3">LOG DE INGESTÃO (últimos 30)</div>
+      <div class="overflow-x-auto">
+      <table><thead><tr><th>Data</th><th>Arquivo</th><th>Status</th><th>Tipo</th></tr></thead>
+      <tbody>${logRows}</tbody></table></div>
+    </div>
+  </div>
+  <div class="card mt-4 border-blue-900/40">
+    <div class="text-xs text-blue-400 font-semibold mb-2">Como adicionar dados</div>
+    <ol class="text-xs text-slate-400 space-y-1 list-decimal ml-4">
+      <li>Salve os PDFs do Milldesk em <code class="text-slate-300">SeniorsBI/Base/[mês]/</code> no OneDrive</li>
+      <li>O watcher (<code class="text-slate-300">watch.ps1</code>) detecta automaticamente e registra aqui</li>
+      <li>Abra o Claude Code — eu processo os PDFs e executo <code class="text-slate-300">push-mes.ps1</code></li>
+      <li>O dashboard atualiza em tempo real via Supabase Realtime</li>
+    </ol>
+  </div>`
+}
+
+// ── Dismiss alerta ──────────────────────────────────────────────────────────
+async function dismissAlerta(id) {
+  await sb.from('alertas').update({resolvido:true}).eq('id',id)
+  D.alertas = D.alertas.filter(a=>a.id!==id)
+  render()
+}
+
+// ── Realtime ────────────────────────────────────────────────────────────────
+function initRealtime() {
+  sb.channel('seniorsbi-live')
+    .on('postgres_changes',{event:'*',schema:'public',table:'meses'},async()=>{
+      await loadMeses()
+      if (!MESES_LIST.find(m=>m.slug===MES) && MESES_LIST.length) {
+        MES = MESES_LIST[0].slug
+        document.getElementById('selMes').value = MES
+      }
+      await loadMonth(MES)
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'recursos'},()=>loadMonth(MES))
+    .on('postgres_changes',{event:'*',schema:'public',table:'clientes'},()=>loadMonth(MES))
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'ingest_log'},()=>{
+      if(TAB==='ingest') render()
+    })
+    .subscribe(status=>{
+      const dot = document.getElementById('liveDot')
+      const lbl = document.getElementById('liveStatus')
+      if(status==='SUBSCRIBED'){
+        dot.style.background='#22c55e'; lbl.textContent='Live'
+      } else {
+        dot.style.background='#f97316'; lbl.textContent='Reconectando…'
+      }
+    })
+}
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+async function boot() {
+  try {
+    await loadMeses()
+    if (MES) await loadMonth(MES)
+    else document.getElementById('main').innerHTML=`
+      <div class="flex flex-col items-center justify-center h-64 gap-4">
+        <div class="text-slate-500 text-sm">Banco ainda vazio.</div>
+        <div class="text-xs text-slate-600">Rode <code>push-mes.ps1 -Slug 2026-06</code> para carregar os dados iniciais.</div>
+      </div>`
+    initRealtime()
+  } catch(e) {
+    document.getElementById('main').innerHTML=`<div class="card border-red-900 text-red-400 text-sm p-6">Erro ao conectar no Supabase: ${e.message}</div>`
+  } finally {
+    document.getElementById('loading').style.display='none'
+    document.getElementById('app').classList.remove('hidden')
+  }
+}
+
+document.getElementById('selMes').addEventListener('change',e=>{if(e.target.value)loadMonth(e.target.value)})
+
+// Tendência precisa de fetch assíncrono
+const _origSetTab = setTab
+window.setTab = function(t) {
+  TAB=t
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    const tabs=['exec','prod','custo','cli','sla','eq','trend','ingest']
+    b.classList.toggle('active',tabs[i]===t)
+  })
+  if(t==='trend'||t==='ingest'){
+    (t==='trend'?rTrend():rIngest()).then?.(html=>{document.getElementById('main').innerHTML=html;lucide.createIcons()})
+      .catch(e=>document.getElementById('main').innerHTML=`<div class="text-red-400 text-sm">${e}</div>`)
+  } else { render() }
+}
+
+boot()
+</script>
+</body>
+</html>
