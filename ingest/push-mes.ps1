@@ -1,124 +1,160 @@
 #Requires -Version 5.1
-<#
-  push-mes.ps1 — Envia dados de um mês (a partir de data\meses\AAAA-MM.json) para o Supabase.
-  Chamado pelo Claude Code após extrair os números dos PDFs.
-
-  Uso: .\push-mes.ps1 -Slug 2026-06
-#>
 param([Parameter(Mandatory)][string]$Slug)
-$ErrorActionPreference = "Stop"
-$scriptDir = Split-Path $MyInvocation.MyCommand.Path
 
-$envFile = Join-Path (Split-Path $scriptDir) ".env"
-Get-Content $envFile | Where-Object { $_ -match "^\s*([^#\s][^=]*)=(.*)$" } | ForEach-Object {
-    $k,$v = $_ -split "=",2; [System.Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim())
+# Carregar .env
+$envFile = Join-Path (Split-Path (Split-Path $MyInvocation.MyCommand.Path)) ".env"
+Get-Content $envFile -Encoding UTF8 | Where-Object { $_ -match "^\s*([^#\s][^=]*)=(.*)" } | ForEach-Object {
+    $k,$v = ($_ -split "=",2); [System.Environment]::SetEnvironmentVariable($k.Trim(),$v.Trim())
 }
 $URL = [System.Environment]::GetEnvironmentVariable("SUPABASE_URL")
 $KEY = [System.Environment]::GetEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY")
 if (-not $KEY) { $KEY = [System.Environment]::GetEnvironmentVariable("SUPABASE_PUBLISHABLE_KEY") }
-
-$hdrs = @{ "apikey" = $KEY; "Authorization" = "Bearer $KEY"; "Content-Type" = "application/json"; "Prefer" = "resolution=merge-duplicates,return=minimal" }
-
-function SB-Upsert($table, $obj) {
-    $body = ($obj | ConvertTo-Json -Depth 10 -Compress)
-    Invoke-RestMethod -Uri "$URL/rest/v1/$table" -Method POST -Body $body -Headers $hdrs | Out-Null
+$hdrs = @{
+    "apikey" = $KEY
+    "Authorization" = "Bearer $KEY"
+    "Content-Type" = "application/json; charset=utf-8"
+    "Prefer" = "resolution=merge-duplicates,return=minimal"
 }
 
-function HM-ToMin($hm) {
+function HM($hm) {
     if (-not $hm -or $hm -eq "0:00") { return 0 }
-    $p = $hm -split ":"
+    $p = "$hm" -split ":"
     return [int]$p[0] * 60 + [int]$p[1]
 }
 
-$dataDir = Join-Path (Split-Path $scriptDir) "data"
+function Post($table, $row, $onConflict = "") {
+    $uri = "$URL/rest/v1/$table"
+    if ($onConflict) { $uri += "?on_conflict=$onConflict" }
+    $json = $row | ConvertTo-Json -Depth 5 -Compress
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    try {
+        Invoke-RestMethod -Uri $uri -Method POST -Body $bytes -Headers $hdrs | Out-Null
+    } catch {
+        Write-Host "    FALHA [$table]: $($_.ErrorDetails.Message) | row: $json" -ForegroundColor Yellow
+    }
+}
+
+$dataDir = Join-Path (Split-Path (Split-Path $MyInvocation.MyCommand.Path)) "data"
 $mesFile = Join-Path $dataDir "meses\$Slug.json"
-if (-not (Test-Path $mesFile)) { Write-Host "ERRO: $mesFile não encontrado." -ForegroundColor Red; exit 1 }
+if (-not (Test-Path $mesFile)) { Write-Host "ERRO: $mesFile nao encontrado." -ForegroundColor Red; exit 1 }
 
 $mes = Get-Content $mesFile -Encoding UTF8 | ConvertFrom-Json
-Write-Host "Enviando $Slug ($($mes.competencia)) para Supabase..." -ForegroundColor Cyan
+Write-Host "Enviando $Slug ($($mes.competencia))..." -ForegroundColor Cyan
 
-# 1. Mês
+# ── 1. meses ──────────────────────────────────────────────────────
 $totalChamados = 0
 if ($mes.clientesTickets) {
     $mes.clientesTickets.PSObject.Properties | ForEach-Object { $totalChamados += [int]$_.Value }
 }
-SB-Upsert "meses" @{ slug = $Slug; competencia = $mes.competencia; total_chamados = $totalChamados; fonte = "manual" }
+$rowMes = [ordered]@{}
+$rowMes["slug"] = $Slug
+$rowMes["competencia"] = $mes.competencia
+$rowMes["total_chamados"] = $totalChamados
+$rowMes["fonte"] = "manual"
+Post "meses" $rowMes
 Write-Host "  meses OK"
 
-# 2. Recursos
+# ── 2. recursos ───────────────────────────────────────────────────
 if ($mes.recursos) {
-    $mes.recursos | ForEach-Object {
-        SB-Upsert "recursos" @{
-            mes_slug = $Slug; nome = $_.nome; nivel = $_.nivel; equipe = $_.equipe
-            cap_minutos    = (HM-ToMin ($_.cap.ToString() + ":00"))
-            trab_minutos   = (HM-ToMin $_.trab)
-            avulsa_minutos = (HM-ToMin $_.avulsa)
-        }
+    foreach ($r in $mes.recursos) {
+        $capMin = [int]$r.cap * 60
+        $trabMin = HM $r.trab
+        $avulsaMin = HM $r.avulsa
+        $rowR = [ordered]@{}
+        $rowR["mes_slug"] = $Slug
+        $rowR["nome"] = "$($r.nome)"
+        $rowR["nivel"] = "$($r.nivel)"
+        $rowR["equipe"] = "$($r.equipe)"
+        $rowR["cap_minutos"] = $capMin
+        $rowR["trab_minutos"] = $trabMin
+        $rowR["avulsa_minutos"] = $avulsaMin
+        Post "recursos" $rowR "mes_slug,nome"
     }
     Write-Host "  recursos OK ($($mes.recursos.Count))"
 }
 
-# 3. Clientes (horas + tickets)
+# ── 3. clientes ───────────────────────────────────────────────────
 if ($mes.clientesHoras) {
-    $mes.clientesHoras.PSObject.Properties | ForEach-Object {
-        $cli = $_.Name; $hm = $_.Value
-        $tick = 0
-        if ($mes.clientesTickets -and $mes.clientesTickets.$cli) { $tick = [int]$mes.clientesTickets.$cli }
-        SB-Upsert "clientes" @{ mes_slug = $Slug; nome = $cli; horas_minutos = (HM-ToMin $hm); chamados = $tick }
+    foreach ($prop in $mes.clientesHoras.PSObject.Properties) {
+        $cli = $prop.Name
+        $hmVal = $prop.Value
+        $tickVal = 0
+        if ($mes.clientesTickets -and $mes.clientesTickets.$cli) {
+            $tickVal = [int]$mes.clientesTickets.$cli
+        }
+        $rowC = [ordered]@{}
+        $rowC["mes_slug"] = $Slug
+        $rowC["nome"] = "$cli"
+        $rowC["horas_minutos"] = HM $hmVal
+        $rowC["chamados"] = $tickVal
+        Post "clientes" $rowC "mes_slug,nome"
     }
     Write-Host "  clientes OK"
 }
 
-# 4. Skills (uma vez — idempotente)
+# ── 4. premissas (uma vez, idempotente) ──────────────────────────
+$premFile = Join-Path $dataDir "premissas.json"
+if (Test-Path $premFile) {
+    $pr = Get-Content $premFile -Encoding UTF8 | ConvertFrom-Json
+    foreach ($p in $pr.clientes) {
+        $rowP = [ordered]@{}
+        $rowP["cliente"] = "$($p.nome)"
+        $rowP["franquia_horas"] = [int]$p.franquia
+        $rowP["valor_mensal"] = [decimal]$p.valorMensal
+        Post "premissas" $rowP
+    }
+    Write-Host "  premissas OK"
+}
+
+# ── 5. skills (uma vez, idempotente) ─────────────────────────────
 $skillsFile = Join-Path $dataDir "skills.json"
 if (Test-Path $skillsFile) {
     $sk = Get-Content $skillsFile -Encoding UTF8 | ConvertFrom-Json
-    $sk.skills.PSObject.Properties | ForEach-Object {
-        $skill = $_.Name
-        $_.Value.PSObject.Properties | ForEach-Object {
-            SB-Upsert "skills" @{ tecnico = $_.Name; skill = $skill; nivel = [int]$_.Value }
+    foreach ($skillProp in $sk.skills.PSObject.Properties) {
+        $skillName = $skillProp.Name
+        foreach ($tecProp in $skillProp.Value.PSObject.Properties) {
+            $rowS = [ordered]@{}
+            $rowS["tecnico"] = "$($tecProp.Name)"
+            $rowS["skill"] = "$skillName"
+            $rowS["nivel"] = [int]$tecProp.Value
+            Post "skills" $rowS "tecnico,skill"
         }
     }
     Write-Host "  skills OK"
 }
 
-# 5. Premissas (uma vez)
-$premFile = Join-Path $dataDir "premissas.json"
-if (Test-Path $premFile) {
-    $pr = Get-Content $premFile -Encoding UTF8 | ConvertFrom-Json
-    $pr.clientes | ForEach-Object {
-        SB-Upsert "premissas" @{ cliente = $_.nome; franquia_horas = [int]$_.franquia; valor_mensal = [decimal]$_.valorMensal }
-    }
-    Write-Host "  premissas OK"
-}
-
-# 6. SLA
+# ── 6. SLA ────────────────────────────────────────────────────────
 $slaFile = Join-Path $dataDir "sla.json"
 if (Test-Path $slaFile) {
-    $sla = Get-Content $slaFile -Encoding UTF8 | ConvertFrom-Json
-    $slaM = $sla | Where-Object { $_.mes -eq $Slug }
+    $slaData = Get-Content $slaFile -Encoding UTF8 | ConvertFrom-Json
+    $slaM = $slaData | Where-Object { $_.mes -eq $Slug }
     if ($slaM) {
-        SB-Upsert "sla" @{
-            mes_slug       = $Slug
-            tma_minutos    = [int]($slaM.tma * 60)
-            tmr_minutos    = [int]($slaM.tmr * 60)
-            dentro_sla_pct = [int]$slaM.dentroSLA
-            chamados_sla   = [int]$slaM.chamadosSLA
-            chamados_fora  = [int]$slaM.chamadosFora
-        }
+        $rowSla = [ordered]@{}
+        $rowSla["mes_slug"] = $Slug
+        $rowSla["tma_minutos"] = [int]([double]$slaM.tma * 60)
+        $rowSla["tmr_minutos"] = [int]([double]$slaM.tmr * 60)
+        $rowSla["dentro_sla_pct"] = [int]$slaM.dentroSLA
+        $rowSla["chamados_sla"] = [int]$slaM.chamadosSLA
+        $rowSla["chamados_fora"] = [int]$slaM.chamadosFora
+        Post "sla" $rowSla
         Write-Host "  sla OK"
     }
 }
 
-# 7. Satisfação
+# ── 7. Satisfação ─────────────────────────────────────────────────
 $satFile = Join-Path $dataDir "satisfacao.json"
 if (Test-Path $satFile) {
-    $sat = Get-Content $satFile -Encoding UTF8 | ConvertFrom-Json
-    $satM = $sat | Where-Object { $_.mes -eq $Slug }
+    $satData = Get-Content $satFile -Encoding UTF8 | ConvertFrom-Json
+    $satM = $satData | Where-Object { $_.mes -eq $Slug }
     if ($satM) {
-        SB-Upsert "satisfacao" @{ mes_slug = $Slug; csat = [int]$satM.csat; nps = [int]$satM.nps; avaliacoes = [int]$satM.avaliacoes }
+        $rowSat = [ordered]@{}
+        $rowSat["mes_slug"] = $Slug
+        $rowSat["csat"] = [int]$satM.csat
+        $rowSat["nps"] = [int]$satM.nps
+        $rowSat["avaliacoes"] = [int]$satM.avaliacoes
+        Post "satisfacao" $rowSat
         Write-Host "  satisfacao OK"
     }
 }
 
-Write-Host "Concluído: $Slug carregado no Supabase." -ForegroundColor Green
+Write-Host "Concluido: $Slug" -ForegroundColor Green
