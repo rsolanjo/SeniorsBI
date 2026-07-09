@@ -8,7 +8,7 @@
 body{background:#0b1220;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;height:100vh;overflow:hidden}
 #stage{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column}
 #frameWrap{flex:1;position:relative;background:#0b1220;overflow:hidden}
-iframe{width:100%;height:100%;border:0;background:#f0f4fa}
+iframe{width:100%;height:100%;border:0;background:#f0f4fa;transform-origin:center center;transition:transform 1.6s cubic-bezier(.33,0,.2,1)}
 #cap{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(0deg,rgba(11,18,32,.96),rgba(11,18,32,.75) 70%,transparent);padding:1.4rem 2rem 1.6rem;pointer-events:none}
 #chip{display:inline-block;font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#93c5fd;background:rgba(43,76,155,.35);border:1px solid rgba(147,197,253,.4);padding:.2rem .6rem;border-radius:.4rem;margin-bottom:.5rem}
 #txt{font-size:1.35rem;font-weight:600;line-height:1.35;max-width:70rem;text-shadow:0 2px 8px rgba(0,0,0,.6)}
@@ -40,67 +40,82 @@ iframe{width:100%;height:100%;border:0;background:#f0f4fa}
   <h1>Seniors<span>BI</span></h1>
   <p>Um tour narrado de 1 minuto pelo painel de operações — Executiva, Técnica e Admin, com dados reais ao vivo.</p>
   <button id="go" onclick="begin()">▶ Iniciar apresentação</button>
-  <div class="hint">Dica: abra no <b>Microsoft Edge</b> para narração com voz masculina (Antônio). Para os dados reais, conecte o Milldesk uma vez no painel antes.</div>
+  <div class="hint">Dica: abra no <b>Microsoft Edge</b> para a narração com voz feminina neural (Francisca), bem fluida. Para os dados reais, conecte o Milldesk uma vez no painel antes.</div>
 </div>
 
 <script>
 const F=document.getElementById('app');
 const chip=document.getElementById('chip'),txt=document.getElementById('txt'),prog=document.getElementById('prog');
 // Sequência: [seção, sub, título-chip, narração]. A Visão Geral executiva é a mais detalhada.
+// [seção, sub, título, narração, foco(fração 0-1 da rolagem), zoom]
 const STEPS=[
- ['exec','geral','Executiva · Visão Geral','Este é o SeniorsBI, o painel de operações da 4 Seniors, com dados ao vivo. Vamos começar pela visão geral executiva, a tela mais importante para a diretoria.'],
- ['exec','geral','Executiva · Visão Geral','No topo, os números que mais importam: a receita total dos contratos, o custo da equipe, a margem global, o total de chamados no período e a quantidade de alertas ativos.'],
- ['exec','geral','Executiva · Visão Geral','Logo abaixo, o resultado é separado em duas visões. À esquerda, a área técnica: receita menos os salários do time, que é a área que gera a receita. À direita, a empresa inteira: receita menos todos os custos, incluindo os outros departamentos.'],
- ['exec','geral','Executiva · Visão Geral','Assim, num olhar, o executivo entende se a margem está sendo pressionada pela área técnica ou pelas demais áreas da empresa.'],
- ['exec','geral','Executiva · Visão Geral','Em seguida, a posição macro de cada empresa do grupo: 4 Seniors, S4SYS e Porto Virtual, cada uma com sua receita, custo e margem. E tudo pode ser filtrado por dia, semana, mês ou pelos últimos doze meses.'],
- ['exec','clientes','Executiva · Por Clientes','Para aprofundar, a tela Por Clientes detalha cada contrato: horas, uso da franquia, receita, custo, margem e SLA.'],
- ['exec','tecnico','Executiva · Por Técnico','Em Por Técnico, você vê horas trabalhadas, FTE, custo e alocação de cada profissional.'],
- ['exec','alertas','Executiva · Alertas','Os alertas executivos concentram apenas o essencial: os críticos, as inconsistências em aberto e a margem por empresa.'],
- ['tech','fila','Técnica · Fila de Chamados','Na área técnica, a fila de chamados: abertos, fechados, fora do SLA, sem atualização e reincidentes, direto do Milldesk, com as horas de cada cliente e técnico.'],
- ['tech','equipe','Técnica · Equipe','Em Equipe, a produtividade do time e a matriz de conhecimento, que aponta em vermelho os riscos de depender de uma única pessoa.'],
- ['tech','clientes','Técnica · Clientes','Aqui, as horas e a franquia por cliente, e as horas a cobrar, com controle de aprovação por e-mail.'],
- ['tech','historico','Técnica · Histórico','O histórico mostra a evolução de chamados, horas e produtividade, mês a mês, por técnico e por cliente.'],
- ['tech','incid','Técnica · Inconsistências','As inconsistências apontam chamados fora do padrão de horas ou de contrato, com contexto, para o líder técnico tratar.'],
- ['tech','alertas','Técnica · Alertas','Os alertas técnicos completos, incluindo o Zabbix, com quedas de link e de equipamento em tempo real.'],
- ['admin','contratos','Admin · Contratos','No Admin fica a base do negócio: os contratos, com escopo, tecnologias, gatilhos e SLA.'],
- ['admin','custos','Admin · Custos','E os custos por departamento, que revelam o lucro real da empresa, não apenas o da área técnica.'],
- ['exec','geral','SeniorsBI','SeniorsBI. Decisão com dados, em tempo real.']
+ ['exec','geral','Executiva · Visão Geral','Este é o SeniorsBI, o painel de operações da 4 Seniors, com dados ao vivo. Vamos começar pela visão geral executiva, a tela mais importante para a diretoria.',0,1.02],
+ ['exec','geral','Executiva · Visão Geral','No topo, os números que mais importam: a receita total dos contratos, o custo da equipe, a margem global, o total de chamados no período e a quantidade de alertas ativos.',0,1.14],
+ ['exec','geral','Executiva · Visão Geral','Logo abaixo, o resultado aparece separado em duas visões. À esquerda, a área técnica: receita menos os salários do time, que é a área que gera a receita. À direita, a empresa inteira: receita menos todos os custos, incluindo os outros departamentos.',0.28,1.16],
+ ['exec','geral','Executiva · Visão Geral','Assim, num olhar, o executivo entende se a margem está sendo pressionada pela área técnica ou pelas demais áreas da empresa.',0.28,1.16],
+ ['exec','geral','Executiva · Visão Geral','Em seguida, a posição macro de cada empresa do grupo: 4 Seniors, S4SYS e Porto Virtual, cada uma com sua receita, custo e margem. E tudo pode ser filtrado por dia, semana, mês ou pelos últimos doze meses.',0.52,1.12],
+ ['exec','clientes','Executiva · Por Clientes','Para aprofundar, a tela Por Clientes detalha cada contrato: horas, uso da franquia, receita, custo, margem e SLA.',0.12,1.12],
+ ['exec','tecnico','Executiva · Por Técnico','Em Por Técnico, você vê horas trabalhadas, FTE, custo e alocação de cada profissional.',0.12,1.12],
+ ['exec','alertas','Executiva · Alertas','Os alertas executivos concentram apenas o essencial: os críticos, as inconsistências em aberto e a margem por empresa.',0.05,1.1],
+ ['tech','fila','Técnica · Fila de Chamados','Na área técnica, a fila de chamados: abertos, fechados, fora do SLA, sem atualização e reincidentes, direto do Milldesk, com as horas de cada cliente e técnico.',0.1,1.1],
+ ['tech','equipe','Técnica · Equipe','Em Equipe, a produtividade do time e a matriz de conhecimento, que aponta em vermelho os riscos de depender de uma única pessoa.',0.4,1.12],
+ ['tech','clientes','Técnica · Clientes','Aqui, as horas e a franquia por cliente, e as horas a cobrar, com controle de aprovação por e-mail.',0.12,1.12],
+ ['tech','historico','Técnica · Histórico','O histórico mostra a evolução de chamados, horas e produtividade, mês a mês, por técnico e por cliente.',0.15,1.1],
+ ['tech','incid','Técnica · Inconsistências','As inconsistências apontam chamados fora do padrão de horas ou de contrato, com contexto, para o líder técnico tratar.',0.12,1.12],
+ ['tech','alertas','Técnica · Alertas','Os alertas técnicos completos, incluindo o Zabbix, com quedas de link e de equipamento em tempo real.',0.4,1.1],
+ ['admin','contratos','Admin · Contratos','No Admin fica a base do negócio: os contratos, com escopo, tecnologias, gatilhos e SLA.',0.1,1.1],
+ ['admin','custos','Admin · Custos','E os custos por departamento, que revelam o lucro real da empresa, não apenas o da área técnica.',0.12,1.12],
+ ['exec','geral','SeniorsBI','O SeniorsBI. Decisão com dados, em tempo real.',0,1.02]
 ];
 let idx=0,voice=null,running=false;
 
+// Pronúncia: "SeniorsBI" falado como em inglês (Seniors B-I)
+function speechText(t){return String(t).replace(/SeniorsBI/gi,'Siniôrs Bí Ái').replace(/\bBI\b/g,'Bí Ái');}
 function pickVoice(){
   const vs=speechSynthesis.getVoices()||[];
-  return vs.find(v=>/pt.?BR/i.test(v.lang)&&/ant[oô]nio|daniel|male|masc|jo[aã]o|felipe|ricardo|thiago|fabio|fábio/i.test(v.name))
+  return vs.find(v=>/pt.?BR/i.test(v.lang)&&/francisca/i.test(v.name))            // Edge neural feminina (mais fluida)
+    || vs.find(v=>/pt.?BR/i.test(v.lang)&&/natural|online/i.test(v.name)&&/female|femin|francisca|thalita|brenda/i.test(v.name))
+    || vs.find(v=>/pt.?BR/i.test(v.lang)&&/google/i.test(v.name))                 // Chrome feminina
+    || vs.find(v=>/pt.?BR/i.test(v.lang)&&/maria|femin|female/i.test(v.name))
     || vs.find(v=>/pt.?BR/i.test(v.lang)) || vs.find(v=>/^pt/i.test(v.lang)) || vs[0] || null;
 }
 function nav(sec,sub){
   try{const w=F.contentWindow;if(w&&typeof w.setSection==='function'){w.setSection(sec);if(typeof w.setSub==='function')w.setSub(sub);}}catch(e){}
 }
+function focusOn(frac,zoom){
+  try{
+    const m=F.contentDocument&&F.contentDocument.getElementById('main');
+    if(m){const top=Math.max(0,(m.scrollHeight-m.clientHeight)*(frac||0));m.scrollTo({top,behavior:'smooth'});}
+    F.style.transformOrigin='center '+((frac||0)<0.34?'top':(frac||0)>0.6?'bottom':'center');
+    F.style.transform='scale('+(zoom||1.08)+')';
+  }catch(e){}
+}
 function speakNow(t,cb){
   try{
     speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(t);
-    if(voice)u.voice=voice; u.lang='pt-BR'; u.rate=1.0; u.pitch=.98;
+    const u=new SpeechSynthesisUtterance(speechText(t));
+    if(voice)u.voice=voice; u.lang='pt-BR'; u.rate=1.0; u.pitch=1.02;
     u.onend=cb; u.onerror=cb;
-    // pequeno atraso para o cancel() assentar antes de falar
-    setTimeout(()=>{ try{ speechSynthesis.speak(u); }catch(e){ cb(); } }, 130);
+    setTimeout(()=>{ try{ speechSynthesis.speak(u); }catch(e){ cb(); } }, 140);
   }catch(e){ setTimeout(cb, 500); }
 }
 function runStep(){
   if(idx>=STEPS.length){ finish(); return; }
-  const s=STEPS[idx], sec=s[0], sub=s[1], title=s[2], narr=s[3];
+  const s=STEPS[idx], sec=s[0], sub=s[1], title=s[2], narr=s[3], frac=s[4], zoom=s[5];
   nav(sec,sub);
   chip.textContent=title; txt.textContent=narr;
   prog.style.width=Math.round((idx+1)/STEPS.length*100)+'%';
+  // dá um instante pro conteúdo renderizar antes de focar/zoom
+  setTimeout(()=>focusOn(frac,zoom), 350);
   let done=false;
   const advance=()=>{ if(done)return; done=true; idx++; setTimeout(runStep, 650); };
-  // rede de segurança: só dispara se o onend falhar; dimensionada ao tamanho da fala
   const safety=setTimeout(advance, Math.max(7000, narr.length*95));
   speakNow(narr, ()=>{ clearTimeout(safety); advance(); });
 }
 function finish(){
   chip.textContent=''; txt.textContent='SeniorsBI — obrigado.';
   prog.style.width='100%';
+  F.style.transform='scale(1)';
   try{ const w=F.contentWindow; if(w&&w.setSection){ w.setSection('exec'); w.setSub&&w.setSub('geral'); } }catch(e){}
 }
 function begin(){
