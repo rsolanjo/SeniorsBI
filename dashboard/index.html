@@ -117,13 +117,24 @@ textarea.fi{resize:vertical;min-height:2.7rem}
     </div>
     <div style="width:1px;height:1.05rem;background:#e2e8f0;flex-shrink:0;"></div>
     <div style="display:flex;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.4rem;padding:.07rem;">
-      <button class="time-btn active" onclick="setTime('atual')" id="t-atual">Atual</button>
+      <button class="time-btn" onclick="setTime('diario')" id="t-diario">Diário</button>
       <button class="time-btn" onclick="setTime('7d')" id="t-7d">7 dias</button>
-      <button class="time-btn" onclick="setTime('30d')" id="t-30d">30 dias</button>
+      <button class="time-btn active" onclick="setTime('30d')" id="t-30d">30 dias</button>
       <button class="time-btn" onclick="setTime('12m')" id="t-12m">12 meses</button>
       <button class="time-btn" onclick="setTime('picker')" id="t-picker">Mês/Ano</button>
+      <button class="time-btn" onclick="setTime('comparar')" id="t-comparar">Comparar</button>
     </div>
     <select id="selMes" class="hidden fi" style="width:auto;padding:.2rem .52rem;font-size:.72rem;"></select>
+    <div id="dateRange" class="hidden" style="display:flex;align-items:center;gap:.3rem;">
+      <input type="date" id="dtInicio" class="fi" style="width:auto;padding:.2rem .4rem;font-size:.72rem;" onchange="onDateRange()">
+      <span style="font-size:.7rem;color:#94a3b8;">até</span>
+      <input type="date" id="dtFim" class="fi" style="width:auto;padding:.2rem .4rem;font-size:.72rem;" onchange="onDateRange()">
+    </div>
+    <div id="cmpBox" class="hidden" style="display:flex;align-items:center;gap:.3rem;">
+      <input type="month" id="cmpA" class="fi" style="width:auto;padding:.2rem .4rem;font-size:.72rem;" onchange="renderCompare()">
+      <span style="font-size:.7rem;color:#94a3b8;">vs</span>
+      <input type="month" id="cmpB" class="fi" style="width:auto;padding:.2rem .4rem;font-size:.72rem;" onchange="renderCompare()">
+    </div>
   </div>
 </div>
 
@@ -220,7 +231,7 @@ const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
 let D={},MES=null,MESES_LIST=[]
-let COMPANY='all',TIME='atual'
+let COMPANY='all',TIME='30d'
 let SECTION='exec',EXEC_SUB='geral',TECH_SUB='prod',ADMIN_SUB='contratos'
 let ROT_PAUSED=false,rotTimer=null,rotSec=30,rotIdx=0
 let FUNCS=[],CONTRACTS=[]
@@ -363,6 +374,7 @@ const getApontRev=()=>lsGet('sbi_apont_rev')||{}
 const setApontRev=v=>lsSet('sbi_apont_rev',v)
 // ─── Milldesk (chamados ao vivo) ───
 let MD={loaded:false,loading:false,periodo:'',ts:0,tickets:[],backlog:[]}
+let CMP={a:'',b:'',SA:null,SB:null,loading:false}
 const getMD=()=>lsGet('sbi_md')||{base:'https://v1.milldesk.com/api',key:''}
 const setMD=v=>lsSet('sbi_md',v)
 const mdCC=loc=>{const p=String(loc||'').split('|');return p.length>1?p[1].trim():''}
@@ -493,13 +505,28 @@ function selectCompany(c){rotIdx=Math.max(0,ROT_SEQ.indexOf(c));rotSec=30;docume
 function applyCompany(c){COMPANY=c;document.getElementById('cbAll').classList.toggle('active',c==='all');document.getElementById('cb4S').classList.toggle('active',c==='4Seniors');document.getElementById('cbS4').classList.toggle('active',c==='S4SYS');document.getElementById('cbPV').classList.toggle('active',c==='Porto Virtual');document.getElementById('rotLabel').textContent=ROT_LABELS[c]||c;renderContent()}
 function toggleRot(){ROT_PAUSED=!ROT_PAUSED;document.getElementById('rotIcon').setAttribute('data-lucide',ROT_PAUSED?'play':'pause');const d=document.getElementById('rotDot');d.style.animation=ROT_PAUSED?'none':'pulse 2s infinite';d.style.background=ROT_PAUSED?'#94a3b8':'#2B4C9B';lucide.createIcons()}
 
-function setTime(t){TIME=t;document.querySelectorAll('.time-btn').forEach(b=>b.classList.remove('active'));document.getElementById('t-'+t)?.classList.add('active');document.getElementById('selMes').classList.toggle('hidden',t!=='picker');if(t==='12m'){setSection('tech');TECH_SUB='historico';renderSubTabs();renderContent()}else if(t!=='picker'&&MESES_LIST.length){MES=MESES_LIST[0].slug;document.getElementById('selMes').value=MES;loadMonth(MES)}}
+function ensureDateDefaults(){const i=document.getElementById('dtInicio'),f=document.getElementById('dtFim'),t=new Date().toISOString().slice(0,10);if(i&&!i.value)i.value=t;if(f&&!f.value)f.value=t}
+function ensureCmpDefaults(){const a=document.getElementById('cmpA'),b=document.getElementById('cmpB'),d=new Date(),cur=d.toISOString().slice(0,7),prev=new Date(d.getFullYear(),d.getMonth()-1,1).toISOString().slice(0,7);if(a&&!a.value)a.value=prev;if(b&&!b.value)b.value=cur}
+window.onDateRange=function(){if(getMD().key)mdSync();else renderContent()}
+function setTime(t){
+  TIME=t
+  document.querySelectorAll('.time-btn').forEach(b=>b.classList.remove('active'));document.getElementById('t-'+t)?.classList.add('active')
+  document.getElementById('selMes').classList.toggle('hidden',t!=='picker')
+  document.getElementById('dateRange').classList.toggle('hidden',t!=='diario')
+  document.getElementById('cmpBox').classList.toggle('hidden',t!=='comparar')
+  if(t==='comparar'){ensureCmpDefaults();renderCompare();return}
+  if(t==='12m'){setSection('tech');TECH_SUB='historico';renderSubTabs();renderContent();return}
+  if(t==='diario')ensureDateDefaults()
+  if(getMD().key){if(t==='picker'&&MESES_LIST.length){MES=MESES_LIST[0].slug;document.getElementById('selMes').value=MES}mdSync();return}
+  if(t!=='picker'&&MESES_LIST.length){MES=MESES_LIST[0].slug;document.getElementById('selMes').value=MES;loadMonth(MES)}
+}
 
 function setSection(s){SECTION=s;['exec','tech','admin'].forEach(x=>document.getElementById('sb-'+x).classList.toggle('active',x===s));renderSubTabs();renderContent()}
 window.setSub=function(s){if(SECTION==='exec')EXEC_SUB=s;else if(SECTION==='tech')TECH_SUB=s;else ADMIN_SUB=s;renderSubTabs();renderContent()}
 function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:ADMIN_SUB;document.getElementById('subTabs').innerHTML=SECTION_SUBS[SECTION].map(([k,l])=>`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}</button>`).join('')}
 function renderContent(){
   const el=document.getElementById('main')
+  if(TIME==='comparar'){renderCompare();return}
   const standalone=SECTION==='admin'||(SECTION==='tech'&&TECH_SUB==='fila')
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
   if(SECTION==='exec'){
@@ -625,7 +652,18 @@ ${D.alertas.length?`<div class="card mb-4">${ST('Alertas manuais ('+D.alertas.le
 window.addApont=function(){const g=id=>document.getElementById(id).value.trim();const tec=g('apTec'),cli=g('apCli'),ativ=g('apAtiv'),h=g('apH'),mot=g('apMot');if(!tec&&!cli&&!ativ){toast('Preencha ao menos técnico/cliente/atividade.',false);return}const all=getApontRev();all[uid()]={tecnico:tec,cliente:cli,atividade:ativ,horas:h,motivo:mot,verificado:false,ts:Date.now()};setApontRev(all);renderContent();toast('Apontamento registrado p/ revisão.')}
 window.verifyApont=function(id){const all=getApontRev();if(all[id]){all[id].verificado=true;setApontRev(all);renderContent();toast('Marcado como verificado.')}}
 window.delApont=function(id){const all=getApontRev();delete all[id];setApontRev(all);renderContent()}
-window.zbxSync=async function(){const z=getZbx();if(!z.url){toast('Configure o Zabbix em Admin.',false);return}toast('Sincronizando Zabbix…');const rpc={jsonrpc:'2.0',method:'problem.get',params:{output:'extend',recent:true,sortfield:['eventid'],sortorder:'DESC',limit:50},id:1};if(z.token)rpc.auth=z.token;try{const base=z.url.replace(/\/+$/,'');const r=await fetch(base.endsWith('api_jsonrpc.php')?base:base+'/api_jsonrpc.php',{method:'POST',headers:{'Content-Type':'application/json-rpc'},body:JSON.stringify(rpc)});const j=await r.json();const items=(j.result||[]).map(p=>({name:p.name,host:p.host||'',severity:p.severity}));lsSet('sbi_zbx_last',{ts:Date.now(),count:items.length,items,error:j.error?(j.error.data||j.error.message):''});toast('Zabbix: '+items.length+' problema(s).')}catch(e){lsSet('sbi_zbx_last',{ts:Date.now(),count:0,items:[],error:'CORS/rede: '+e.message});toast('Falha ao ler Zabbix (CORS/rede).',false)}renderContent()}
+window.zbxSync=async function(){const z=getZbx();if(!z.url){toast('Configure a URL do Zabbix em Admin.',false);return}toast('Sincronizando Zabbix…')
+  const base=z.url.replace(/\/+$/,''),url=base.endsWith('api_jsonrpc.php')?base:base+'/api_jsonrpc.php'
+  const call=async(useBearer)=>{const rpc={jsonrpc:'2.0',method:'problem.get',params:{output:'extend',selectHosts:['host'],recent:true,sortfield:['eventid'],sortorder:'DESC',limit:100},id:1}
+    const headers={'Content-Type':'application/json-rpc'};if(z.token){if(useBearer)headers['Authorization']='Bearer '+z.token;else rpc.auth=z.token}
+    const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(rpc)});return r.json()}
+  try{let j=await call(true)
+    if(j&&j.error&&/auth|permission|token|bearer/i.test(JSON.stringify(j.error)))j=await call(false) // fallback Zabbix 5.x (auth no corpo)
+    if(j&&j.error)throw new Error(j.error.data||j.error.message||'erro Zabbix')
+    const items=(j.result||[]).map(p=>({name:p.name,host:(p.hosts&&p.hosts[0]&&p.hosts[0].host)||p.host||'',severity:p.severity}))
+    lsSet('sbi_zbx_last',{ts:Date.now(),count:items.length,items,error:''});toast('Zabbix: '+items.length+' problema(s).')
+  }catch(e){lsSet('sbi_zbx_last',{ts:Date.now(),count:0,items:[],error:(/Failed to fetch/i.test(e.message)?'CORS/rede — libere CORS no Zabbix':e.message)});toast('Falha ao ler Zabbix: '+e.message,false)}
+  renderContent()}
 
 // ═══════ TÉCNICA ═══════════════════════════════════════════════════════════
 
@@ -633,6 +671,7 @@ function rProd(){const rows=fRec().map(r=>{const fte=pct(r.trab_minutos,r.cap_mi
 
 function mdPeriodRange(){
   const d=new Date(),ymd=x=>x.toISOString().slice(0,10)
+  if(TIME==='diario'){const a=document.getElementById('dtInicio')?.value,b=document.getElementById('dtFim')?.value;if(a&&b)return a<=b?[a,b]:[b,a];const t=ymd(d);return[t,t]}
   if(TIME==='7d'||TIME==='30d'){const n=TIME==='7d'?7:30;return[ymd(new Date(d.getTime()-n*864e5)),ymd(d)]}
   if(MES&&/^\d{4}-\d{2}$/.test(MES)){const[y,m]=MES.split('-').map(Number),last=new Date(y,m,0).getDate();return[`${MES}-01`,`${MES}-${String(last).padStart(2,'0')}`]}
   return[ymd(new Date(d.getFullYear(),d.getMonth(),1)),ymd(d)]
@@ -647,7 +686,7 @@ window.mdSync=async function(){
     const rawArr=Array.isArray(per)?per:[]
     MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag))
     const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});MD.backlog=Object.values(uniq).filter(t=>mdIsOpen(t.st))
-    if(!MES||TIME==='atual')MES=start.slice(0,7)
+    if(!MES||TIME!=='picker')MES=start.slice(0,7)
     mdApplyToD(rawArr)
     MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
     document.getElementById('lastUpdate').textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
@@ -670,6 +709,45 @@ function mdMetrics(){
   const porTecnico=Object.values(tec).sort((a,b)=>b.total-a.total)
   const cat={};U.forEach(t=>{const c=t.cat||'—';cat[c]=(cat[c]||0)+1});const topCat=Object.entries(cat).map(([k,v])=>({cat:k,n:v})).sort((a,b)=>b.n-a.n).slice(0,10)
   return{total:U.length,fechados,byStatus,backlogOpen:open.length,semAtual,reinc,porCliente,porTecnico,topCat}
+}
+async function mdFetchSummary(ym){
+  const cfg=getMD();if(!cfg.key||!/^\d{4}-\d{2}$/.test(ym))return null
+  const[y,m]=ym.split('-').map(Number),last=new Date(y,m,0).getDate(),start=`${ym}-01`,end=`${ym}-${String(last).padStart(2,'0')}`
+  const base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key
+  let per=[];try{per=await fetch(`${base}/showTicketsPerPeriod?start=${start}&end=${end}`).then(r=>r.json())}catch(e){per=[]}
+  const raw=Array.isArray(per)?per.filter(r=>!isExcludedTech(r.agent)):[]
+  const uids=new Set(),hTec={},hCli={},chCli={};let horas=0
+  raw.forEach(r=>{const wm=mdWorkedMin(r.worked_hour);horas+=wm;uids.add(r.id)
+    if(r.agent)hTec[r.agent]=(hTec[r.agent]||0)+wm
+    const loc=r.location||'—',ct=mdContractForCC(mdCC(loc)),nome=ct?ct.cliente:loc;hCli[nome]=(hCli[nome]||0)+wm;(chCli[nome]=chCli[nome]||new Set()).add(r.id)})
+  const cap=Object.keys(hTec).reduce((s,ag)=>{const f=matchFuncByAgent(ag);return s+((f?f.cap_horas:168)*60)},0)
+  return{ym,chamados:uids.size,horas,fte:pct(horas,cap),tecnicos:Object.entries(hTec).map(([k,v])=>({k,v})),clientes:Object.entries(hCli).map(([k,v])=>({k,v,ch:chCli[k].size}))}
+}
+function renderCompareHtml(A,B){
+  if(!A||!B)return '<div class="card" style="color:#94a3b8;text-align:center;padding:2rem;">Sem dados para comparar.</div>'
+  const ml=ym=>{const[y,m]=ym.split('-');return m+'/'+y},dvar=(a,b)=>{if(!a)return{t:b?'novo':'—',c:'#94a3b8'};const p=Math.round((b-a)/a*100);return{t:(p>0?'+':'')+p+'%',c:p>0?'#166534':p<0?'#ef4444':'#64748b'}}
+  const kpi=(lbl,va,vb,ff,icon)=>{const d=dvar(va,vb);return`<div class="card"><div class="kpi-lbl">${lbl}</div><div style="display:flex;align-items:baseline;gap:.45rem;margin-top:.35rem;flex-wrap:wrap;"><span style="font-size:1.05rem;font-weight:800;color:#64748b;">${ff(va)}</span><span style="color:#cbd5e1;">→</span><span style="font-size:1.15rem;font-weight:900;color:var(--brand);">${ff(vb)}</span><span class="badge" style="background:${d.c}18;color:${d.c};margin-left:auto;">${d.t}</span></div></div>`}
+  const un=(la,lb)=>{const map={};la.forEach(x=>{(map[x.k]=map[x.k]||{a:0,b:0}).a=x.v});lb.forEach(x=>{(map[x.k]=map[x.k]||{a:0,b:0}).b=x.v});return Object.entries(map).sort((x,y)=>y[1].b-x[1].b).slice(0,15)}
+  const rowH=([k,v])=>{const d=dvar(v.a,v.b);return`<tr><td style="font-weight:600;">${esc(k)}</td><td>${minToHM(v.a)}h</td><td style="font-weight:700;">${minToHM(v.b)}h</td><td style="color:${d.c};font-weight:700;">${d.t}</td></tr>`}
+  const cliRows=un(A.clientes,B.clientes).map(rowH).join(''),tecRows=un(A.tecnicos,B.tecnicos).map(rowH).join('')
+  return`<div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.8rem;"><i data-lucide="git-compare" style="width:1.05rem;height:1.05rem;color:var(--brand);"></i><span style="font-size:1rem;font-weight:900;">Comparativo ${ml(A.ym)} vs ${ml(B.ym)}</span></div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">${kpi('Chamados',A.chamados,B.chamados,fmt)}${kpi('Horas trabalhadas',A.horas,B.horas,v=>minToHM(v)+'h')}${kpi('FTE médio',A.fte,B.fte,v=>v+'%')}</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="card overflow-x-auto">${ST('Horas por Cliente')}<table><thead><tr><th>Cliente</th><th>${ml(A.ym)}</th><th>${ml(B.ym)}</th><th>Var</th></tr></thead><tbody>${cliRows||'<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:1rem;">—</td></tr>'}</tbody></table></div>
+<div class="card overflow-x-auto">${ST('Horas por Técnico')}<table><thead><tr><th>Técnico</th><th>${ml(A.ym)}</th><th>${ml(B.ym)}</th><th>Var</th></tr></thead><tbody>${tecRows||'<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:1rem;">—</td></tr>'}</tbody></table></div>
+</div>`
+}
+async function renderCompare(){
+  const el=document.getElementById('main')
+  if(!getMD().key){el.innerHTML='<div class="card" style="color:#64748b;text-align:center;padding:2rem;">Configure a chave Milldesk em <button onclick="setSection(\'admin\');setSub(\'alertcfg\')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Admin → Config Alertas</button> para comparar meses.</div>';return}
+  ensureCmpDefaults()
+  const a=document.getElementById('cmpA').value,b=document.getElementById('cmpB').value;if(!a||!b)return
+  if(CMP.a!==a||CMP.b!==b||!CMP.SA||!CMP.SB){
+    if(CMP.loading)return
+    CMP.loading=true;el.innerHTML=`<div style="padding:2.5rem;text-align:center;color:#94a3b8;font-size:.85rem;">Carregando comparativo de ${a} e ${b}…</div>`
+    const[SA,SB]=await Promise.all([mdFetchSummary(a),mdFetchSummary(b)]);CMP={a,b,SA,SB,loading:false}
+  }
+  el.innerHTML=renderCompareHtml(CMP.SA,CMP.SB);lucide.createIcons()
 }
 async function rFila(){
   const s=D.sla,[start,end]=mdPeriodRange(),cfg=getAlertCfg()
