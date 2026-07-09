@@ -92,7 +92,7 @@ textarea.fi{resize:vertical;min-height:2.7rem}
         <button class="sec-btn" onclick="setSection('admin')" id="sb-admin">Admin</button>
       </div>
       <div style="width:1px;height:1.25rem;background:#e2e8f0;"></div>
-      <div class="flex items-center gap-1.5"><div class="pulse" id="liveDot"></div><span style="font-size:.68rem;color:#64748b;" id="liveStatus">…</span><span id="appVersion" style="font-size:.62rem;font-weight:800;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;padding:.05rem .32rem;border-radius:.3rem;"></span></div>
+      <div class="flex items-center gap-1.5"><div class="pulse" id="liveDot"></div><span style="font-size:.68rem;color:#64748b;" id="liveStatus">…</span><span id="zbxStatus" style="font-size:.62rem;font-weight:700;"></span><span id="appVersion" style="font-size:.62rem;font-weight:800;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;padding:.05rem .32rem;border-radius:.3rem;"></span></div>
       <span style="font-size:.58rem;color:#94a3b8;" id="lastUpdate"></span>
     </div>
   </div>
@@ -242,10 +242,10 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v10'
+const APP_VERSION='v11'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
-let SECTION='exec',EXEC_SUB='geral',TECH_SUB='prod',ADMIN_SUB='contratos'
+let SECTION='exec',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos'
 let ROT_PAUSED=false,rotTimer=null,rotSec=30,rotIdx=0
 let FUNCS=[],CONTRACTS=[]
 const ROT_SEQ=['all','4Seniors','S4SYS','Porto Virtual']
@@ -260,7 +260,7 @@ const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Usuário',ic:'user',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
   exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Alertas']],
-  tech:[['prod','Produtividade'],['fila','Fila de Chamados'],['clientes','Clientes'],['equipe','Equipe'],['historico','Histórico'],['incid','Inconsistências'],['alertas','Alertas'],['checklists','Checklists']],
+  tech:[['fila','Fila de Chamados'],['equipe','Equipe'],['clientes','Clientes'],['historico','Histórico'],['incid','Inconsistências'],['alertas','Alertas'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
 }
 
@@ -279,6 +279,19 @@ const BASE_FUNCS=[
   {nome:'Jose Carlos',nivel:'N3',equipe:'Infra/SOC',salario:10000,tipo:'PJ',cap_horas:168,alocacao_tipo:'todos',alocacao_clientes:[]},
   {nome:'Eduardo Kalil',nivel:'N3',equipe:'Redes',salario:10000,tipo:'PJ',cap_horas:136,alocacao_tipo:'todos',alocacao_clientes:[]}
 ]
+
+// ─── Matriz de conhecimento (fonte: Prompt exemplo.txt, tópico 13) — 1 básico · 2 pleno · 3 especialista ───
+const BASE_SKILLS=(()=>{const raw={
+  'Renan Ruivo':{Microsoft:3,Backup:3,SAT:2,'Watchguard EPDR':2,Zabbix:2,'Documentação':3,Assessment:3},
+  'Eduardo Kalil':{Linux:3,Redes:3,'Storage SAN':1},
+  'Vagner Oliveira':{Microsoft:3,Backup:2,Redes:1,TrendMicro:3,'Lotus Notes':3,EPDR:3},
+  'Isaque Costa':{'Field Service':1},
+  'Leonardo Grecco':{'Field Service':1},
+  'Ronni Santos':{'Field Service':1},
+  'Jose Carlos':{Microsoft:3,Cloud:3,SOC:3,Backup:1,Redes:3,Zabbix:2,Linux:3},
+  'Rafael Prado':{EPDR:1,Microsoft:1,SOC:1,NOC:1,'Field Service':1},
+  'André Frota':{Microsoft:3,'Cloud AWS':3,Azure:3,SAN:2,Linux:2,Redes:3,Zabbix:3,Backup:3}
+};const out=[];for(const t in raw)for(const s in raw[t])out.push({tecnico:t,skill:s,nivel:raw[t][s]});return out})()
 
 // ─── Base de conhecimento contratual (fonte: pasta Base/Contratos/*.docx) ───
 // Usada na consulta de contrato e na análise de inconsistências (gatilhos do "Analise de inconsistência.txt").
@@ -382,6 +395,8 @@ const setChkMonthly=v=>lsSet('sbi_chk_month',v)
 const getZbx=()=>{const s=lsGet('sbi_zbx')||{};return{url:s.url||'https://noc.4sr.com.br/zabbix',token:s.token||''}}
 const setZbx=v=>lsSet('sbi_zbx',v)
 const ZBX_SEV={'0':{t:'Não classif.',c:'#94a3b8'},'1':{t:'Info',c:'#3b82f6'},'2':{t:'Aviso',c:'#f59e0b'},'3':{t:'Média',c:'#f97316'},'4':{t:'Alta',c:'#ef4444'},'5':{t:'Desastre',c:'#991b1b'}}
+const ZBX_CRIT_RE=/down|offline|unavailable|no data|icmp|ping|link|sdwan|power|desligad|queda|indispon|unreachable|is down/i
+const zbxCritical=p=>(+p.severity>=4)||ZBX_CRIT_RE.test(p.name||'')
 const getContractDocs=()=>lsGet('sbi_contract_docs')||{}
 const setContractDocs=v=>lsSet('sbi_contract_docs',v)
 const getApontRev=()=>lsGet('sbi_apont_rev')||{}
@@ -402,7 +417,8 @@ const setMD=v=>lsSet('sbi_md',v)
 const mdCC=loc=>{const p=String(loc||'').split('|');return p.length>1?p[1].trim():''}
 const mdDate=s=>{if(!s)return null;const p=String(s).split('/');return p.length===3?new Date(+p[2],+p[1]-1,+p[0]):null}
 const mdNorm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[0-9]+/g,' ').replace(/[^a-z ]+/g,' ').replace(/\s+/g,' ').trim().split(' ').filter(w=>w.length>2).slice(0,6).join(' ')
-const mdCompact=r=>({id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:r.agent,dep:r.department,lv:r.level,st:r.status,start:r.start,end:r.end,ana:r.analysis,reab:r.reopening,cat:r.category,pri:r.priority,wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour),req:r.requester,grupo:r.stage})
+const stripHtml=s=>String(s==null?'':s).replace(/<[^>]+>/g,' ').replace(/&[a-z#0-9]+;/gi,' ').replace(/\s+/g,' ').trim()
+const mdCompact=r=>({id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:r.agent,dep:r.department,lv:r.level,st:r.status,start:r.start,end:r.end,ana:r.analysis,reab:r.reopening,cat:r.category,subcat:r.subcategory,pri:r.priority,wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour),req:r.requester,grupo:r.stage,desc:stripHtml(r.description).slice(0,300)})
 const mdIsOpen=st=>!/fechad|resolvid|cancelad/i.test(st||'')
 function mdContractForCC(cc){return CONTRACTS.find(c=>String(c.cc)===String(cc))||null}
 const mdWorkedMin=s=>{const v=parseFloat(String(s==null?'':s).replace(',','.'));return isNaN(v)?0:Math.round(v*60)}
@@ -508,8 +524,8 @@ function buildChecklistAlerts(){
     if(!e||!e.done){if(hourNow>=lim)out.push({lv:'alta',cat:'Checklist',msg:`Checklist diário não feito: ${c.nome}`,det:`Prazo ${lim}h — avisar líder técnico`})}
     else if(e.risco||hasRisk(e.obs))out.push({lv:'critica',cat:'Checklist',msg:`Risco no checklist de ${esc(c.nome)}`,det:(e.obs||'').slice(0,80)||'Marcado como risco/ação'})
   })
-  const mon=getChkMonthly()[MES]||{},pend=MONTHLY_CHK.filter(i=>!(mon[i.k]&&mon[i.k].done))
-  if(pend.length)out.push({lv:'media',cat:'Mensal',msg:`${pend.length} atividade(s) mensal(is) pendente(s)`,det:pend.slice(0,4).map(i=>i.t.split('—')[0].trim()).join(', ')+(pend.length>4?'…':'')})
+  const mon=getChkMonthly()[MES]||{},pend=MONTHLY_CHK.filter(i=>!Object.values(mon).some(cli=>cli&&cli[i.k]))
+  if(pend.length)out.push({lv:'media',cat:'Mensal',msg:`${pend.length} atividade(s) mensal(is) não iniciada(s)`,det:pend.slice(0,4).map(i=>i.t.split('—')[0].trim()).join(', ')+(pend.length>4?'…':'')})
   return out
 }
 function buildMdAlerts(){
@@ -567,7 +583,7 @@ function renderContent(){
     const sync={geral:rExecGeral,clientes:rExecClientes,tecnico:rExecTecnico,alertas:rExecAlertas}
     el.innerHTML=(sync[EXEC_SUB]||rExecGeral)();lucide.createIcons()
   }else if(SECTION==='tech'){
-    const sync={prod:rProd,clientes:rCli,equipe:rEquipe,incid:rIncidencias,checklists:rChecklists}
+    const sync={clientes:rCli,equipe:rEquipe,incid:rIncidencias,checklists:rChecklists}
     if(TECH_SUB==='historico')rTrend().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else if(TECH_SUB==='fila')rFila().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else if(TECH_SUB==='alertas')rAlertasTec().then(h=>{el.innerHTML=h;lucide.createIcons()})
@@ -610,7 +626,13 @@ function rExecGeral(){
     const rec=cliValor(c.nome),fran=cliFranquia(c.nome),uso=fran?pct(Math.round(c.horas_minutos/60),fran):null,custo=D.totalHoras>0?Math.round(c.horas_minutos/D.totalHoras*totalCusto):0,mg=rec&&custo?Math.round((rec-custo)/rec*100):null,mC=mg==null?'#94a3b8':mg<0?'#ef4444':mg<20?'#f59e0b':'#22c55e',usC=uso==null?'#64748b':uso>100?'#ef4444':uso>85?'#f59e0b':'#22c55e'
     return`<tr><td style="font-weight:600;">${esc(c.nome)}</td><td>${empBadge(getClientEmpresa(c.nome))}</td><td>${minToHM(c.horas_minutos)}h</td><td style="color:${usC};font-weight:700;">${uso!=null?uso+'%':'—'}</td><td style="color:#166534;font-weight:700;">${rec?fmtR(rec):'—'}</td><td style="color:#854d0e;">${fmtR(custo)}</td><td style="color:${mC};font-weight:800;">${mg!=null?mg+'%':'—'}</td></tr>`
   }).join('')
+  const receita=g.receita,folhaTec=FUNCS.filter(f=>!f._removed).reduce((s,f)=>s+getSalario(f.nome,f.nivel),0),custosGerais=custosDoMes(MES).reduce((s,c)=>s+(+c.valor||0),0),custoEmp=folhaTec+custosGerais
+  const mgTec=receita>0?Math.round((receita-folhaTec)/receita*100):null,mgEmp=receita>0?Math.round((receita-custoEmp)/receita*100):null,mc=v=>v==null?'#94a3b8':v<0?'#ef4444':v<20?'#f59e0b':'#22c55e'
+  const pnl=(titulo,sub,cst,cstLbl,lucro,mg,cor,icon)=>`<div class="card" style="border-top:3px solid ${cor};"><div style="display:flex;align-items:center;gap:.45rem;margin-bottom:.6rem;"><div style="background:${cor}18;color:${cor};border-radius:.42rem;padding:.3rem;display:flex;"><i data-lucide="${icon}" style="width:.85rem;height:.85rem;"></i></div><div><div style="font-size:.78rem;font-weight:800;">${titulo}</div><div style="font-size:.6rem;color:#94a3b8;">${sub}</div></div><span style="margin-left:auto;font-size:1.3rem;font-weight:900;color:${mc(mg)};">${mg!=null?mg+'%':'—'}</span></div><div class="grid grid-cols-3 gap-2"><div><div class="kpi-lbl">Receita</div><div style="font-size:.9rem;font-weight:800;color:#166534;">${fmtR(receita)}</div></div><div><div class="kpi-lbl">${cstLbl}</div><div style="font-size:.9rem;font-weight:800;color:#854d0e;">${fmtR(cst)}</div></div><div><div class="kpi-lbl">Lucro</div><div style="font-size:.9rem;font-weight:800;color:${lucro>=0?'#166534':'#ef4444'};">${fmtR(lucro)}</div></div></div></div>`
   return`<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">${kpiCard(g.receita?fmtR(g.receita):'(a def.)','Receita Total','#166534','dollar-sign','Todos contratos')}${kpiCard(fmtR(totalCusto),'Custo Equipe (est.)','#854d0e','users','Salários CLT')}${kpiCard(g.margem!=null?g.margem+'%':'—','Margem Global',mgC,'trending-up')}${kpiCard(D.fte+'%','FTE Global',fteC,'activity',minToHM(D.totalHoras)+'h')}${kpiCard(fmt(D.totalChamados)+' ch.','Total Chamados','#E04622','ticket')}${kpiCard(auto.length,'Alertas Ativos',alerC,'triangle-alert',auto.filter(a=>a.lv==='critica').length+' críticos')}</div>
+<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Resultado — Área Técnica × Empresa</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">${pnl('Área Técnica','área que gera a receita',folhaTec,'Custo (salários)',receita-folhaTec,mgTec,'#2B4C9B','wrench')}${pnl('Empresa (todas as áreas)','técnico + custos gerais',custoEmp,'Custo total',receita-custoEmp,mgEmp,'#7c3aed','building-2')}</div>
+<div style="font-size:.6rem;color:#94a3b8;margin:-.5rem 0 1rem;">Margem técnica alta e margem empresa baixa = peso nas outras áreas. As duas baixas = área técnica pesada. Custos gerais em Admin → Custos.</div>
 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">${empCards}</div>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="card">${ST('Alertas ativos ('+auto.length+')')}<div style="display:flex;flex-direction:column;gap:.28rem;">${auto.slice(0,5).map(alertCard).join('')||'<div style="color:#94a3b8;font-size:.74rem;padding:.7rem;text-align:center;">Sem alertas ativos</div>'}</div>${auto.length>5?`<div style="text-align:center;margin-top:.42rem;"><button onclick="setSub('alertas')" style="font-size:.68rem;color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Ver todos (${auto.length}) →</button></div>`:''}</div>
 <div class="card overflow-x-auto">${ST('Top clientes — financeiro')}<table><thead><tr><th>Cliente</th><th>Empresa</th><th>Horas</th><th>Franquia</th><th>Receita</th><th>Custo</th><th>Margem</th></tr></thead><tbody>${topCli||'<tr><td colspan="7" style="color:#94a3b8;padding:1.25rem;text-align:center;">Configure receitas em Admin → Contratos</td></tr>'}</tbody></table></div></div>`
@@ -682,7 +704,7 @@ async function rAlertasTec(){
 ${(cad.contratos.length||cad.tecnicos.length)?`<div class="card mb-4" style="border-left:3px solid #E04622;">${ST('Cadastros pendentes no SeniorsTalent — novos no Milldesk, fora da lista master')}<div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><div style="font-size:.68rem;font-weight:800;color:#334155;margin-bottom:.3rem;">Contratos/Locais (${cad.contratos.length})</div>${cad.contratos.length?cad.contratos.map(c=>`<div style="display:flex;gap:.4rem;align-items:center;font-size:.7rem;padding:.18rem 0;border-bottom:1px solid #f8fafc;"><i data-lucide="file-plus" style="width:.72rem;height:.72rem;color:#E04622;flex-shrink:0;"></i>${esc(c)}</div>`).join(''):'<div style="font-size:.68rem;color:#22c55e;">Todos cadastrados 👍</div>'}</div><div><div style="font-size:.68rem;font-weight:800;color:#334155;margin-bottom:.3rem;">Técnicos (${cad.tecnicos.length})</div>${cad.tecnicos.length?cad.tecnicos.map(t=>`<div style="display:flex;gap:.4rem;align-items:center;font-size:.7rem;padding:.18rem 0;border-bottom:1px solid #f8fafc;"><i data-lucide="user-plus" style="width:.72rem;height:.72rem;color:#E04622;flex-shrink:0;"></i>${esc(t)}</div>`).join(''):'<div style="font-size:.68rem;color:#22c55e;">Todos cadastrados 👍</div>'}</div></div></div>`:''}
 ${D.alertas.length?`<div class="card mb-4">${ST('Alertas manuais ('+D.alertas.length+')')}<div style="display:flex;flex-direction:column;gap:.23rem;">${D.alertas.map(a=>`<div style="display:flex;align-items:center;gap:.43rem;font-size:.72rem;"><span class="badge badge-r" style="flex-shrink:0;">${a.tipo}</span><span>${esc(a.titulo||'')}${a.descricao?' — '+esc(a.descricao):''}</span><button onclick="dismissAlerta('${a.id}')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#cbd5e1;">✕</button></div>`).join('')}</div></div>`:''}
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-<div class="card">${ST('Zabbix — Alertas de Monitoramento')}${zbx.url?`<div style="font-size:.7rem;color:#64748b;margin-bottom:.5rem;">Servidor: <code style="background:#f1f5f9;padding:0 .25rem;border-radius:.2rem;">${esc(zbx.url)}</code></div><button onclick="zbxSync()" style="display:inline-flex;align-items:center;gap:.3rem;padding:.33rem .72rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.7rem;font-weight:700;cursor:pointer;"><i data-lucide="refresh-cw" style="width:.72rem;height:.72rem;"></i>Sincronizar</button>${zlast?`<div style="margin-top:.6rem;font-size:.68rem;color:#64748b;">Última sync: ${new Date(zlast.ts).toLocaleString('pt-BR')} — <b>${fmt(zlast.count)}</b> problema(s)${zlast.error?` <span style="color:#ef4444;">(${esc(zlast.error)})</span>`:''}</div>${(zlast.items||[]).slice(0,10).map(p=>{const sv=ZBX_SEV[String(p.severity)]||ZBX_SEV['0'];return`<div class="alrt-c" style="background:${sv.c}12;border-color:${sv.c};margin-top:.3rem;"><i data-lucide="server" style="width:.7rem;height:.7rem;color:${sv.c};flex-shrink:0;margin-top:.1rem;"></i><div style="flex:1;"><div style="font-size:.72rem;font-weight:700;">${esc(p.name||'')}</div><div style="font-size:.64rem;color:#64748b;">${p.clock?new Date(+p.clock*1000).toLocaleString('pt-BR'):''}</div></div><span class="badge" style="background:${sv.c}1a;color:${sv.c};flex-shrink:0;">${sv.t}</span></div>`}).join('')}`:'<div style="font-size:.66rem;color:#94a3b8;margin-top:.5rem;">Ainda não sincronizado.</div>'}`:`<div style="font-size:.7rem;color:#64748b;line-height:1.6;">Configure a URL e o token do Zabbix em <button onclick="setSection('admin');setSub('alertcfg')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Admin → Config Alertas</button> para puxar os problemas ativos.</div>`}
+<div class="card">${ST('Zabbix — Críticos (queda de link / equipamento)')}${zbx.url?`<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;flex-wrap:wrap;"><button onclick="zbxSync()" style="display:inline-flex;align-items:center;gap:.3rem;padding:.33rem .72rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.7rem;font-weight:700;cursor:pointer;"><i data-lucide="refresh-cw" style="width:.72rem;height:.72rem;"></i>Sincronizar</button>${zlast?`<span style="font-size:.66rem;color:#64748b;"><b style="color:#ef4444;">${fmt(zlast.crit||0)}</b> crítico(s) de ${fmt(zlast.count)} · ${new Date(zlast.ts).toLocaleTimeString('pt-BR')}${zlast.error?` <span style="color:#ef4444;">(${esc(zlast.error)})</span>`:''}</span>`:''}</div>${zlast?`${(zlast.items||[]).filter(zbxCritical).slice(0,12).map(p=>{const sv=ZBX_SEV[String(p.severity)]||ZBX_SEV['0'];return`<div class="alrt-c" style="background:${sv.c}12;border-color:${sv.c};margin-top:.3rem;"><i data-lucide="server" style="width:.7rem;height:.7rem;color:${sv.c};flex-shrink:0;margin-top:.1rem;"></i><div style="flex:1;"><div style="font-size:.72rem;font-weight:700;">${esc(p.name||'')}</div><div style="font-size:.64rem;color:#64748b;">${p.clock?new Date(+p.clock*1000).toLocaleString('pt-BR'):''}</div></div><span class="badge" style="background:${sv.c}1a;color:${sv.c};flex-shrink:0;">${sv.t}</span></div>`}).join('')||'<div style="font-size:.7rem;color:#22c55e;text-align:center;padding:.7rem;">Nenhum crítico ativo. 👍</div>'}`:'<div style="font-size:.66rem;color:#94a3b8;margin-top:.5rem;">Clique em Sincronizar.</div>'}`:`<div style="font-size:.7rem;color:#64748b;line-height:1.6;">Configure a URL e o token do Zabbix em <button onclick="setSection('admin');setSub('alertcfg')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Admin → Config Alertas</button>.</div>`}
 <div style="margin-top:.6rem;background:#fffbeb;border:1px solid #fde68a;border-radius:.4rem;padding:.4rem .6rem;font-size:.63rem;color:#854d0e;">A leitura direta do Zabbix a partir do navegador depende de CORS liberado no servidor Zabbix.</div></div>
 <div class="card">${ST('Checklist Diário — Status de Hoje')}${(()=>{const today=todayISO(),daily=getChkDaily()[today]||{},cl=D.clientes||[],done=cl.filter(c=>(daily[c.nome]||{}).done).length,risk=cl.filter(c=>{const e=daily[c.nome]||{};return e.risco||hasRisk(e.obs)}).length;return`<div style="display:flex;gap:1.2rem;margin-bottom:.6rem;"><div><div class="kpi-lbl">Feitos</div><div style="font-size:1.2rem;font-weight:800;color:#22c55e;">${done}/${cl.length}</div></div><div><div class="kpi-lbl">Com risco/ação</div><div style="font-size:1.2rem;font-weight:800;color:#ef4444;">${risk}</div></div><div><div class="kpi-lbl">Prazo</div><div style="font-size:1.2rem;font-weight:800;color:${new Date().getHours()>=(getAlertCfg().checklist_hora||12)?'#ef4444':'#2B4C9B'};">${getAlertCfg().checklist_hora||12}h</div></div></div><button onclick="setSection('tech');setSub('checklists')" style="font-size:.68rem;color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Preencher checklists →</button>`})()}</div>
 </div>`
@@ -699,10 +721,11 @@ window.zbxSync=async function(){const z=getZbx();if(!z.url){toast('Configure a U
     if(j&&j.error&&/auth|permission|token|bearer|unauthor/i.test(JSON.stringify(j.error)))j=await call(false) // fallback Zabbix 5.x (auth no corpo)
     if(j&&j.error)throw new Error(j.error.data||j.error.message||'erro Zabbix')
     const items=(j.result||[]).map(p=>({name:p.name,severity:p.severity,clock:p.clock}))
-    const crit=items.filter(p=>+p.severity>=4).length
-    lsSet('sbi_zbx_last',{ts:Date.now(),count:items.length,crit,items,error:''});toast('Zabbix: '+items.length+' problema(s), '+crit+' alta/desastre.')
-  }catch(e){lsSet('sbi_zbx_last',{ts:Date.now(),count:0,items:[],error:(/Failed to fetch/i.test(e.message)?'CORS/rede — libere CORS no Zabbix':e.message)});toast('Falha ao ler Zabbix: '+e.message,false)}
-  renderContent()}
+    const crit=items.filter(zbxCritical).length
+    lsSet('sbi_zbx_last',{ts:Date.now(),count:items.length,crit,items,error:''});toast('Zabbix: '+items.length+' problema(s), '+crit+' crítico(s).')
+    const zs=document.getElementById('zbxStatus');if(zs){zs.textContent=' · Zabbix '+(crit?crit+'⚠':'✓');zs.style.color=crit?'#ef4444':'#166534'}
+  }catch(e){lsSet('sbi_zbx_last',{ts:Date.now(),count:0,items:[],error:(/Failed to fetch/i.test(e.message)?'CORS/rede — libere CORS no Zabbix':e.message)});const zs=document.getElementById('zbxStatus');if(zs){zs.textContent=' · Zabbix ✕';zs.style.color='#ef4444'}toast('Falha ao ler Zabbix: '+e.message,false)}
+  if(SECTION==='tech'&&TECH_SUB==='alertas')renderContent()}
 
 // ═══════ TÉCNICA ═══════════════════════════════════════════════════════════
 
@@ -759,16 +782,24 @@ function mdMetrics(){
 }
 const LEAK_KW=['fortigate','fortinet','forticare','watchguard','epdr','lotus','domino','veeam','m365','office 365','sd-wan','proxy revers','zabbix','grafana','pentest','azure','hyper-v','vmware','backup exec','unifi']
 const cliNomeLoc=(loc,cc)=>{const ct=mdContractForCC(cc);return ct?ct.cliente:(loc||'—')}
+const INC_LEGIT=/4 ?seniors|interno|v[aá]rios? +cliente|todos os +cliente|m[uú]ltiplos? +cliente|diversos +cliente|relat[oó]rio|documenta[cç]|reuni[aã]o|kpi|fechamento|p&d|treinamento|apresenta[cç]|onboarding|infra da 4|m[aá]quina.? da 4|computador.? da 4/i
 function mdInconsistencias(){
   if(!MD.loaded)return[]
   const cfg=getAlertCfg(),maxMin=(cfg.hora_max_atividade||8)*60,out=[]
+  // Tempo excessivo e registro faltando — por atividade
   MD.tickets.forEach(t=>{
     const nome=cliNomeLoc(t.loc,t.cc)
-    if(t.wh>=maxMin)out.push({key:t.id+'|tempo|'+(t.start||''),id:t.id,data:t.start,tecnico:t.ag||'—',cliente:nome,cc:t.cc,tipo:'Tempo',motivo:`${minToHM(t.wh)}h numa única atividade — "${(t.t||'').slice(0,55)}"`})
-    const interno=/geral/i.test(t.loc||'')||t.cc==='9'||t.cc==='10'
-    if(interno){const txt=((t.t||'')+' '+(t.cat||'')).toLowerCase(),kw=LEAK_KW.find(k=>txt.includes(k));if(kw)out.push({key:t.id+'|interno|'+(t.start||''),id:t.id,data:t.start,tecnico:t.ag||'—',cliente:nome,cc:t.cc,tipo:'Contrato',motivo:`Assunto de cliente ("${kw}") lançado no centro de custo interno — verificar contrato/local`})}
-    if(!t.ag)out.push({key:t.id+'|semtec|'+(t.start||''),id:t.id,data:t.start,tecnico:'—',cliente:nome,cc:t.cc,tipo:'Registro',motivo:'Atividade sem técnico registrado'})
-    if(!t.loc||/n[aã]o cadastrad/i.test(t.loc))out.push({key:t.id+'|semcli|'+(t.start||''),id:t.id,data:t.start,tecnico:t.ag||'—',cliente:'—',cc:'',tipo:'Registro',motivo:'Atividade sem cliente/local registrado'})
+    if(t.wh>=maxMin)out.push({key:t.id+'|tempo|'+(t.start||''),id:t.id,data:t.start,tecnico:t.ag||'—',cliente:nome,cc:t.cc,tipo:'Tempo',motivo:`${minToHM(t.wh)}h numa única atividade — "${(t.t||'').slice(0,55)}"`,ctx:t.desc||''})
+    if(!t.ag)out.push({key:t.id+'|semtec|'+(t.start||''),id:t.id,data:t.start,tecnico:'—',cliente:nome,cc:t.cc,tipo:'Registro',motivo:'Atividade sem técnico registrado',ctx:t.desc||''})
+    if(!t.loc||/n[aã]o cadastrad/i.test(t.loc||''))out.push({key:t.id+'|semcli|'+(t.start||''),id:t.id,data:t.start,tecnico:t.ag||'—',cliente:'—',cc:'',tipo:'Registro',motivo:'Atividade sem cliente/local registrado',ctx:t.desc||''})
+  })
+  // Vazamento de contrato — por CHAMADO (lê todas as atividades p/ contexto, evita falso positivo)
+  const byId={};MD.tickets.forEach(t=>{(byId[t.id]=byId[t.id]||[]).push(t)})
+  Object.entries(byId).forEach(([id,rows])=>{
+    const r0=rows[0],interno=/geral/i.test(r0.loc||'')||r0.cc==='9'||r0.cc==='10';if(!interno)return
+    const combined=rows.map(x=>(x.t||'')+' '+(x.subcat||'')+' '+(x.desc||'')).join(' | ').toLowerCase()
+    const kw=LEAK_KW.find(k=>combined.includes(k))
+    if(kw&&!INC_LEGIT.test(combined))out.push({key:id+'|interno',id,data:r0.start,tecnico:r0.ag||'—',cliente:cliNomeLoc(r0.loc,r0.cc),cc:r0.cc,tipo:'Contrato',motivo:`Assunto de cliente ("${kw}") no centro de custo interno — verificar contrato`,ctx:rows.map(x=>x.t).filter((v,i,a)=>a.indexOf(v)===i).join(' · ').slice(0,220)})
   })
   const seen={};return out.filter(x=>seen[x.key]?false:(seen[x.key]=1))
 }
@@ -866,7 +897,7 @@ function rIncidencias(){
 }
 window.openIncid=function(ek){const key=decodeURIComponent(ek),x=(window._INC||[]).find(i=>i.key===key);if(!x)return;const treat=getIncid()[key]||{};document.getElementById('inBody').innerHTML=`<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;"><span class="badge ${x.tipo==='Tempo'?'badge-y':x.tipo==='Contrato'?'badge-r':'badge-b'}">${x.tipo}</span><h3 style="font-size:.95rem;font-weight:800;">Chamado #${esc(x.id)}</h3></div>
 <div style="display:flex;flex-wrap:wrap;gap:.9rem;background:#f8fafc;border:1px solid var(--border);border-radius:.5rem;padding:.7rem;margin-bottom:.7rem;"><div><div class="kpi-lbl">Data</div><div style="font-size:.8rem;font-weight:700;">${esc(x.data||'—')}</div></div><div><div class="kpi-lbl">Cliente</div><div style="font-size:.8rem;font-weight:700;">${esc(x.cliente)}</div></div><div><div class="kpi-lbl">Técnico</div><div style="font-size:.8rem;font-weight:700;">${esc(x.tecnico)}</div></div></div>
-<div style="font-size:.75rem;color:#334155;margin-bottom:.7rem;line-height:1.5;"><b>Motivo:</b> ${esc(x.motivo)}</div>
+<div style="font-size:.75rem;color:#334155;margin-bottom:.5rem;line-height:1.5;"><b>Motivo:</b> ${esc(x.motivo)}</div>${x.ctx?`<div style="font-size:.68rem;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.4rem;padding:.5rem .6rem;margin-bottom:.7rem;line-height:1.5;"><b>Contexto (atividades do chamado):</b> ${esc(x.ctx)}</div>`:''}
 <label class="fl">Anotação do tratamento</label><textarea id="inNota" class="fi" rows="3" placeholder="O que foi verificado / corrigido…">${esc(treat.nota||'')}</textarea>
 <div style="display:flex;gap:.5rem;margin-top:.8rem;flex-wrap:wrap;"><button onclick="setIncidStatus('${encodeURIComponent(key)}','tratando')" style="padding:.4rem .9rem;background:#fef9c3;color:#854d0e;border:none;border-radius:.43rem;font-size:.73rem;font-weight:700;cursor:pointer;">Em tratamento</button><button onclick="setIncidStatus('${encodeURIComponent(key)}','resolvido')" style="padding:.4rem .9rem;background:#22c55e;color:white;border:none;border-radius:.43rem;font-size:.73rem;font-weight:700;cursor:pointer;">Marcar resolvido</button>${treat.status?`<button onclick="setIncidStatus('${encodeURIComponent(key)}','')" style="padding:.4rem .9rem;background:#f1f5f9;color:#64748b;border:none;border-radius:.43rem;font-size:.73rem;font-weight:700;cursor:pointer;">Reabrir</button>`:''}</div>`;openModal('modalIncid')}
 window.setIncidStatus=function(ek,status){const key=decodeURIComponent(ek),all=getIncid();if(!status){delete all[key]}else{all[key]={status,nota:document.getElementById('inNota')?document.getElementById('inNota').value:(all[key]?.nota||''),ts:Date.now()}}setIncid(all);closeModal('modalIncid');renderContent();toast(status==='resolvido'?'Marcado como resolvido.':status?'Em tratamento.':'Reaberto.')}
@@ -881,12 +912,17 @@ function rCli(){
 window.toggleAprov=function(cli,val){const all=getAprov();all[MES]=all[MES]||{};all[MES][cli]=val;setAprov(all);toast(val?'Aprovação marcada.':'Aprovação desmarcada.')}
 
 function rEquipe(){
-  if(!D.skills.length)return`<div class="card" style="color:#94a3b8;text-align:center;padding:2rem;">Matriz de skills não disponível.</div>`
-  const tecnicos=[...new Set(D.skills.map(s=>s.tecnico))],skills=[...new Set(D.skills.map(s=>s.skill))]
+  // Produtividade (mesclado da antiga aba Produtividade)
+  const prodRows=fRec().map(r=>{const fte=pct(r.trab_minutos,r.cap_minutos),c=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e';return`<tr><td style="font-weight:600;">${esc(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td style="color:#64748b;">${esc(r.equipe||'—')}</td><td>${minToHM(r.trab_minutos)}h</td><td style="color:#94a3b8;">${minToHM(r.avulsa_minutos)}h</td><td><div style="display:flex;align-items:center;gap:.43rem;"><div style="flex:1;height:.28rem;background:#f1f5f9;border-radius:9999px;min-width:3.5rem;overflow:hidden;"><div style="height:100%;width:${Math.min(fte,100)}%;background:${c};"></div></div><span style="font-size:.72rem;font-weight:800;color:${c};min-width:2.1rem;">${fte}%</span></div></td></tr>`}).join('')
+  const prodCard=`<div class="card mb-4 overflow-x-auto">${ST('Produtividade por Técnico')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Equipe</th><th>H. Trabalhadas</th><th>H. Avulsas</th><th>FTE %</th></tr></thead><tbody>${prodRows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.5rem;text-align:center;">Sem dados.</td></tr>'}</tbody></table></div>`
+  // Matriz de conhecimento
+  const SK=(D.skills&&D.skills.length)?D.skills:BASE_SKILLS
+  const tecnicos=[...new Set(SK.map(s=>s.tecnico))],skills=[...new Set(SK.map(s=>s.skill))]
   const bg={1:'#dbeafe',2:'#fef9c3',3:'#dcfce7'},tx={1:'#1e40af',2:'#854d0e',3:'#166534'}
-  const spofs=skills.filter(sk=>D.skills.filter(s=>s.skill===sk&&s.nivel===3).length<2)
-  const rows=skills.map(sk=>{const isSp=spofs.includes(sk);return`<tr><td style="font-size:.74rem;padding-right:.68rem;white-space:nowrap;font-weight:${isSp?700:400};">${esc(sk)} ${isSp?'<span style="background:#fee2e2;color:#991b1b;padding:.07rem .27rem;border-radius:.19rem;font-size:.55rem;font-weight:800;">SPOF</span>':''}</td>${tecnicos.map(t=>{const e=D.skills.find(s=>s.tecnico===t&&s.skill===sk),n=e?.nivel||0;return`<td style="text-align:center;"><div class="hcell mx-auto" style="background:${n?bg[n]:'#f8fafc'};color:${n?tx[n]:'#cbd5e1'};">${n||''}</div></td>`}).join('')}</tr>`}).join('')
-  return`<div class="card overflow-x-auto">${ST('Matriz de Conhecimento — 1 básico · 2 pleno · 3 especialista')}<table><thead><tr><th>Skill</th>${tecnicos.map(t=>`<th style="text-align:center;min-width:2rem;">${t.split(' ')[0]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>${spofs.length?`<div class="card mt-3" style="border-left:3px solid #ef4444;">${ST('Riscos SPOF')}<div style="display:flex;flex-wrap:wrap;gap:.28rem;">${spofs.map(s=>`<span class="badge badge-r">${esc(s)}</span>`).join('')}</div></div>`:''}`
+  const spofs=skills.filter(sk=>SK.filter(s=>s.skill===sk&&s.nivel===3).length<2)
+  const rows=skills.map(sk=>{const isSp=spofs.includes(sk);return`<tr><td style="font-size:.74rem;padding-right:.68rem;white-space:nowrap;font-weight:${isSp?700:400};">${esc(sk)} ${isSp?'<span style="background:#fee2e2;color:#991b1b;padding:.07rem .27rem;border-radius:.19rem;font-size:.55rem;font-weight:800;">SPOF</span>':''}</td>${tecnicos.map(t=>{const e=SK.find(s=>s.tecnico===t&&s.skill===sk),n=e?e.nivel:0;return`<td style="text-align:center;"><div class="hcell mx-auto" style="background:${n?bg[n]:'#f8fafc'};color:${n?tx[n]:'#cbd5e1'};">${n||''}</div></td>`}).join('')}</tr>`}).join('')
+  const matriz=`<div class="card overflow-x-auto">${ST('Matriz de Conhecimento — 1 básico · 2 pleno · 3 especialista')}<table><thead><tr><th>Skill</th>${tecnicos.map(t=>`<th style="text-align:center;min-width:2rem;">${esc(t.split(' ')[0])}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>${spofs.length?`<div class="card mt-3" style="border-left:3px solid #ef4444;">${ST('Riscos SPOF — skill com menos de 2 especialistas')}<div style="display:flex;flex-wrap:wrap;gap:.28rem;">${spofs.map(s=>`<span class="badge badge-r">${esc(s)}</span>`).join('')}</div></div>`:''}`
+  return prodCard+matriz
 }
 
 let HIST={key:'',ts:0,html:''}
@@ -901,7 +937,17 @@ async function rTrend(){
     const maxCh=Math.max(1,...sums.map(s=>s.chamados)),maxH=Math.max(1,...sums.map(s=>s.horas))
     const rows=sums.map(s=>{const[y,m]=s.ym.split('-'),fteC=s.fte<60?'#ef4444':s.fte<80?'#f59e0b':'#22c55e'
       return`<tr><td style="font-weight:600;">${m}/${y}</td><td style="font-weight:700;">${fmt(s.chamados)}</td><td><div style="display:flex;align-items:center;gap:.4rem;"><div style="flex:1;height:.26rem;background:#f1f5f9;border-radius:9999px;min-width:3rem;overflow:hidden;"><div style="height:100%;width:${Math.round(s.horas/maxH*100)}%;background:#2B4C9B;"></div></div><span style="font-size:.72rem;font-weight:700;min-width:3.5rem;">${minToHM(s.horas)}h</span></div></td><td style="color:${fteC};font-weight:800;">${s.fte}%</td><td>${fmt(s.clientes.filter(c=>c.v>0).length)}</td><td>${fmt(s.tecnicos.filter(t=>t.v>0).length)}</td></tr>`}).join('')
-    HIST={key,ts:Date.now(),html:`<div class="card overflow-x-auto">${ST('Histórico — últimos 6 meses (Milldesk ao vivo)')}<table><thead><tr><th>Mês</th><th>Chamados</th><th>Horas trabalhadas</th><th>FTE %</th><th>Clientes ativos</th><th>Técnicos ativos</th></tr></thead><tbody>${rows}</tbody></table><div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;">Clientes/técnicos ativos = com horas lançadas no mês. Cache de 10 min.</div></div>`}
+    const monLbl=sums.map(s=>{const[y,m]=s.ym.split('-');return m+'/'+y})
+    const allTec=[...new Set(sums.flatMap(s=>s.tecnicos.filter(t=>t.v>0).map(t=>t.k)))].filter(n=>!isExcludedTech(n))
+    const tecMx=allTec.map(name=>{const cells=sums.map(s=>{const t=s.tecnicos.find(x=>x.k===name);return t?t.v:0});return{name,cells,tot:cells.reduce((a,b)=>a+b,0)}}).sort((a,b)=>b.tot-a.tot)
+    const tecRows=tecMx.map(r=>`<tr><td style="font-weight:600;font-size:.72rem;white-space:nowrap;position:sticky;left:0;background:white;">${esc(r.name)}</td>${r.cells.map(v=>`<td style="font-size:.7rem;">${v?minToHM(v)+'h':'<span style="color:#cbd5e1">—</span>'}</td>`).join('')}<td style="font-weight:700;color:#2B4C9B;">${minToHM(r.tot)}h</td></tr>`).join('')
+    const allCli=[...new Set(sums.flatMap(s=>s.clientes.filter(c=>c.v>0).map(c=>c.k)))]
+    const cliMx=allCli.map(name=>{const cells=sums.map(s=>{const c=s.clientes.find(x=>x.k===name);return c?c.v:0});return{name,cells,tot:cells.reduce((a,b)=>a+b,0)}}).sort((a,b)=>b.tot-a.tot).slice(0,30)
+    const cliRows=cliMx.map(r=>`<tr><td style="font-weight:600;font-size:.72rem;white-space:nowrap;position:sticky;left:0;background:white;">${esc(r.name)}</td>${r.cells.map(v=>`<td style="font-size:.7rem;">${v?minToHM(v)+'h':'<span style="color:#cbd5e1">—</span>'}</td>`).join('')}<td style="font-weight:700;color:#2B4C9B;">${minToHM(r.tot)}h</td></tr>`).join('')
+    const thMon=monLbl.map(m=>`<th style="text-align:right;">${m}</th>`).join('')
+    HIST={key,ts:Date.now(),html:`<div class="card overflow-x-auto mb-4">${ST('Histórico geral — últimos 6 meses (Milldesk ao vivo)')}<table><thead><tr><th>Mês</th><th>Chamados</th><th>Horas trabalhadas</th><th>FTE %</th><th>Clientes ativos</th><th>Técnicos ativos</th></tr></thead><tbody>${rows}</tbody></table><div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;">Clientes/técnicos ativos = com horas lançadas no mês. Cache de 10 min.</div></div>
+<div class="card overflow-x-auto mb-4">${ST('Histórico por Técnico — horas/mês')}<table style="min-width:40rem;"><thead><tr><th style="position:sticky;left:0;background:#f8fafc;">Técnico</th>${thMon}<th style="text-align:right;">Total</th></tr></thead><tbody>${tecRows||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:1rem;">—</td></tr>'}</tbody></table></div>
+<div class="card overflow-x-auto">${ST('Histórico por Cliente — horas/mês (top 30)')}<table style="min-width:40rem;"><thead><tr><th style="position:sticky;left:0;background:#f8fafc;">Cliente</th>${thMon}<th style="text-align:right;">Total</th></tr></thead><tbody>${cliRows||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:1rem;">—</td></tr>'}</tbody></table></div>`}
     return HIST.html
   }
   const{data}=await sb.from('meses').select('slug,competencia,total_chamados').order('slug');if(!data?.length)return`<div class="card" style="color:#94a3b8;text-align:center;padding:2rem;">Configure a chave Milldesk (Admin) para o histórico ao vivo, ou ingira meses no banco.</div>`;const{data:recs}=await sb.from('recursos').select('mes_slug,trab_minutos,cap_minutos').in('mes_slug',data.map(m=>m.slug));const rows=data.map(m=>{const r=(recs||[]).filter(x=>x.mes_slug===m.slug),trab=r.reduce((s,x)=>s+x.trab_minutos,0),cap=r.reduce((s,x)=>s+x.cap_minutos,0),fte=pct(trab,cap),c=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e';return`<tr><td style="font-weight:600;">${esc(m.competencia)}</td><td>${minToHM(trab)}h</td><td><div style="display:flex;align-items:center;gap:.43rem;"><div style="flex:1;height:.26rem;background:#f1f5f9;border-radius:9999px;min-width:3.2rem;overflow:hidden;"><div style="height:100%;width:${Math.min(fte,100)}%;background:${c};"></div></div><span style="font-size:.7rem;font-weight:800;color:${c};">${fte}%</span></div></td><td>${fmt(m.total_chamados)}</td></tr>`}).join('');return`<div class="card overflow-x-auto">${ST('Série Histórica')}<table><thead><tr><th>Mês</th><th>Horas</th><th>FTE %</th><th>Chamados</th></tr></thead><tbody>${rows}</tbody></table></div>`}
@@ -965,20 +1011,25 @@ window.addCusto=function(){const dep=document.getElementById('cuDep').value.trim
 window.delCusto=function(id){setCustos(getCustos().filter(c=>c.id!==id));renderContent();toast('Custo removido.')}
 window.saveAC=function(k,v){const c=getAlertCfg();c[k]=v;lsSet('sbi_acfg',c)}
 
+const MCHK_SHORT={backup:'Backup',firmware:'Firmware',epdr:'EPDR',firewall:'Firewall',wifi:'Wi-Fi',patches:'Patches',disco:'Disco',cert:'Cert.',m365:'M365',relatorio:'Relatório'}
 function rChecklists(){
   const cfg=getAlertCfg(),today=todayISO(),daily=getChkDaily()[today]||{},lim=cfg.checklist_hora||12
-  const clis=D.clientes||[]
+  const clis=D.clientes||[],roster=FUNCS.filter(f=>!f._removed).map(f=>f.nome)
+  const techOpts=sel=>['<option value="">— técnico —</option>'].concat(roster.map(n=>`<option value="${esc(n)}"${sel===n?' selected':''}>${esc(n)}</option>`)).join('')
   const dRows=clis.map(c=>{const e=daily[c.nome]||{},risk=e.risco||hasRisk(e.obs),st=e.done?(risk?'<span class="badge badge-r">RISCO/AÇÃO</span>':'<span class="badge badge-g">OK</span>'):'<span class="badge badge-y">Pendente</span>'
-    return`<tr><td style="font-weight:600;">${esc(c.nome)}</td><td style="text-align:center;"><input type="checkbox" ${e.done?'checked':''} onchange="saveChkD('${esc(c.nome)}','done',this.checked)" style="accent-color:var(--brand);width:1rem;height:1rem;cursor:pointer;"></td><td><input type="text" value="${esc(e.tecnico||'')}" onchange="saveChkD('${esc(c.nome)}','tecnico',this.value)" placeholder="técnico" class="fi" style="padding:.22rem .4rem;font-size:.7rem;max-width:8rem;"></td><td><input type="text" value="${esc(e.obs||'')}" onchange="saveChkD('${esc(c.nome)}','obs',this.value)" placeholder="observações / achados" class="fi" style="padding:.22rem .4rem;font-size:.7rem;min-width:12rem;"></td><td style="text-align:center;"><label style="font-size:.64rem;color:#64748b;cursor:pointer;"><input type="checkbox" ${e.risco?'checked':''} onchange="saveChkD('${esc(c.nome)}','risco',this.checked)" style="accent-color:#ef4444;"> risco</label></td><td>${st}</td></tr>`}).join('')
+    return`<tr><td style="font-weight:600;">${esc(c.nome)}</td><td style="text-align:center;"><input type="checkbox" ${e.done?'checked':''} onchange="saveChkD('${esc(c.nome)}','done',this.checked)" style="accent-color:var(--brand);width:1rem;height:1rem;cursor:pointer;"></td><td><select onchange="saveChkD('${esc(c.nome)}','tecnico',this.value)" class="fi" style="padding:.22rem .4rem;font-size:.7rem;max-width:9rem;">${techOpts(e.tecnico)}</select></td><td><input type="text" value="${esc(e.obs||'')}" onchange="saveChkD('${esc(c.nome)}','obs',this.value)" placeholder="observações / achados" class="fi" style="padding:.22rem .4rem;font-size:.7rem;min-width:12rem;"></td><td style="text-align:center;"><label style="font-size:.64rem;color:#64748b;cursor:pointer;"><input type="checkbox" ${e.risco?'checked':''} onchange="saveChkD('${esc(c.nome)}','risco',this.checked)" style="accent-color:#ef4444;"> risco</label></td><td>${st}</td></tr>`}).join('')
   const done=clis.filter(c=>(daily[c.nome]||{}).done).length,late=(new Date().getHours()>=lim)
-  const mon=getChkMonthly()[MES]||{},mDone=MONTHLY_CHK.filter(i=>(mon[i.k]||{}).done).length
-  const mRows=MONTHLY_CHK.map(i=>{const e=mon[i.k]||{};return`<tr><td style="text-align:center;"><input type="checkbox" ${e.done?'checked':''} onchange="saveChkM('${i.k}','done',this.checked)" style="accent-color:var(--brand);width:1rem;height:1rem;cursor:pointer;"></td><td style="font-weight:600;">${esc(i.t)}</td><td><span class="tag">${i.cat}</span></td><td><input type="text" value="${esc(e.obs||'')}" onchange="saveChkM('${i.k}','obs',this.value)" placeholder="observações" class="fi" style="padding:.22rem .4rem;font-size:.7rem;min-width:11rem;"></td><td style="font-size:.62rem;color:#94a3b8;">${e.ts?new Date(e.ts).toLocaleDateString('pt-BR'):'—'}</td></tr>`}).join('')
-  return`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(done+'/'+clis.length,'Checklist Diário Hoje',done>=clis.length&&clis.length?'#22c55e':late?'#ef4444':'#f59e0b','clipboard-check',today.split('-').reverse().join('/'))}${kpiCard('até '+lim+'h','Prazo Diário',late?'#ef4444':'#2B4C9B','clock',late?'prazo vencido':'no prazo')}${kpiCard(mDone+'/'+MONTHLY_CHK.length,'Mensal '+(MES||''),mDone>=MONTHLY_CHK.length?'#22c55e':'#f59e0b','calendar-check')}${kpiCard(clis.length-done,'Diários Pendentes',(clis.length-done)?'#f59e0b':'#22c55e','list-todo')}</div>
-<div class="card mb-4 overflow-x-auto">${ST('Checklist Diário por Cliente — '+today.split('-').reverse().join('/'))}<div style="font-size:.66rem;color:#64748b;margin-bottom:.5rem;">Os técnicos preenchem o resultado do checklist diário. Não preenchido até <b>${lim}h</b> gera alerta ao líder técnico. Palavras como "erro", "falha", "offline", "vencido" marcam <b>risco</b> automaticamente.</div><table><thead><tr><th>Cliente</th><th style="text-align:center;">Feito</th><th>Técnico</th><th>Observações / Achados</th><th style="text-align:center;">Risco</th><th>Status</th></tr></thead><tbody>${dRows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.2rem;text-align:center;">Sem clientes carregados.</td></tr>'}</tbody></table></div>
-<div class="card overflow-x-auto">${ST('Checklist Mensal Obrigatório — '+(MES||'')+' ('+mDone+'/'+MONTHLY_CHK.length+')')}<div style="font-size:.66rem;color:#64748b;margin-bottom:.5rem;">Atividades macro que devem ser executadas ao menos 1x/mês. Itens não concluídos aparecem em Alertas.</div><table><thead><tr><th style="text-align:center;">OK</th><th>Atividade</th><th>Categoria</th><th>Observações</th><th>Concluído em</th></tr></thead><tbody>${mRows}</tbody></table></div>`
+  // Mensal — matriz clientes × atividades
+  const mon=getChkMonthly()[MES]||{}
+  const totalCells=clis.length*MONTHLY_CHK.length,doneCells=clis.reduce((s,c)=>s+MONTHLY_CHK.filter(i=>(mon[c.nome]||{})[i.k]).length,0)
+  const mxRows=clis.map(c=>{const cm=mon[c.nome]||{};return`<tr><td style="font-weight:600;font-size:.72rem;white-space:nowrap;position:sticky;left:0;background:white;">${esc(c.nome)}</td>${MONTHLY_CHK.map(i=>{const on=!!cm[i.k];return`<td style="text-align:center;padding:.2rem;"><div onclick="toggleChkMx('${esc(c.nome)}','${i.k}')" class="hcell mx-auto" style="cursor:pointer;background:${on?'#dcfce7':'#f8fafc'};color:${on?'#166534':'#cbd5e1'};border:1px solid ${on?'#86efac':'#e2e8f0'};">${on?'✓':''}</div></td>`}).join('')}</tr>`}).join('')
+  const colProg=MONTHLY_CHK.map(i=>{const n=clis.filter(c=>(mon[c.nome]||{})[i.k]).length;return`<td style="text-align:center;font-size:.6rem;font-weight:700;color:${n>=clis.length&&clis.length?'#166534':'#94a3b8'};">${n}/${clis.length}</td>`}).join('')
+  return`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(done+'/'+clis.length,'Checklist Diário Hoje',done>=clis.length&&clis.length?'#22c55e':late?'#ef4444':'#f59e0b','clipboard-check',today.split('-').reverse().join('/'))}${kpiCard('até '+lim+'h','Prazo Diário',late?'#ef4444':'#2B4C9B','clock',late?'prazo vencido':'no prazo')}${kpiCard(doneCells+'/'+totalCells,'Mensal '+(MES||''),doneCells>=totalCells&&totalCells?'#22c55e':'#f59e0b','calendar-check','clientes × atividades')}${kpiCard(clis.length-done,'Diários Pendentes',(clis.length-done)?'#f59e0b':'#22c55e','list-todo')}</div>
+<div class="card mb-4 overflow-x-auto">${ST('Checklist Diário por Cliente — '+today.split('-').reverse().join('/'))}<div style="font-size:.66rem;color:#64748b;margin-bottom:.5rem;">Selecione o técnico responsável (cadastro de Funcionários). Não preenchido até <b>${lim}h</b> gera alerta ao líder. Palavras como "erro", "falha", "offline", "vencido" marcam <b>risco</b>.</div><table><thead><tr><th>Cliente</th><th style="text-align:center;">Feito</th><th>Técnico</th><th>Observações / Achados</th><th style="text-align:center;">Risco</th><th>Status</th></tr></thead><tbody>${dRows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.2rem;text-align:center;">Sem clientes carregados.</td></tr>'}</tbody></table></div>
+<div class="card overflow-x-auto">${ST('Checklist Mensal Obrigatório — '+(MES||'')+' · clique para ticar por cliente')}<div style="font-size:.66rem;color:#64748b;margin-bottom:.6rem;">Marque cada atividade macro por cliente. Atividade não iniciada em nenhum cliente vira alerta.</div><table style="min-width:44rem;"><thead><tr><th style="position:sticky;left:0;background:#f8fafc;">Cliente</th>${MONTHLY_CHK.map(i=>`<th style="text-align:center;font-size:.58rem;" title="${esc(i.t)}">${MCHK_SHORT[i.k]||i.k}</th>`).join('')}</tr></thead><tbody>${mxRows||'<tr><td colspan="'+(MONTHLY_CHK.length+1)+'" style="color:#94a3b8;padding:1.2rem;text-align:center;">Sem clientes carregados.</td></tr>'}<tr style="border-top:2px solid #e2e8f0;"><td style="font-size:.6rem;font-weight:800;color:#64748b;position:sticky;left:0;background:white;">Feito em</td>${colProg}</tr></tbody></table></div>`
 }
 window.saveChkD=function(cliente,field,val){const all=getChkDaily(),t=todayISO();all[t]=all[t]||{};all[t][cliente]=all[t][cliente]||{};all[t][cliente][field]=val;all[t][cliente].ts=Date.now();if(field==='obs'&&hasRisk(val))all[t][cliente].risco=true;setChkDaily(all);if(SECTION==='tech'&&TECH_SUB==='checklists')renderContent();toast('Checklist salvo.')}
-window.saveChkM=function(k,field,val){const all=getChkMonthly();all[MES]=all[MES]||{};all[MES][k]=all[MES][k]||{};all[MES][k][field]=val;all[MES][k].ts=Date.now();setChkMonthly(all);if(SECTION==='tech'&&TECH_SUB==='checklists')renderContent();toast('Checklist mensal salvo.')}
+window.toggleChkMx=function(cli,k){const all=getChkMonthly();all[MES]=all[MES]||{};all[MES][cli]=all[MES][cli]||{};all[MES][cli][k]=!all[MES][cli][k];all[MES][cli].ts=Date.now();setChkMonthly(all);if(SECTION==='tech'&&TECH_SUB==='checklists')renderContent()}
 
 // ═══════ CRUD ═══════════════════════════════════════════════════════════════
 
@@ -1027,6 +1078,7 @@ function initRealtime(){sb.channel('sbi-live').on('postgres_changes',{event:'*',
 
 async function boot(){
   try{seedLocalData();await loadMeses();renderSubTabs()
+    if(getZbx().token)zbxSync()
     if(getMD().key){mdSync()}
     else{document.getElementById('mdBanner').classList.remove('hidden');if(MES)await loadMonth(MES);else document.getElementById('main').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:14rem;gap:.62rem;color:#94a3b8;font-size:.875rem;text-align:center;">Conecte ao Milldesk na barra acima para carregar chamados e horas ao vivo.<br>Contratos e funcionários já estão disponíveis em <b>Admin</b>.</div>`}
     initRealtime();startRot()}
