@@ -10,6 +10,7 @@
 <style>
 :root{--brand:#2B4C9B;--accent:#E04622;--bg:#f0f4fa;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;--subtle:#94a3b8}
 body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.hidden{display:none!important}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:#f1f5f9}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
 .card{background:var(--card);border-radius:.875rem;padding:1.25rem;border:1px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,.05)}
 .kpi-big{font-size:1.7rem;font-weight:800;color:var(--text);line-height:1.1;letter-spacing:-.02em}
@@ -343,6 +344,16 @@ const getContractDocs=()=>lsGet('sbi_contract_docs')||{}
 const setContractDocs=v=>lsSet('sbi_contract_docs',v)
 const getApontRev=()=>lsGet('sbi_apont_rev')||{}
 const setApontRev=v=>lsSet('sbi_apont_rev',v)
+// ─── Milldesk (chamados ao vivo) ───
+let MD={loaded:false,loading:false,periodo:'',ts:0,tickets:[],backlog:[]}
+const getMD=()=>lsGet('sbi_md')||{base:'https://v1.milldesk.com/api',key:''}
+const setMD=v=>lsSet('sbi_md',v)
+const mdCC=loc=>{const p=String(loc||'').split('|');return p.length>1?p[1].trim():''}
+const mdDate=s=>{if(!s)return null;const p=String(s).split('/');return p.length===3?new Date(+p[2],+p[1]-1,+p[0]):null}
+const mdNorm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[0-9]+/g,' ').replace(/[^a-z ]+/g,' ').replace(/\s+/g,' ').trim().split(' ').filter(w=>w.length>2).slice(0,6).join(' ')
+const mdCompact=r=>({id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:r.agent,dep:r.department,lv:r.level,st:r.status,start:r.start,end:r.end,ana:r.analysis,reab:r.reopening,cat:r.category,pri:r.priority})
+const mdIsOpen=st=>!/fechad|resolvid|cancelad/i.test(st||'')
+function mdContractForCC(cc){return CONTRACTS.find(c=>String(c.cc)===String(cc))||null}
 const todayISO=()=>new Date().toISOString().slice(0,10)
 const RISK_KW=['erro','falha','offline','down','crítico','critico','pendente','vencido','risco','sem backup','backup falh','não','nao ','indisponível','indisponivel','alerta','degradad','lento','estourou','expirou','expirad']
 const hasRisk=t=>{const s=(t||'').toLowerCase();return RISK_KW.some(k=>s.includes(k))}
@@ -429,6 +440,13 @@ function buildChecklistAlerts(){
   if(pend.length)out.push({lv:'media',cat:'Mensal',msg:`${pend.length} atividade(s) mensal(is) pendente(s)`,det:pend.slice(0,4).map(i=>i.t.split('—')[0].trim()).join(', ')+(pend.length>4?'…':'')})
   return out
 }
+function buildMdAlerts(){
+  if(!MD.loaded)return[]
+  const M=mdMetrics(),di=getAlertCfg().dias_inat||3,out=[]
+  M.semAtual.slice(0,12).forEach(t=>out.push({lv:t.dias>=di*3?'critica':'alta',cat:'Sem update',msg:`#${t.id} parado ${t.dias}d: ${(t.t||'').slice(0,48)}`,det:(mdContractForCC(t.cc)?.cliente||t.loc||'—')+' · '+(t.ag||'sem técnico')}))
+  M.reinc.slice(0,8).forEach(g=>out.push({lv:'media',cat:'Reincidência',msg:`${g.ids.length}× ${(g.titulo||'').slice(0,48)}`,det:(mdContractForCC(g.cc)?.cliente||g.loc||'—')}))
+  return out
+}
 const alertCard=a=>`<div class="alrt-c" style="background:${aB[a.lv]};border-color:${aC[a.lv]};"><i data-lucide="${aI[a.lv]}" style="width:.73rem;height:.73rem;color:${aC[a.lv]};flex-shrink:0;margin-top:.1rem;"></i><div style="flex:1;"><div style="font-size:.74rem;font-weight:700;">${esc(a.msg)}</div><div style="font-size:.66rem;color:#64748b;margin-top:.05rem;">${esc(a.det)}</div></div><span class="badge" style="background:${aB[a.lv]};color:${aC[a.lv]};font-size:.57rem;flex-shrink:0;">${a.cat}</span></div>`
 
 function startRot(){clearInterval(rotTimer);rotTimer=setInterval(tickRot,1000)}
@@ -444,7 +462,8 @@ window.setSub=function(s){if(SECTION==='exec')EXEC_SUB=s;else if(SECTION==='tech
 function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:ADMIN_SUB;document.getElementById('subTabs').innerHTML=SECTION_SUBS[SECTION].map(([k,l])=>`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}</button>`).join('')}
 function renderContent(){
   const el=document.getElementById('main')
-  if((!MES||!D.recursos)&&SECTION!=='admin'){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> (contratos, funcionários, checklists) já está disponível.</div></div>';return}
+  const standalone=SECTION==='admin'||(SECTION==='tech'&&TECH_SUB==='fila')
+  if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
   if(SECTION==='exec'){
     const sync={geral:rExecGeral,empresa:rExecEmpresa,contrato:rExecContrato,tecnico:rExecTecnico}
     if(EXEC_SUB==='alertas')rAlertas().then(h=>{el.innerHTML=h;lucide.createIcons()})
@@ -535,7 +554,7 @@ function rExecTecnico(){
 }
 
 async function rAlertas(){
-  const auto=buildAutoAlerts().concat(buildChecklistAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0),custoPorCh=D.totalChamados>0?totalCusto/D.totalChamados:0
+  const auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0),custoPorCh=D.totalChamados>0?totalCusto/D.totalChamados:0
   const ord={critica:0,alta:1,media:2,baixa:3};auto.sort((a,b)=>ord[a.lv]-ord[b.lv])
   const techRows=D.recursos.map(r=>{const fte=pct(r.trab_minutos,r.cap_minutos),fC=fte>90?'#ef4444':fte<60?'#f59e0b':'#22c55e',sal=getSalario(r.nome,r.nivel),vh=getVH(r.nome,r.nivel),cr=vh>0?Math.round(r.trab_minutos/60*vh):sal;return`<tr><td style="font-weight:600;">${esc(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td>${minToHM(r.trab_minutos)}h</td><td style="color:${fC};font-weight:800;">${fte}%</td><td style="color:#854d0e;">${fmtR(sal)}</td><td style="color:#64748b;">${vh>0?fmtR(Math.round(vh))+'/h':'—'}</td><td style="color:#166534;font-weight:700;">${fmtR(cr)}</td></tr>`}).join('')
   // Validação de apontamentos (itens registrados p/ revisão do líder)
@@ -566,27 +585,79 @@ window.zbxSync=async function(){const z=getZbx();if(!z.url){toast('Configure o Z
 
 function rProd(){const rows=fRec().map(r=>{const fte=pct(r.trab_minutos,r.cap_minutos),c=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e';return`<tr><td style="font-weight:600;">${esc(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td style="color:#64748b;">${esc(r.equipe||'—')}</td><td>${minToHM(r.trab_minutos)}h</td><td style="color:#94a3b8;">${minToHM(r.avulsa_minutos)}h</td><td><div style="display:flex;align-items:center;gap:.43rem;"><div style="flex:1;height:.28rem;background:#f1f5f9;border-radius:9999px;min-width:3.5rem;overflow:hidden;"><div style="height:100%;width:${Math.min(fte,100)}%;background:${c};"></div></div><span style="font-size:.72rem;font-weight:800;color:${c};min-width:2.1rem;">${fte}%</span></div></td></tr>`}).join('');return`<div class="card overflow-x-auto">${ST('Produtividade por Técnico')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Equipe</th><th>H. Trabalhadas</th><th>H. Avulsas</th><th>FTE %</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.5rem;text-align:center;">Sem dados.</td></tr>'}</tbody></table></div>`}
 
+function mdPeriodRange(){
+  const d=new Date(),ymd=x=>x.toISOString().slice(0,10)
+  if(TIME==='7d'||TIME==='30d'){const n=TIME==='7d'?7:30;return[ymd(new Date(d.getTime()-n*864e5)),ymd(d)]}
+  if(MES&&/^\d{4}-\d{2}$/.test(MES)){const[y,m]=MES.split('-').map(Number),last=new Date(y,m,0).getDate();return[`${MES}-01`,`${MES}-${String(last).padStart(2,'0')}`]}
+  return[ymd(new Date(d.getFullYear(),d.getMonth(),1)),ymd(d)]
+}
+window.mdSync=async function(){
+  const cfg=getMD();if(!cfg.key){toast('Configure a chave da API Milldesk em Admin → Config Alertas.',false);setSection('admin');setSub('alertcfg');return}
+  const[start,end]=mdPeriodRange(),base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key
+  MD.loading=true;renderContent()
+  try{
+    const per=await fetch(`${base}/showTicketsPerPeriod?start=${start}&end=${end}`).then(r=>r.json())
+    if(per&&per.error)throw new Error(per.error)
+    let backlog=[];for(const s of['Aberto','Pendente','Em Execução','Aguardando','Agendado']){try{const d=await fetch(`${base}/showTicketsByStatus?status=${encodeURIComponent(s)}`).then(r=>r.json());if(Array.isArray(d))backlog=backlog.concat(d)}catch(e){}}
+    MD.tickets=(Array.isArray(per)?per:[]).map(mdCompact).filter(t=>!isExcludedTech(t.ag))
+    const seen={};MD.backlog=backlog.map(mdCompact).filter(t=>{if(seen[t.id])return false;seen[t.id]=1;return true})
+    MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
+    toast(`Milldesk: ${MD.tickets.length} chamados no período, ${MD.backlog.length} na fila.`)
+  }catch(e){MD.loading=false;toast('Falha Milldesk: '+e.message,false)}
+  renderContent()
+}
+function mdMetrics(){
+  const cfg=getAlertCfg(),diasInat=cfg.dias_inat||3,minRec=Math.max(2,cfg.tickets_rec||3),now=new Date()
+  const T=MD.tickets,B=MD.backlog
+  const byStatus={};T.forEach(t=>byStatus[t.st]=(byStatus[t.st]||0)+1)
+  const fechados=T.filter(t=>!mdIsOpen(t.st)).length
+  // Sem atualização: fila aberta com última data (analysis||start) além de N dias
+  const semAtual=B.filter(t=>mdIsOpen(t.st)).map(t=>{const d=mdDate(t.ana)||mdDate(t.start);const dias=d?Math.floor((now-d)/864e5):null;return{...t,dias}}).filter(t=>t.dias!=null&&t.dias>=diasInat).sort((a,b)=>b.dias-a.dias)
+  // Reincidência: mesmo cc + título normalizado, ≥minRec chamados
+  const grp={};T.forEach(t=>{const k=(t.cc||t.loc)+'§'+mdNorm(t.t);if(!mdNorm(t.t))return;(grp[k]=grp[k]||{loc:t.loc,cc:t.cc,titulo:t.t,ids:[]}).ids.push(t.id)})
+  const reinc=Object.values(grp).filter(g=>g.ids.length>=minRec).sort((a,b)=>b.ids.length-a.ids.length)
+  // Por cliente (cc)
+  const cli={};T.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'—'),emp=c?c.empresa:getClientEmpresa(t.loc);(cli[nome]=cli[nome]||{nome,emp,total:0,aberto:0}).total++;if(mdIsOpen(t.st))cli[nome].aberto++})
+  const porCliente=Object.values(cli).sort((a,b)=>b.total-a.total)
+  // Por técnico
+  const tec={};T.forEach(t=>{if(!t.ag)return;(tec[t.ag]=tec[t.ag]||{ag:t.ag,lv:t.lv,total:0,fechados:0}).total++;if(!mdIsOpen(t.st))tec[t.ag].fechados++})
+  const porTecnico=Object.values(tec).sort((a,b)=>b.total-a.total)
+  // Top categorias
+  const cat={};T.forEach(t=>{const c=t.cat||'—';cat[c]=(cat[c]||0)+1});const topCat=Object.entries(cat).map(([k,v])=>({cat:k,n:v})).sort((a,b)=>b.n-a.n).slice(0,10)
+  const backlogOpen=B.filter(t=>mdIsOpen(t.st)).length
+  return{total:T.length,fechados,byStatus,backlogOpen,semAtual,reinc,porCliente,porTecnico,topCat}
+}
 async function rFila(){
-  const s=D.sla,clis=fCli()
-  const totCh=clis.reduce((a,c)=>a+c.chamados,0)
-  const slC=s?(s.dentro_sla_pct>=90?'#22c55e':s.dentro_sla_pct>=75?'#f59e0b':'#ef4444'):'#94a3b8'
-  const kpis=`<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">${kpiCard(fmt(totCh),'Total Chamados','#E04622','ticket',MES||'')}${kpiCard(s?minToHM(s.tma_minutos)+'h':'—','TMA (1º atend.)','#2B4C9B','clock')}${kpiCard(s?minToHM(s.tmr_minutos)+'h':'—','TMR (resolução)','#7c3aed','timer')}${kpiCard(s?s.dentro_sla_pct+'%':'—','Dentro do SLA',slC,'shield-check')}${kpiCard(s?fmt(s.chamados_fora):'—','Fora do SLA','#ef4444','shield-alert')}</div>`
-  // Chamados por cliente (dado disponível: agregado mensal por local)
-  const cliRows=[...clis].sort((a,b)=>b.chamados-a.chamados).map(c=>{const fran=cliFranquia(c.nome),uso=fran?pct(Math.round(c.horas_minutos/60),fran):null,usC=uso==null?'#64748b':uso>100?'#ef4444':uso>=80?'#f59e0b':'#22c55e',hpc=c.chamados>0?(c.horas_minutos/c.chamados):0;return`<tr><td>${empBadge(getClientEmpresa(c.nome))}</td><td style="font-weight:600;">${esc(c.nome)}</td><td style="font-weight:700;">${fmt(c.chamados)}</td><td>${minToHM(c.horas_minutos)}h</td><td style="color:#64748b;">${hpc?minToHM(Math.round(hpc)):'—'}</td><td style="color:#64748b;">${fran||'—'}h</td><td style="color:${usC};font-weight:700;">${uso!=null?uso+'%':'—'}</td></tr>`}).join('')
-  // Horas por técnico (chamados por técnico não vêm no agregado → requer export Milldesk)
-  const tecRows=fRec().map(r=>`<tr><td style="font-weight:600;">${esc(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td>${minToHM(r.trab_minutos)}h</td><td style="color:#94a3b8;">${minToHM(r.avulsa_minutos)}h</td></tr>`).join('')
-  const note=t=>`<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:.4rem;padding:.4rem .6rem;font-size:.66rem;color:#854d0e;display:flex;gap:.4rem;align-items:center;"><i data-lucide="plug-zap" style="width:.8rem;height:.8rem;flex-shrink:0;"></i><span>${t}</span></div>`
-  return`${kpis}
-<div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-  <div class="card" style="border-left:3px solid #f59e0b;"><div class="kpi-lbl">Pendentes / Sem atualização</div><div class="kpi-big" style="color:#f59e0b;">—</div><div style="font-size:.6rem;color:#94a3b8;margin-top:.3rem;">Chamados sem update &gt; ${getAlertCfg().dias_inat} dias</div></div>
-  <div class="card" style="border-left:3px solid #ef4444;"><div class="kpi-lbl">Reincidentes</div><div class="kpi-big" style="color:#ef4444;">—</div><div style="font-size:.6rem;color:#94a3b8;margin-top:.3rem;">Assuntos repetidos no mesmo cliente</div></div>
-  <div class="card" style="border-left:3px solid #22c55e;"><div class="kpi-lbl">Fechados no período</div><div class="kpi-big" style="color:#22c55e;">${fmt(totCh)}</div><div style="font-size:.6rem;color:#94a3b8;margin-top:.3rem;">Total registrado no mês</div></div>
+  const s=D.sla,[start,end]=mdPeriodRange(),cfg=getAlertCfg()
+  const syncBtn=`<button onclick="mdSync()" ${MD.loading?'disabled':''} style="display:inline-flex;align-items:center;gap:.34rem;padding:.36rem .8rem;background:${MD.loading?'#94a3b8':'var(--brand)'};color:white;border:none;border-radius:.43rem;font-size:.72rem;font-weight:700;cursor:${MD.loading?'wait':'pointer'};"><i data-lucide="${MD.loading?'loader':'refresh-cw'}" style="width:.74rem;height:.74rem;"></i>${MD.loading?'Sincronizando…':'Sincronizar Milldesk'}</button>`
+  const bar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;margin-bottom:.9rem;"><div style="font-size:.72rem;color:#64748b;">Período: <b>${start.split('-').reverse().join('/')}</b> a <b>${end.split('-').reverse().join('/')}</b>${MD.loaded?` · sincronizado ${new Date(MD.ts).toLocaleTimeString('pt-BR')}`:''}</div>${syncBtn}</div>`
+  if(!MD.loaded){
+    const clis=D.clientes?fCli():[],totCh=clis.reduce((a,c)=>a+c.chamados,0),slC=s?(s.dentro_sla_pct>=90?'#22c55e':s.dentro_sla_pct>=75?'#f59e0b':'#ef4444'):'#94a3b8'
+    const cliRows=[...clis].sort((a,b)=>b.chamados-a.chamados).map(c=>`<tr><td>${empBadge(getClientEmpresa(c.nome))}</td><td style="font-weight:600;">${esc(c.nome)}</td><td style="font-weight:700;">${fmt(c.chamados)}</td><td>${minToHM(c.horas_minutos)}h</td></tr>`).join('')
+    return`${bar}<div class="card mb-4" style="border-left:3px solid var(--brand);"><div style="display:flex;gap:.6rem;align-items:flex-start;"><i data-lucide="plug-zap" style="width:1rem;height:1rem;color:var(--brand);margin-top:.15rem;flex-shrink:0;"></i><div><div style="font-size:.8rem;font-weight:700;margin-bottom:.2rem;">Conecte ao Milldesk para dados ao vivo</div><div style="font-size:.7rem;color:#64748b;line-height:1.5;">Clique em <b>Sincronizar Milldesk</b> para puxar os chamados do período direto da API: por cliente, por técnico, por status, sem atualização por ${cfg.dias_inat} dias e reincidência. Configure a chave da API em <button onclick="setSection('admin');setSub('alertcfg')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;padding:0;">Admin → Config Alertas</button>.</div></div></div></div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(fmt(totCh),'Chamados (agregado)','#E04622','ticket')}${kpiCard(s?minToHM(s.tma_minutos)+'h':'—','TMA','#2B4C9B','clock')}${kpiCard(s?minToHM(s.tmr_minutos)+'h':'—','TMR','#7c3aed','timer')}${kpiCard(s?s.dentro_sla_pct+'%':'—','Dentro do SLA',slC,'shield-check')}</div>
+<div class="card overflow-x-auto">${ST('Chamados por Cliente (agregado mensal — provisório)')}<table><thead><tr><th>Empresa</th><th>Cliente</th><th>Chamados</th><th>Horas</th></tr></thead><tbody>${cliRows||'<tr><td colspan="4" style="color:#94a3b8;padding:1.2rem;text-align:center;">Sem dados.</td></tr>'}</tbody></table></div>`
+  }
+  const M=mdMetrics()
+  const stColors={Fechado:'#22c55e',Aberto:'#3b82f6',Pendente:'#f59e0b','Em Execução':'#7c3aed',Aguardando:'#f97316',Agendado:'#64748b'}
+  const kpis=`<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">${kpiCard(fmt(M.total),'Chamados no Período','#E04622','ticket',MD.periodo)}${kpiCard(fmt(M.fechados),'Fechados','#22c55e','check-circle')}${kpiCard(fmt(M.backlogOpen),'Fila Aberta','#3b82f6','inbox','abertos+pendentes')}${kpiCard(fmt(M.semAtual.length),'Sem Atualização',M.semAtual.length?'#ef4444':'#22c55e','clock-alert','> '+(cfg.dias_inat||3)+' dias')}${kpiCard(fmt(M.reinc.length),'Reincidentes',M.reinc.length?'#f59e0b':'#22c55e','repeat')}</div>`
+  const statusBadges=Object.entries(M.byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge" style="background:${(stColors[k]||'#64748b')}22;color:${stColors[k]||'#64748b'};margin:.1rem;">${esc(k)}: ${fmt(v)}</span>`).join('')
+  const cliRows=M.porCliente.slice(0,20).map(c=>`<tr><td>${empBadge(c.emp)}</td><td style="font-weight:600;">${esc(c.nome)}</td><td style="font-weight:700;">${fmt(c.total)}</td><td style="color:${c.aberto?'#3b82f6':'#94a3b8'};font-weight:${c.aberto?700:400};">${fmt(c.aberto)}</td></tr>`).join('')
+  const tecRows=M.porTecnico.map(t=>`<tr><td style="font-weight:600;">${esc(t.ag)}</td><td><span class="tag">${esc(t.lv||'—')}</span></td><td style="font-weight:700;">${fmt(t.total)}</td><td style="color:#22c55e;">${fmt(t.fechados)}</td></tr>`).join('')
+  const saRows=M.semAtual.slice(0,25).map(t=>{const c=mdContractForCC(t.cc);return`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:16rem;">${esc((t.t||'').slice(0,60))}</td><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:t.loc)}</td><td style="font-size:.68rem;">${esc(t.ag||'—')}</td><td><span class="badge" style="background:${stColors[t.st]||'#64748b'}22;color:${stColors[t.st]||'#64748b'};">${esc(t.st)}</span></td><td style="color:#ef4444;font-weight:800;">${t.dias}d</td></tr>`}).join('')
+  const reRows=M.reinc.slice(0,25).map(g=>{const c=mdContractForCC(g.cc);return`<tr><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:g.loc)}</td><td style="font-size:.7rem;max-width:20rem;">${esc((g.titulo||'').slice(0,70))}</td><td style="color:#f59e0b;font-weight:800;text-align:center;">${g.ids.length}×</td></tr>`}).join('')
+  const catRows=M.topCat.map(c=>`<tr><td style="font-weight:600;">${esc(c.cat)}</td><td style="font-weight:700;">${fmt(c.n)}</td><td style="color:#64748b;">${pct(c.n,M.total)}%</td></tr>`).join('')
+  return`${bar}${kpis}
+<div class="card mb-4">${ST('Chamados por Status')}<div style="display:flex;flex-wrap:wrap;">${statusBadges||'—'}</div></div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+<div class="card overflow-x-auto">${ST('Chamados por Cliente')}<table><thead><tr><th>Empresa</th><th>Cliente</th><th>Total</th><th>Em aberto</th></tr></thead><tbody>${cliRows||'<tr><td colspan="4" style="color:#94a3b8;padding:1rem;text-align:center;">—</td></tr>'}</tbody></table></div>
+<div class="card overflow-x-auto">${ST('Chamados por Técnico')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Total</th><th>Fechados</th></tr></thead><tbody>${tecRows||'<tr><td colspan="4" style="color:#94a3b8;padding:1rem;text-align:center;">—</td></tr>'}</tbody></table></div>
 </div>
-<div class="card mb-4 overflow-x-auto">${ST('Chamados por Cliente')}<table><thead><tr><th>Empresa</th><th>Cliente</th><th>Chamados</th><th>Horas</th><th>H/Chamado</th><th>Franquia</th><th>Uso%</th></tr></thead><tbody>${cliRows||'<tr><td colspan="7" style="color:#94a3b8;padding:1.2rem;text-align:center;">Sem dados.</td></tr>'}</tbody></table></div>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="card overflow-x-auto">${ST('Carga por Técnico (horas)')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Horas</th><th>Avulsas</th></tr></thead><tbody>${tecRows||'<tr><td colspan="4" style="color:#94a3b8;padding:1.2rem;text-align:center;">Sem dados.</td></tr>'}</tbody></table></div>
-<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">${ST('Detalhamento ticket-a-ticket')}<button onclick="setSection('admin');setSub('sla-edit')" style="font-size:.66rem;color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Editar SLA →</button></div>
-<div style="display:flex;flex-direction:column;gap:.5rem;">${note('Chamados por técnico (fechados), pendentes por status, sem atualização por N dias e detecção de reincidência exigem o export detalhado do Milldesk (Relatório de atividades / Solicitações por Local). A detecção de reincidência compara assuntos similares do mesmo cliente abertos em datas diferentes.')}
-<div style="font-size:.66rem;color:#64748b;line-height:1.6;">Assim que o export do Milldesk for ingerido (tabela <code style="background:#f1f5f9;padding:0 .2rem;border-radius:.2rem;">chamados</code>), estes números passam a preencher automaticamente. Hoje o painel usa os agregados mensais por local.</div></div></div></div>`
+<div class="card mb-4 overflow-x-auto" style="border-left:3px solid #ef4444;">${ST('Sem Atualização — fila aberta há mais de '+(cfg.dias_inat||3)+' dias')}<table><thead><tr><th>ID</th><th>Assunto</th><th>Cliente</th><th>Técnico</th><th>Status</th><th>Parado</th></tr></thead><tbody>${saRows||'<tr><td colspan="6" style="color:#22c55e;padding:1rem;text-align:center;">Nenhum chamado parado além do limite. 👍</td></tr>'}</tbody></table></div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="card overflow-x-auto" style="border-left:3px solid #f59e0b;">${ST('Reincidentes — mesmo assunto/cliente (≥'+Math.max(2,cfg.tickets_rec||3)+'×)')}<table><thead><tr><th>Cliente</th><th>Assunto</th><th>Qtd</th></tr></thead><tbody>${reRows||'<tr><td colspan="3" style="color:#22c55e;padding:1rem;text-align:center;">Sem reincidência relevante.</td></tr>'}</tbody></table></div>
+<div class="card overflow-x-auto">${ST('Top Categorias')}<table><thead><tr><th>Categoria</th><th>Chamados</th><th>%</th></tr></thead><tbody>${catRows||'<tr><td colspan="3" style="color:#94a3b8;padding:1rem;text-align:center;">—</td></tr>'}</tbody></table></div>
+</div>`
 }
 
 function rCli(){const rows=fCli().map(c=>{const fran=cliFranquia(c.nome),uso=fran?pct(Math.round(c.horas_minutos/60),fran):null,cor=uso==null?'#64748b':uso>110?'#ef4444':uso>90?'#f59e0b':'#22c55e';return`<tr><td style="font-weight:600;">${esc(c.nome)}</td><td>${empBadge(getClientEmpresa(c.nome))}</td><td>${minToHM(c.horas_minutos)}h</td><td style="color:#64748b;">${fran||'—'}h</td><td><div style="display:flex;align-items:center;gap:.38rem;"><div style="flex:1;height:.26rem;background:#f1f5f9;border-radius:9999px;min-width:2.8rem;overflow:hidden;"><div style="height:100%;width:${Math.min(uso??50,100)}%;background:${cor};"></div></div><span style="font-size:.7rem;font-weight:800;color:${cor};min-width:1.9rem;">${uso!=null?uso+'%':'—'}</span></div></td><td>${fmt(c.chamados)}</td></tr>`}).join('');return`<div class="card overflow-x-auto">${ST('Clientes — Horas vs Franquia')}<table><thead><tr><th>Cliente</th><th>Empresa</th><th>H. Real</th><th>Franquia</th><th>Uso %</th><th>Chamados</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.5rem;text-align:center;">Sem dados.</td></tr>'}</tbody></table></div>`}
@@ -631,12 +702,13 @@ function rSLAAdmin(){
 }
 
 function rAlertCfg(){
-  const cfg=getAlertCfg(),z=getZbx()
+  const cfg=getAlertCfg(),z=getZbx(),md=getMD()
   return`<div class="card mb-4" style="max-width:38rem;">${ST('Limites de Alerta Automático')}<div class="grid grid-cols-2 md:grid-cols-3 gap-3"><div><label class="fl">FTE mínimo (%)</label><input type="number" class="fi" value="${cfg.fte_min}" min="0" max="100" onchange="saveAC('fte_min',+this.value)" style="padding:.38rem .6rem;font-size:.76rem;"></div><div><label class="fl">FTE máximo (%)</label><input type="number" class="fi" value="${cfg.fte_max}" min="0" max="100" onchange="saveAC('fte_max',+this.value)" style="padding:.38rem .6rem;font-size:.76rem;"></div><div><label class="fl">Alerta em % das horas</label><input type="number" class="fi" value="${cfg.limite_pct||80}" min="0" max="100" onchange="saveAC('limite_pct',+this.value)" style="padding:.38rem .6rem;font-size:.76rem;"></div><div><label class="fl">Alerta franquia em (%)</label><input type="number" class="fi" value="${cfg.franquia_warn}" min="0" max="100" onchange="saveAC('franquia_warn',+this.value)" style="padding:.38rem .6rem;font-size:.76rem;"></div><div><label class="fl">Checklist diário até (h)</label><input type="number" class="fi" value="${cfg.checklist_hora||12}" min="0" max="23" onchange="saveAC('checklist_hora',+this.value)" style="padding:.38rem .6rem;font-size:.76rem;"></div><div><label class="fl">Chamado inativo após (dias)</label><input type="number" class="fi" value="${cfg.dias_inat}" min="1" onchange="saveAC('dias_inat',+this.value)" style="padding:.38rem .6rem;font-size:.76rem;"></div><div><label class="fl">Recorrência: N tickets</label><input type="number" class="fi" value="${cfg.tickets_rec}" min="1" onchange="saveAC('tickets_rec',+this.value)" style="padding:.38rem .6rem;font-size:.76rem;"></div><div><label class="fl">Recorrência: em X dias</label><input type="number" class="fi" value="${cfg.dias_rec}" min="1" onchange="saveAC('dias_rec',+this.value)" style="padding:.38rem .6rem;font-size:.76rem;"></div></div>
 <div style="font-size:.63rem;color:#94a3b8;margin-top:.5rem;">"Alerta em % das horas" (padrão 80%) dispara aviso quando técnico, grupo N1/N2/N3 ou cliente atingem esse % da capacidade/franquia.</div></div>
 <div class="card mb-4" style="max-width:38rem;">${ST('Integração Zabbix')}<div class="grid grid-cols-1 gap-3"><div><label class="fl">URL do Zabbix (ex: https://zabbix.suaempresa.com)</label><input type="text" id="zbxUrl" class="fi" value="${esc(z.url)}" placeholder="https://zabbix.exemplo.com" style="padding:.38rem .6rem;font-size:.76rem;"></div><div><label class="fl">API Token</label><input type="password" id="zbxTok" class="fi" value="${esc(z.token)}" placeholder="token de API do Zabbix" style="padding:.38rem .6rem;font-size:.76rem;"></div></div><button onclick="saveZbx()" style="margin-top:.6rem;padding:.38rem 1rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.73rem;font-weight:700;cursor:pointer;">Salvar Zabbix</button><div style="font-size:.63rem;color:#94a3b8;margin-top:.5rem;">O token fica salvo localmente neste navegador. A sincronização é feita na aba Alertas.</div></div>
-<div class="card" style="max-width:38rem;background:#f8fafc;border-left:3px solid #e2e8f0;"><div style="font-size:.7rem;font-weight:700;color:#64748b;margin-bottom:.2rem;">Alertas de tickets individuais — requer integração Milldesk</div><div style="font-size:.66rem;color:#94a3b8;line-height:1.6;">Inatividade por dias, recorrência e chamados por técnico ficam disponíveis após ingerir o export detalhado do Milldesk (tabela <code>chamados</code>).</div></div>`
+<div class="card" style="max-width:38rem;">${ST('Integração Milldesk (chamados ao vivo)')}<div class="grid grid-cols-1 gap-3"><div><label class="fl">Base da API</label><input type="text" id="mdBase" class="fi" value="${esc(md.base||'https://v1.milldesk.com/api')}" style="padding:.38rem .6rem;font-size:.76rem;"></div><div><label class="fl">Chave da API</label><input type="password" id="mdKey" class="fi" value="${esc(md.key)}" placeholder="chave da API Milldesk" style="padding:.38rem .6rem;font-size:.76rem;"></div></div><button onclick="saveMD()" style="margin-top:.6rem;padding:.38rem 1rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.73rem;font-weight:700;cursor:pointer;">Salvar Milldesk</button><div style="font-size:.63rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;">A chave fica salva apenas neste navegador (não é publicada no código). A sincronização é feita na aba <b>Técnica → Fila de Chamados</b>. Endpoints usados: <code>showTicketsPerPeriod</code> e <code>showTicketsByStatus</code>.</div></div>`
 }
+window.saveMD=function(){setMD({base:document.getElementById('mdBase').value.trim()||'https://v1.milldesk.com/api',key:document.getElementById('mdKey').value.trim()});toast('Milldesk salvo. Sincronize na Fila de Chamados.');renderContent()}
 window.saveZbx=function(){setZbx({url:document.getElementById('zbxUrl').value.trim(),token:document.getElementById('zbxTok').value.trim()});toast('Zabbix salvo.');renderContent()}
 window.saveAC=function(k,v){const c=getAlertCfg();c[k]=v;lsSet('sbi_acfg',c)}
 
