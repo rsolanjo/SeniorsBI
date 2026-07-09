@@ -46,68 +46,75 @@ iframe{width:100%;height:100%;border:0;background:#f0f4fa}
 <script>
 const F=document.getElementById('app');
 const chip=document.getElementById('chip'),txt=document.getElementById('txt'),prog=document.getElementById('prog');
-// Sequência: [seção, sub, título-chip, narração]
+// Sequência: [seção, sub, título-chip, narração]. A Visão Geral executiva é a mais detalhada.
 const STEPS=[
- ['exec','geral','Executiva · Visão Geral','SeniorsBI, o painel de operações da 4 Seniors, ao vivo. Na visão geral executiva você tem receita, custo, margem, total de chamados e os alertas mais relevantes para a diretoria. O resultado da área técnica aparece separado do resultado da empresa, além da posição macro de cada empresa do grupo. E tudo pode ser filtrado por dia, semana ou mês.'],
- ['exec','clientes','Executiva · Por Clientes','Para se aprofundar, a tela Por Clientes traz cada contrato com receita, custo, margem, uso da franquia e SLA.'],
- ['exec','tecnico','Executiva · Por Técnico','Por Técnico, você vê horas trabalhadas, FTE, custo e alocação de cada profissional.'],
- ['exec','alertas','Executiva · Alertas','Os alertas executivos concentram só o macro: críticos, inconsistências em aberto e a margem de cada empresa.'],
- ['tech','fila','Técnica · Fila de Chamados','Na área técnica, a fila de chamados: abertos, fechados, fora do SLA, sem atualização e reincidentes, direto do Milldesk.'],
- ['tech','equipe','Técnica · Equipe','Em Equipe, a produtividade do time e a matriz de conhecimento, apontando os riscos de dependência de uma única pessoa.'],
- ['tech','clientes','Técnica · Clientes','Aqui, horas e franquia por cliente, e as horas a cobrar com controle de aprovação por e-mail.'],
- ['tech','historico','Técnica · Histórico','O histórico mostra a evolução de chamados, horas e FTE, por mês, por técnico e por cliente.'],
+ ['exec','geral','Executiva · Visão Geral','Este é o SeniorsBI, o painel de operações da 4 Seniors, com dados ao vivo. Vamos começar pela visão geral executiva, a tela mais importante para a diretoria.'],
+ ['exec','geral','Executiva · Visão Geral','No topo, os números que mais importam: a receita total dos contratos, o custo da equipe, a margem global, o total de chamados no período e a quantidade de alertas ativos.'],
+ ['exec','geral','Executiva · Visão Geral','Logo abaixo, o resultado é separado em duas visões. À esquerda, a área técnica: receita menos os salários do time, que é a área que gera a receita. À direita, a empresa inteira: receita menos todos os custos, incluindo os outros departamentos.'],
+ ['exec','geral','Executiva · Visão Geral','Assim, num olhar, o executivo entende se a margem está sendo pressionada pela área técnica ou pelas demais áreas da empresa.'],
+ ['exec','geral','Executiva · Visão Geral','Em seguida, a posição macro de cada empresa do grupo: 4 Seniors, S4SYS e Porto Virtual, cada uma com sua receita, custo e margem. E tudo pode ser filtrado por dia, semana, mês ou pelos últimos doze meses.'],
+ ['exec','clientes','Executiva · Por Clientes','Para aprofundar, a tela Por Clientes detalha cada contrato: horas, uso da franquia, receita, custo, margem e SLA.'],
+ ['exec','tecnico','Executiva · Por Técnico','Em Por Técnico, você vê horas trabalhadas, FTE, custo e alocação de cada profissional.'],
+ ['exec','alertas','Executiva · Alertas','Os alertas executivos concentram apenas o essencial: os críticos, as inconsistências em aberto e a margem por empresa.'],
+ ['tech','fila','Técnica · Fila de Chamados','Na área técnica, a fila de chamados: abertos, fechados, fora do SLA, sem atualização e reincidentes, direto do Milldesk, com as horas de cada cliente e técnico.'],
+ ['tech','equipe','Técnica · Equipe','Em Equipe, a produtividade do time e a matriz de conhecimento, que aponta em vermelho os riscos de depender de uma única pessoa.'],
+ ['tech','clientes','Técnica · Clientes','Aqui, as horas e a franquia por cliente, e as horas a cobrar, com controle de aprovação por e-mail.'],
+ ['tech','historico','Técnica · Histórico','O histórico mostra a evolução de chamados, horas e produtividade, mês a mês, por técnico e por cliente.'],
  ['tech','incid','Técnica · Inconsistências','As inconsistências apontam chamados fora do padrão de horas ou de contrato, com contexto, para o líder técnico tratar.'],
  ['tech','alertas','Técnica · Alertas','Os alertas técnicos completos, incluindo o Zabbix, com quedas de link e de equipamento em tempo real.'],
- ['tech','checklists','Técnica · Checklists','E os checklists, diário e mensal, ticados por cliente.'],
- ['admin','contratos','Admin · Contratos','No Admin fica a base: os contratos, com escopo, tecnologias, gatilhos e SLA.'],
- ['admin','funcionarios','Admin · Funcionários','Os funcionários, com salários e alocação.'],
- ['admin','custos','Admin · Custos','E os custos por departamento, que revelam o lucro real da empresa, não só da área técnica.'],
- ['admin','alertcfg','Admin · Configurações','Além de SLA, integrações e configurações de alerta, tudo em um só lugar.'],
+ ['admin','contratos','Admin · Contratos','No Admin fica a base do negócio: os contratos, com escopo, tecnologias, gatilhos e SLA.'],
+ ['admin','custos','Admin · Custos','E os custos por departamento, que revelam o lucro real da empresa, não apenas o da área técnica.'],
  ['exec','geral','SeniorsBI','SeniorsBI. Decisão com dados, em tempo real.']
 ];
-let idx=-1,voice=null,speaking=false;
+let idx=0,voice=null,running=false;
 
 function pickVoice(){
-  const vs=speechSynthesis.getVoices();
-  return vs.find(v=>/pt.?BR/i.test(v.lang)&&/ant[oô]nio|daniel|male|masc|jo[aã]o|felipe|ricardo|thiago/i.test(v.name))
+  const vs=speechSynthesis.getVoices()||[];
+  return vs.find(v=>/pt.?BR/i.test(v.lang)&&/ant[oô]nio|daniel|male|masc|jo[aã]o|felipe|ricardo|thiago|fabio|fábio/i.test(v.name))
     || vs.find(v=>/pt.?BR/i.test(v.lang)) || vs.find(v=>/^pt/i.test(v.lang)) || vs[0] || null;
 }
 function nav(sec,sub){
-  try{const w=F.contentWindow;if(w&&w.setSection){w.setSection(sec);if(w.setSub)w.setSub(sub);}}catch(e){}
+  try{const w=F.contentWindow;if(w&&typeof w.setSection==='function'){w.setSection(sec);if(typeof w.setSub==='function')w.setSub(sub);}}catch(e){}
 }
-function speak(t,cb){
+function speakNow(t,cb){
   try{
+    speechSynthesis.cancel();
     const u=new SpeechSynthesisUtterance(t);
-    if(voice)u.voice=voice; u.lang='pt-BR'; u.rate=1.06; u.pitch=.96;
+    if(voice)u.voice=voice; u.lang='pt-BR'; u.rate=1.0; u.pitch=.98;
     u.onend=cb; u.onerror=cb;
-    speechSynthesis.cancel(); speechSynthesis.speak(u);
-  }catch(e){ setTimeout(cb, 3500); }
+    // pequeno atraso para o cancel() assentar antes de falar
+    setTimeout(()=>{ try{ speechSynthesis.speak(u); }catch(e){ cb(); } }, 130);
+  }catch(e){ setTimeout(cb, 500); }
 }
-function next(){
-  idx++;
+function runStep(){
   if(idx>=STEPS.length){ finish(); return; }
-  const [sec,sub,title,narr]=STEPS[idx];
+  const s=STEPS[idx], sec=s[0], sub=s[1], title=s[2], narr=s[3];
   nav(sec,sub);
   chip.textContent=title; txt.textContent=narr;
   prog.style.width=Math.round((idx+1)/STEPS.length*100)+'%';
-  // fallback de tempo caso a fala não dispare onend
-  const fb=setTimeout(()=>{ if(!advanced){ advanced=true; next(); } }, Math.min(9000, 2200+narr.length*45));
-  let advanced=false;
-  speak(narr, ()=>{ if(!advanced){ advanced=true; clearTimeout(fb); setTimeout(next, 400); } });
+  let done=false;
+  const advance=()=>{ if(done)return; done=true; idx++; setTimeout(runStep, 650); };
+  // rede de segurança: só dispara se o onend falhar; dimensionada ao tamanho da fala
+  const safety=setTimeout(advance, Math.max(7000, narr.length*95));
+  speakNow(narr, ()=>{ clearTimeout(safety); advance(); });
 }
 function finish(){
-  chip.textContent=''; txt.textContent='Obrigado. — SeniorsBI';
+  chip.textContent=''; txt.textContent='SeniorsBI — obrigado.';
   prog.style.width='100%';
+  try{ const w=F.contentWindow; if(w&&w.setSection){ w.setSection('exec'); w.setSub&&w.setSub('geral'); } }catch(e){}
 }
 function begin(){
+  if(running)return; running=true;
   document.getElementById('start').style.display='none';
-  // garante vozes carregadas
   voice=pickVoice();
-  if(!voice){ speechSynthesis.onvoiceschanged=()=>{voice=pickVoice();}; }
-  // dá um tempinho pro iframe/app carregar antes de começar
-  setTimeout(next, 1200);
+  speechSynthesis.onvoiceschanged=()=>{ if(!voice)voice=pickVoice(); };
+  // "aquece" a fala (alguns navegadores exigem um primeiro speak após gesto)
+  try{ speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); }catch(e){}
+  idx=0;
+  setTimeout(runStep, 900); // dá tempo do app no iframe montar
 }
-window.begin=begin; window.next=next;
+window.begin=begin;
+window.next=()=>{ try{ speechSynthesis.cancel(); }catch(e){} }; // Pular: cancela a fala e o onend avança
 </script>
 </body>
 </html>
