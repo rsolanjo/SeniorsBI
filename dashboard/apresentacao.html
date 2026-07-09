@@ -55,12 +55,6 @@ h1.big span{color:var(--accent)}
 .badges{display:flex;gap:9px;align-items:center;justify-content:center;flex-wrap:wrap;opacity:0;transform:translateY(12px);animation:rise .8s .6s forwards}
 .bdg{padding:.4rem .78rem;border-radius:.6rem;font-size:.8rem;font-weight:800;box-shadow:0 6px 18px rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.06)}
 .bdg.md{background:#0aa3a3;color:#fff}.bdg.pbi{background:#F2C811;color:#3b3b00}.bdg.zbx{background:#D40000;color:#fff}.bdg.grf{background:#F46800;color:#fff}
-/* Faixa de logos reais (fundo branco, casa com a capa) */
-.band{width:100%;max-width:680px;margin:2px auto 0;border-radius:16px;overflow:hidden;background:#fff;
-  box-shadow:0 14px 40px rgba(43,76,155,.15);border:1px solid #e9f0fb;opacity:0;transform:translateY(12px);animation:rise .9s .72s forwards}
-.band img{width:100%;display:block}
-.band.vend{max-width:760px;aspect-ratio:971/402}
-.band.vend img{margin-top:-17.5%}
 #go{margin-top:8px;background:var(--brand);color:#fff;border:none;border-radius:.85rem;padding:.95rem 2.4rem;font-size:1.1rem;font-weight:800;cursor:pointer;
   box-shadow:0 16px 40px rgba(43,76,155,.35);opacity:0;transform:translateY(14px);animation:rise .8s .88s forwards;transition:transform .15s}
 #go:hover{transform:translateY(-3px)}
@@ -94,11 +88,8 @@ h1.big span{color:var(--accent)}
   </div>
   <h1 class="big">Seniors<span>BI</span></h1>
   <div class="tag"><b></b> Executivo &nbsp;•&nbsp; Técnico &nbsp;•&nbsp; Ao vivo <b></b></div>
-  <p class="sub">O painel de operações do Grupo 4 Seniors. Um tour narrado com as principais funcionalidades.</p>
+  <p class="sub">O painel de operações do Grupo Seniors. Um tour narrado com as principais funcionalidades.</p>
   <div><div class="rowlbl">Integrações</div><div class="badges"><span class="bdg md">Milldesk</span><span class="bdg pbi">Power BI</span><span class="bdg zbx">Zabbix</span><span class="bdg grf">Grafana</span></div></div>
-  <div style="width:100%"><div class="rowlbl" style="margin-top:8px">Nossos clientes</div>
-    <div class="band"><img src="clientes.png" alt="Clientes atendidos pelo Grupo 4 Seniors"></div>
-  </div>
   <button id="go" onclick="begin()">▶ Iniciar apresentação</button>
 </div>
 
@@ -111,10 +102,7 @@ h1.big span{color:var(--accent)}
   </div>
   <h1 class="big">Obrigado.</h1>
   <p class="sub">SeniorsBI - do executivo ao técnico, decisão com dados, em tempo real.</p>
-  <div><div class="rowlbl" style="margin-top:6px">Parceiros, fabricantes e soluções</div>
-    <div class="band vend"><img src="fornecedores.png" alt="Parceiros e fabricantes"></div>
-  </div>
-  <div class="tag"><b></b> Grupo 4 Seniors <b></b></div>
+  <div class="tag"><b></b> Grupo Seniors <b></b></div>
   <button id="go" onclick="location.reload()">↻ Assistir novamente</button>
 </div>
 
@@ -126,7 +114,7 @@ const IW=1680, IH=1000;
 
 // [seção, sub, título, narração, alvo do zoom (selector ou null)]
 const STEPS=[
- ['exec','geral','SeniorsBI','Este é o SeniorsBI, o painel de operações do Grupo 4 Seniors, com dados reais ao vivo do Milldesk e do Zabbix.',null],
+ ['exec','geral','SeniorsBI','Este é o SeniorsBI, o painel de operações do Grupo Seniors, com dados reais ao vivo do Milldesk e do Zabbix.',null],
  ['exec','geral','Duas visões','São duas visões que se completam: a executiva, com receita, custo e margem para a diretoria; e a técnica, com chamados, horas e riscos para o time.',null],
  ['exec','geral','Conexões ao vivo','No topo, o status das conexões mostra se o Milldesk e o Zabbix estão ativos e recebendo dados agora.','#demo-live'],
  ['exec','geral','Executiva · Números','Começamos pela executiva: os números que mais importam. Receita, custo da equipe, margem, chamados e alertas ativos.','#demo-kpis'],
