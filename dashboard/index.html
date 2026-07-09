@@ -92,7 +92,7 @@ textarea.fi{resize:vertical;min-height:2.7rem}
         <button class="sec-btn" onclick="setSection('admin')" id="sb-admin">Admin</button>
       </div>
       <div style="width:1px;height:1.25rem;background:#e2e8f0;"></div>
-      <div class="flex items-center gap-1.5"><div class="pulse" id="liveDot"></div><span style="font-size:.68rem;color:#64748b;" id="liveStatus">…</span></div>
+      <div class="flex items-center gap-1.5"><div class="pulse" id="liveDot"></div><span style="font-size:.68rem;color:#64748b;" id="liveStatus">…</span><span id="appVersion" style="font-size:.62rem;font-weight:800;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;padding:.05rem .32rem;border-radius:.3rem;"></span></div>
       <span style="font-size:.58rem;color:#94a3b8;" id="lastUpdate"></span>
     </div>
   </div>
@@ -242,6 +242,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
+const APP_VERSION='v10'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='exec',EXEC_SUB='geral',TECH_SUB='prod',ADMIN_SUB='contratos'
@@ -378,8 +379,9 @@ const getChkDaily=()=>lsGet('sbi_chk_daily')||{}
 const setChkDaily=v=>lsSet('sbi_chk_daily',v)
 const getChkMonthly=()=>lsGet('sbi_chk_month')||{}
 const setChkMonthly=v=>lsSet('sbi_chk_month',v)
-const getZbx=()=>lsGet('sbi_zbx')||{url:'',token:''}
+const getZbx=()=>{const s=lsGet('sbi_zbx')||{};return{url:s.url||'https://noc.4sr.com.br/zabbix',token:s.token||''}}
 const setZbx=v=>lsSet('sbi_zbx',v)
+const ZBX_SEV={'0':{t:'Não classif.',c:'#94a3b8'},'1':{t:'Info',c:'#3b82f6'},'2':{t:'Aviso',c:'#f59e0b'},'3':{t:'Média',c:'#f97316'},'4':{t:'Alta',c:'#ef4444'},'5':{t:'Desastre',c:'#991b1b'}}
 const getContractDocs=()=>lsGet('sbi_contract_docs')||{}
 const setContractDocs=v=>lsSet('sbi_contract_docs',v)
 const getApontRev=()=>lsGet('sbi_apont_rev')||{}
@@ -517,6 +519,18 @@ function buildMdAlerts(){
   M.reinc.slice(0,8).forEach(g=>out.push({lv:'media',cat:'Reincidência',msg:`${g.ids.length}× ${(g.titulo||'').slice(0,48)}`,det:(mdContractForCC(g.cc)?.cliente||g.loc||'—')}))
   return out
 }
+// Cadastro: contrato/técnico que aparece no Milldesk mas não está na lista master (Admin) → cadastrar no SeniorsTalent
+function buildCadastroAlerts(){
+  if(!MD.loaded)return[]
+  const out=[],vC=new Set(),vT=new Set()
+  MD.tickets.forEach(t=>{
+    const interno=/geral/i.test(t.loc||'')||t.cc==='9'||t.cc==='10'
+    if(t.loc&&!interno&&!/n[aã]o cadastrad/i.test(t.loc)&&!mdContractForCC(t.cc)&&!vC.has(t.loc)){vC.add(t.loc);out.push({lv:'alta',cat:'Cadastro',grp:'cliente',msg:`Contrato não cadastrado: ${t.loc}`,det:'Cadastrar no SeniorsTalent'})}
+    if(t.ag&&!isExcludedTech(t.ag)&&!matchFuncByAgent(t.ag)&&!vT.has(t.ag)){vT.add(t.ag);out.push({lv:'alta',cat:'Cadastro',grp:'profissional',msg:`Técnico não cadastrado: ${t.ag}`,det:'Cadastrar no SeniorsTalent'})}
+  })
+  return out
+}
+function cadastroPendentes(){if(!MD.loaded)return{contratos:[],tecnicos:[]};const cs=new Set(),ts=new Set();MD.tickets.forEach(t=>{const interno=/geral/i.test(t.loc||'')||t.cc==='9'||t.cc==='10';if(t.loc&&!interno&&!/n[aã]o cadastrad/i.test(t.loc)&&!mdContractForCC(t.cc))cs.add(t.loc);if(t.ag&&!isExcludedTech(t.ag)&&!matchFuncByAgent(t.ag))ts.add(t.ag)});return{contratos:[...cs],tecnicos:[...ts]}}
 const alertCard=a=>`<div class="alrt-c" style="background:${aB[a.lv]};border-color:${aC[a.lv]};"><i data-lucide="${aI[a.lv]}" style="width:.73rem;height:.73rem;color:${aC[a.lv]};flex-shrink:0;margin-top:.1rem;"></i><div style="flex:1;"><div style="font-size:.74rem;font-weight:700;">${esc(a.msg)}</div><div style="font-size:.66rem;color:#64748b;margin-top:.05rem;">${esc(a.det)}</div></div><span class="badge" style="background:${aB[a.lv]};color:${aC[a.lv]};font-size:.57rem;flex-shrink:0;">${a.cat}</span></div>`
 
 function startRot(){clearInterval(rotTimer);rotTimer=setInterval(tickRot,1000)}
@@ -652,9 +666,10 @@ function rExecAlertas(){
 </div>`
 }
 async function rAlertasTec(){
-  const auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts())
+  const auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts()).concat(buildCadastroAlerts())
   const ord={critica:0,alta:1,media:2,baixa:3};auto.sort((a,b)=>ord[a.lv]-ord[b.lv])
   const AG={profissional:[],cliente:[],usuario:[],custo:[]};auto.forEach(a=>AG[alertGrp(a)].push(a))
+  const cad=cadastroPendentes()
   const grpCard=key=>{const m=GRP_META[key],arr=AG[key],crit=arr.filter(x=>x.lv==='critica').length;return`<div class="card"><div style="display:flex;align-items:center;gap:.42rem;margin-bottom:.55rem;"><div style="background:${m.cor}18;color:${m.cor};border-radius:.42rem;padding:.3rem;display:flex;"><i data-lucide="${m.ic}" style="width:.82rem;height:.82rem;"></i></div><span style="font-size:.75rem;font-weight:800;color:${m.cor};">${m.lbl}</span><span class="badge" style="background:${m.cor}18;color:${m.cor};margin-left:auto;">${arr.length}${crit?' · '+crit+' críticos':''}</span></div><div style="display:flex;flex-direction:column;gap:.26rem;max-height:20rem;overflow-y:auto;">${arr.map(alertCard).join('')||'<div style="color:#94a3b8;font-size:.7rem;text-align:center;padding:.7rem;">Sem alertas nesta categoria</div>'}</div></div>`}
   const zbx=getZbx(),zlast=lsGet('sbi_zbx_last')
   const treat=getIncid(),incAll=MD.loaded?mdInconsistencias():[],incPend=incAll.filter(x=>(treat[x.key]&&treat[x.key].status)!=='resolvido').length,incTrat=incAll.filter(x=>treat[x.key]&&treat[x.key].status==='tratando').length
@@ -664,9 +679,10 @@ async function rAlertasTec(){
 <div class="card mb-4" style="border-left:3px solid ${incPend?'#E04622':'#22c55e'};display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;"><i data-lucide="search-x" style="width:1.1rem;height:1.1rem;color:${incPend?'#E04622':'#22c55e'};"></i><div style="flex:1;min-width:12rem;"><div style="font-size:.85rem;font-weight:800;">${incPend} inconsistência(s) em aberto${incTrat?` · ${incTrat} em tratamento`:''}</div><div style="font-size:.68rem;color:#64748b;">Tempo de atividade ou lançamento de contrato fora do padrão, detectados no período.</div></div><button onclick="setSection('tech');setSub('incid')" style="padding:.4rem .9rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.72rem;font-weight:700;cursor:pointer;">Tratar na Técnica →</button></div>
 <div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Alertas ativos por categoria</div>
 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">${['profissional','cliente','usuario','custo'].map(grpCard).join('')}</div>
+${(cad.contratos.length||cad.tecnicos.length)?`<div class="card mb-4" style="border-left:3px solid #E04622;">${ST('Cadastros pendentes no SeniorsTalent — novos no Milldesk, fora da lista master')}<div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><div style="font-size:.68rem;font-weight:800;color:#334155;margin-bottom:.3rem;">Contratos/Locais (${cad.contratos.length})</div>${cad.contratos.length?cad.contratos.map(c=>`<div style="display:flex;gap:.4rem;align-items:center;font-size:.7rem;padding:.18rem 0;border-bottom:1px solid #f8fafc;"><i data-lucide="file-plus" style="width:.72rem;height:.72rem;color:#E04622;flex-shrink:0;"></i>${esc(c)}</div>`).join(''):'<div style="font-size:.68rem;color:#22c55e;">Todos cadastrados 👍</div>'}</div><div><div style="font-size:.68rem;font-weight:800;color:#334155;margin-bottom:.3rem;">Técnicos (${cad.tecnicos.length})</div>${cad.tecnicos.length?cad.tecnicos.map(t=>`<div style="display:flex;gap:.4rem;align-items:center;font-size:.7rem;padding:.18rem 0;border-bottom:1px solid #f8fafc;"><i data-lucide="user-plus" style="width:.72rem;height:.72rem;color:#E04622;flex-shrink:0;"></i>${esc(t)}</div>`).join(''):'<div style="font-size:.68rem;color:#22c55e;">Todos cadastrados 👍</div>'}</div></div></div>`:''}
 ${D.alertas.length?`<div class="card mb-4">${ST('Alertas manuais ('+D.alertas.length+')')}<div style="display:flex;flex-direction:column;gap:.23rem;">${D.alertas.map(a=>`<div style="display:flex;align-items:center;gap:.43rem;font-size:.72rem;"><span class="badge badge-r" style="flex-shrink:0;">${a.tipo}</span><span>${esc(a.titulo||'')}${a.descricao?' — '+esc(a.descricao):''}</span><button onclick="dismissAlerta('${a.id}')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#cbd5e1;">✕</button></div>`).join('')}</div></div>`:''}
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-<div class="card">${ST('Zabbix — Alertas de Monitoramento')}${zbx.url?`<div style="font-size:.7rem;color:#64748b;margin-bottom:.5rem;">Servidor: <code style="background:#f1f5f9;padding:0 .25rem;border-radius:.2rem;">${esc(zbx.url)}</code></div><button onclick="zbxSync()" style="display:inline-flex;align-items:center;gap:.3rem;padding:.33rem .72rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.7rem;font-weight:700;cursor:pointer;"><i data-lucide="refresh-cw" style="width:.72rem;height:.72rem;"></i>Sincronizar</button>${zlast?`<div style="margin-top:.6rem;font-size:.68rem;color:#64748b;">Última sync: ${new Date(zlast.ts).toLocaleString('pt-BR')} — <b>${fmt(zlast.count)}</b> problema(s)${zlast.error?` <span style="color:#ef4444;">(${esc(zlast.error)})</span>`:''}</div>${(zlast.items||[]).slice(0,8).map(p=>`<div class="alrt-c" style="background:#ede9fe;border-color:#7c3aed;margin-top:.3rem;"><i data-lucide="server" style="width:.7rem;height:.7rem;color:#7c3aed;flex-shrink:0;margin-top:.1rem;"></i><div style="flex:1;"><div style="font-size:.72rem;font-weight:700;">${esc(p.name||'')}</div><div style="font-size:.64rem;color:#64748b;">${esc(p.host||'')} · sev ${esc(p.severity||'')}</div></div></div>`).join('')}`:'<div style="font-size:.66rem;color:#94a3b8;margin-top:.5rem;">Ainda não sincronizado.</div>'}`:`<div style="font-size:.7rem;color:#64748b;line-height:1.6;">Configure a URL e o token do Zabbix em <button onclick="setSection('admin');setSub('alertcfg')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Admin → Config Alertas</button> para puxar os problemas ativos.</div>`}
+<div class="card">${ST('Zabbix — Alertas de Monitoramento')}${zbx.url?`<div style="font-size:.7rem;color:#64748b;margin-bottom:.5rem;">Servidor: <code style="background:#f1f5f9;padding:0 .25rem;border-radius:.2rem;">${esc(zbx.url)}</code></div><button onclick="zbxSync()" style="display:inline-flex;align-items:center;gap:.3rem;padding:.33rem .72rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.7rem;font-weight:700;cursor:pointer;"><i data-lucide="refresh-cw" style="width:.72rem;height:.72rem;"></i>Sincronizar</button>${zlast?`<div style="margin-top:.6rem;font-size:.68rem;color:#64748b;">Última sync: ${new Date(zlast.ts).toLocaleString('pt-BR')} — <b>${fmt(zlast.count)}</b> problema(s)${zlast.error?` <span style="color:#ef4444;">(${esc(zlast.error)})</span>`:''}</div>${(zlast.items||[]).slice(0,10).map(p=>{const sv=ZBX_SEV[String(p.severity)]||ZBX_SEV['0'];return`<div class="alrt-c" style="background:${sv.c}12;border-color:${sv.c};margin-top:.3rem;"><i data-lucide="server" style="width:.7rem;height:.7rem;color:${sv.c};flex-shrink:0;margin-top:.1rem;"></i><div style="flex:1;"><div style="font-size:.72rem;font-weight:700;">${esc(p.name||'')}</div><div style="font-size:.64rem;color:#64748b;">${p.clock?new Date(+p.clock*1000).toLocaleString('pt-BR'):''}</div></div><span class="badge" style="background:${sv.c}1a;color:${sv.c};flex-shrink:0;">${sv.t}</span></div>`}).join('')}`:'<div style="font-size:.66rem;color:#94a3b8;margin-top:.5rem;">Ainda não sincronizado.</div>'}`:`<div style="font-size:.7rem;color:#64748b;line-height:1.6;">Configure a URL e o token do Zabbix em <button onclick="setSection('admin');setSub('alertcfg')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Admin → Config Alertas</button> para puxar os problemas ativos.</div>`}
 <div style="margin-top:.6rem;background:#fffbeb;border:1px solid #fde68a;border-radius:.4rem;padding:.4rem .6rem;font-size:.63rem;color:#854d0e;">A leitura direta do Zabbix a partir do navegador depende de CORS liberado no servidor Zabbix.</div></div>
 <div class="card">${ST('Checklist Diário — Status de Hoje')}${(()=>{const today=todayISO(),daily=getChkDaily()[today]||{},cl=D.clientes||[],done=cl.filter(c=>(daily[c.nome]||{}).done).length,risk=cl.filter(c=>{const e=daily[c.nome]||{};return e.risco||hasRisk(e.obs)}).length;return`<div style="display:flex;gap:1.2rem;margin-bottom:.6rem;"><div><div class="kpi-lbl">Feitos</div><div style="font-size:1.2rem;font-weight:800;color:#22c55e;">${done}/${cl.length}</div></div><div><div class="kpi-lbl">Com risco/ação</div><div style="font-size:1.2rem;font-weight:800;color:#ef4444;">${risk}</div></div><div><div class="kpi-lbl">Prazo</div><div style="font-size:1.2rem;font-weight:800;color:${new Date().getHours()>=(getAlertCfg().checklist_hora||12)?'#ef4444':'#2B4C9B'};">${getAlertCfg().checklist_hora||12}h</div></div></div><button onclick="setSection('tech');setSub('checklists')" style="font-size:.68rem;color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Preencher checklists →</button>`})()}</div>
 </div>`
@@ -676,14 +692,15 @@ window.verifyApont=function(id){const all=getApontRev();if(all[id]){all[id].veri
 window.delApont=function(id){const all=getApontRev();delete all[id];setApontRev(all);renderContent()}
 window.zbxSync=async function(){const z=getZbx();if(!z.url){toast('Configure a URL do Zabbix em Admin.',false);return}toast('Sincronizando Zabbix…')
   const base=z.url.replace(/\/+$/,''),url=base.endsWith('api_jsonrpc.php')?base:base+'/api_jsonrpc.php'
-  const call=async(useBearer)=>{const rpc={jsonrpc:'2.0',method:'problem.get',params:{output:'extend',selectHosts:['host'],recent:true,sortfield:['eventid'],sortorder:'DESC',limit:100},id:1}
+  const call=async(useBearer)=>{const rpc={jsonrpc:'2.0',method:'problem.get',params:{output:['eventid','name','severity','clock'],recent:true,sortfield:['eventid'],sortorder:'DESC',limit:100},id:1}
     const headers={'Content-Type':'application/json-rpc'};if(z.token){if(useBearer)headers['Authorization']='Bearer '+z.token;else rpc.auth=z.token}
     const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(rpc)});return r.json()}
   try{let j=await call(true)
-    if(j&&j.error&&/auth|permission|token|bearer/i.test(JSON.stringify(j.error)))j=await call(false) // fallback Zabbix 5.x (auth no corpo)
+    if(j&&j.error&&/auth|permission|token|bearer|unauthor/i.test(JSON.stringify(j.error)))j=await call(false) // fallback Zabbix 5.x (auth no corpo)
     if(j&&j.error)throw new Error(j.error.data||j.error.message||'erro Zabbix')
-    const items=(j.result||[]).map(p=>({name:p.name,host:(p.hosts&&p.hosts[0]&&p.hosts[0].host)||p.host||'',severity:p.severity}))
-    lsSet('sbi_zbx_last',{ts:Date.now(),count:items.length,items,error:''});toast('Zabbix: '+items.length+' problema(s).')
+    const items=(j.result||[]).map(p=>({name:p.name,severity:p.severity,clock:p.clock}))
+    const crit=items.filter(p=>+p.severity>=4).length
+    lsSet('sbi_zbx_last',{ts:Date.now(),count:items.length,crit,items,error:''});toast('Zabbix: '+items.length+' problema(s), '+crit+' alta/desastre.')
   }catch(e){lsSet('sbi_zbx_last',{ts:Date.now(),count:0,items:[],error:(/Failed to fetch/i.test(e.message)?'CORS/rede — libere CORS no Zabbix':e.message)});toast('Falha ao ler Zabbix: '+e.message,false)}
   renderContent()}
 
@@ -726,8 +743,9 @@ function mdMetrics(){
   const semAtual=open.map(t=>{const d=mdDate(t.ana)||mdDate(t.start);const dias=d?Math.floor((now-d)/864e5):null;return{...t,dias}}).filter(t=>t.dias!=null&&t.dias>=diasInat).sort((a,b)=>b.dias-a.dias)
   const grp={};U.forEach(t=>{const nt=mdNorm(t.t);if(!nt)return;const k=(t.cc||t.loc)+'§'+nt;(grp[k]=grp[k]||{loc:t.loc,cc:t.cc,titulo:t.t,ids:[]}).ids.push(t.id)})
   const reinc=Object.values(grp).filter(g=>g.ids.length>=minRec).sort((a,b)=>b.ids.length-a.ids.length)
+  const ativCli={};MD.tickets.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'—');ativCli[nome]=(ativCli[nome]||0)+1})
   const cli={};U.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'—'),emp=c?c.empresa:getClientEmpresa(t.loc);(cli[nome]=cli[nome]||{nome,emp,total:0,aberto:0}).total++;if(mdIsOpen(t.st))cli[nome].aberto++})
-  const porCliente=Object.values(cli).sort((a,b)=>b.total-a.total)
+  const porCliente=Object.values(cli).map(c=>({...c,atividades:ativCli[c.nome]||0})).sort((a,b)=>b.total-a.total)
   const tec={};U.forEach(t=>{if(!t.ag)return;(tec[t.ag]=tec[t.ag]||{ag:t.ag,lv:t.lv,total:0,fechados:0}).total++;if(!mdIsOpen(t.st))tec[t.ag].fechados++})
   const porTecnico=Object.values(tec).sort((a,b)=>b.total-a.total)
   const cat={};U.forEach(t=>{const c=t.cat||'—';cat[c]=(cat[c]||0)+1});const topCat=Object.entries(cat).map(([k,v])=>({cat:k,n:v})).sort((a,b)=>b.n-a.n).slice(0,10)
@@ -809,7 +827,7 @@ async function rFila(){
   const qTile=(val,lbl,cor,icon,sub='')=>`<div class="card" style="background:${cor}0d;border:1px solid ${cor}33;border-left:3px solid ${cor};padding:.9rem 1rem;"><div style="display:flex;align-items:flex-start;justify-content:space-between;"><div><div style="font-size:1.75rem;font-weight:900;color:${cor};line-height:1;letter-spacing:-.02em;">${val}</div><div style="font-size:.62rem;color:#475569;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-top:.35rem;">${lbl}</div>${sub?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.1rem;">${sub}</div>`:''}</div><div style="background:${cor}1a;border-radius:.5rem;padding:.4rem;color:${cor};flex-shrink:0;"><i data-lucide="${icon}" style="width:1rem;height:1rem;"></i></div></div></div>`
   const kpis=`<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Situação da fila — ${MD.periodo}</div><div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${qTile(fmt(M.total),'Chamados no período','#2B4C9B','ticket')}${qTile(fmt(M.backlogOpen),'Abertos / na fila','#3b82f6','inbox')}${qTile(fmt(M.fechados),'Fechados','#22c55e','check-circle')}${qTile(fmt(M.foraSLA.length),'Fora do SLA',M.foraSLA.length?'#ef4444':'#22c55e','shield-alert')}${qTile(fmt(M.recentes),'Com atividade recente','#16a34a','activity','≤ '+(cfg.dias_inat||3)+'d')}${qTile(fmt(M.semRec),'Sem atividade recente',M.semRec?'#f59e0b':'#22c55e','pause-circle')}${qTile(fmt(M.semAtual.length),'Sem atualização',M.semAtual.length?'#ef4444':'#22c55e','history','> '+(cfg.dias_inat||3)+'d')}${qTile(fmt(M.reinc.length),'Reincidentes',M.reinc.length?'#f97316':'#22c55e','repeat')}</div>`
   const statusBadges=Object.entries(M.byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge" style="background:${(stColors[k]||'#64748b')}22;color:${stColors[k]||'#64748b'};margin:.1rem;">${esc(k)}: ${fmt(v)}</span>`).join('')
-  const cliRows=M.porCliente.slice(0,20).map(c=>`<tr><td>${empBadge(c.emp)}</td><td style="font-weight:600;">${esc(c.nome)}</td><td style="font-weight:700;">${fmt(c.total)}</td><td style="color:${c.aberto?'#3b82f6':'#94a3b8'};font-weight:${c.aberto?700:400};">${fmt(c.aberto)}</td></tr>`).join('')
+  const cliRows=M.porCliente.slice(0,20).map(c=>`<tr><td>${empBadge(c.emp)}</td><td style="font-weight:600;">${esc(c.nome)}</td><td style="font-weight:700;">${fmt(c.total)}</td><td style="color:#7c3aed;font-weight:700;">${fmt(c.atividades)}</td><td style="color:${c.aberto?'#3b82f6':'#94a3b8'};font-weight:${c.aberto?700:400};">${fmt(c.aberto)}</td></tr>`).join('')
   const tecRows=M.porTecnico.map(t=>`<tr><td style="font-weight:600;">${esc(t.ag)}</td><td><span class="tag">${esc(t.lv||'—')}</span></td><td style="font-weight:700;">${fmt(t.total)}</td><td style="color:#22c55e;">${fmt(t.fechados)}</td><td style="color:${(t.total-t.fechados)?'#3b82f6':'#94a3b8'};font-weight:${(t.total-t.fechados)?700:400};">${fmt(t.total-t.fechados)}</td></tr>`).join('')
   const slaRows=M.foraSLA.slice(0,25).map(t=>{const c=mdContractForCC(t.cc);return`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:16rem;">${esc((t.t||'').slice(0,55))}</td><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:t.loc)}</td><td style="font-size:.68rem;">${esc(t.ag||'—')}</td><td style="color:#ef4444;font-weight:800;">${t.dias}d</td><td style="font-size:.66rem;color:#64748b;">limite ${t.lim}d</td></tr>`}).join('')
   const semTag='<span style="color:#ef4444;font-weight:700;">'
@@ -820,7 +838,7 @@ async function rFila(){
   return`${bar}${kpis}
 <div class="card mb-4">${ST('Chamados por Status')}<div style="display:flex;flex-wrap:wrap;">${statusBadges||'—'}</div></div>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-<div class="card overflow-x-auto">${ST('Chamados por Cliente')}<table><thead><tr><th>Empresa</th><th>Cliente</th><th>Total</th><th>Em aberto</th></tr></thead><tbody>${cliRows||'<tr><td colspan="4" style="color:#94a3b8;padding:1rem;text-align:center;">—</td></tr>'}</tbody></table></div>
+<div class="card overflow-x-auto">${ST('Chamados e Atividades por Cliente')}<table><thead><tr><th>Empresa</th><th>Cliente</th><th>Chamados</th><th>Atividades</th><th>Em aberto</th></tr></thead><tbody>${cliRows||'<tr><td colspan="5" style="color:#94a3b8;padding:1rem;text-align:center;">—</td></tr>'}</tbody></table></div>
 <div class="card overflow-x-auto">${ST('Chamados por Técnico')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Total</th><th>Fechados</th><th>Pendentes</th></tr></thead><tbody>${tecRows||'<tr><td colspan="5" style="color:#94a3b8;padding:1rem;text-align:center;">—</td></tr>'}</tbody></table></div>
 </div>
 <div class="card mb-4 overflow-x-auto" style="border-left:3px solid #ef4444;">${ST('Sem Atualização — fila aberta há mais de '+(cfg.dias_inat||3)+' dias')}<table><thead><tr><th>ID</th><th>Assunto</th><th>Cliente</th><th>Técnico</th><th>Status</th><th>Parado</th></tr></thead><tbody>${saRows||'<tr><td colspan="6" style="color:#22c55e;padding:1rem;text-align:center;">Nenhum chamado parado além do limite. 👍</td></tr>'}</tbody></table></div>
@@ -1013,7 +1031,7 @@ async function boot(){
     else{document.getElementById('mdBanner').classList.remove('hidden');if(MES)await loadMonth(MES);else document.getElementById('main').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:14rem;gap:.62rem;color:#94a3b8;font-size:.875rem;text-align:center;">Conecte ao Milldesk na barra acima para carregar chamados e horas ao vivo.<br>Contratos e funcionários já estão disponíveis em <b>Admin</b>.</div>`}
     initRealtime();startRot()}
   catch(e){document.getElementById('main').innerHTML=`<div class="card" style="border-left:3px solid #ef4444;color:#ef4444;padding:1.25rem;font-size:.875rem;">Erro: ${esc(e.message)}</div>`}
-  finally{document.getElementById('loading').style.display='none';document.getElementById('app').classList.remove('hidden');lucide.createIcons()}
+  finally{document.getElementById('appVersion').textContent=APP_VERSION;document.getElementById('loading').style.display='none';document.getElementById('app').classList.remove('hidden');lucide.createIcons()}
 }
 document.getElementById('selMes').addEventListener('change',e=>{if(e.target.value)loadMonth(e.target.value)})
 boot()
