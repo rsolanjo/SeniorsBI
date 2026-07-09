@@ -138,6 +138,12 @@ textarea.fi{resize:vertical;min-height:2.7rem}
   </div>
 </div>
 
+<div id="mdBanner" class="hidden" style="background:linear-gradient(90deg,#2B4C9B,#1a3a6b);color:white;padding:.7rem 1.1rem;display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
+  <i data-lucide="plug-zap" style="width:1.1rem;height:1.1rem;flex-shrink:0;"></i>
+  <div style="flex:1;min-width:13rem;"><div style="font-weight:800;font-size:.82rem;">Conectar ao Milldesk</div><div style="font-size:.68rem;opacity:.85;">Cole a chave da API (uma vez neste navegador) para carregar chamados, horas e inconsistências ao vivo.</div></div>
+  <input id="mdBannerKey" type="password" placeholder="chave da API Milldesk" style="padding:.42rem .6rem;border-radius:.4rem;border:none;font-size:.75rem;min-width:15rem;flex:1;color:#1e293b;">
+  <button onclick="mdConnect()" style="padding:.44rem 1.1rem;background:white;color:#2B4C9B;border:none;border-radius:.4rem;font-size:.75rem;font-weight:800;cursor:pointer;">Conectar</button>
+</div>
 <main class="flex-1 p-4 overflow-auto" id="main"></main>
 </div>
 
@@ -253,7 +259,7 @@ const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Usuário',ic:'user',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
   exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Alertas']],
-  tech:[['prod','Produtividade'],['fila','Fila de Chamados'],['clientes','Clientes'],['equipe','Equipe'],['historico','Histórico'],['incid','Inconsistências'],['checklists','Checklists']],
+  tech:[['prod','Produtividade'],['fila','Fila de Chamados'],['clientes','Clientes'],['equipe','Equipe'],['historico','Histórico'],['incid','Inconsistências'],['alertas','Alertas'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
 }
 
@@ -389,7 +395,7 @@ const DEPTS=['TI / Técnico','Comercial','Administrativo','Financeiro','RH','Inf
 // ─── Milldesk (chamados ao vivo) ───
 let MD={loaded:false,loading:false,periodo:'',ts:0,tickets:[],backlog:[]}
 let CMP={a:'',b:'',SA:null,SB:null,loading:false}
-const getMD=()=>lsGet('sbi_md')||{base:'https://v1.milldesk.com/api',key:''}
+const getMD=()=>{const s=lsGet('sbi_md')||{};return{base:s.base||'https://v1.milldesk.com/api',key:s.key||''}}
 const setMD=v=>lsSet('sbi_md',v)
 const mdCC=loc=>{const p=String(loc||'').split('|');return p.length>1?p[1].trim():''}
 const mdDate=s=>{if(!s)return null;const p=String(s).split('/');return p.length===3?new Date(+p[2],+p[1]-1,+p[0]):null}
@@ -544,13 +550,13 @@ function renderContent(){
   const standalone=SECTION==='admin'||(SECTION==='tech'&&['fila','checklists','incid'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
   if(SECTION==='exec'){
-    const sync={geral:rExecGeral,clientes:rExecClientes,tecnico:rExecTecnico}
-    if(EXEC_SUB==='alertas')rAlertas().then(h=>{el.innerHTML=h;lucide.createIcons()})
-    else{el.innerHTML=(sync[EXEC_SUB]||rExecGeral)();lucide.createIcons()}
+    const sync={geral:rExecGeral,clientes:rExecClientes,tecnico:rExecTecnico,alertas:rExecAlertas}
+    el.innerHTML=(sync[EXEC_SUB]||rExecGeral)();lucide.createIcons()
   }else if(SECTION==='tech'){
     const sync={prod:rProd,clientes:rCli,equipe:rEquipe,incid:rIncidencias,checklists:rChecklists}
     if(TECH_SUB==='historico')rTrend().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else if(TECH_SUB==='fila')rFila().then(h=>{el.innerHTML=h;lucide.createIcons()})
+    else if(TECH_SUB==='alertas')rAlertasTec().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else{el.innerHTML=(sync[TECH_SUB]||rProd)();lucide.createIcons()}
   }else{
     const sync={contratos:rContratos,funcionarios:rFuncionarios,custos:rCustos,'sla-edit':rSLAAdmin,alertcfg:rAlertCfg}
@@ -629,7 +635,23 @@ function rExecTecnico(){
 <div style="text-align:right;margin-top:.38rem;"><button onclick="setSection('admin');setSub('funcionarios')" style="font-size:.68rem;color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Informar salários reais em Admin →</button></div></div>`
 }
 
-async function rAlertas(){
+function rExecAlertas(){
+  const auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts())
+  const ord={critica:0,alta:1,media:2,baixa:3};auto.sort((a,b)=>ord[a.lv]-ord[b.lv])
+  const criticos=auto.filter(a=>a.lv==='critica'),altos=auto.filter(a=>a.lv==='alta')
+  const treat=getIncid(),incAll=MD.loaded?mdInconsistencias():[],incPend=incAll.filter(x=>(treat[x.key]&&treat[x.key].status)!=='resolvido').length
+  const franqExtrap=(D.clientes||[]).filter(c=>{const fr=cliFranquia(c.nome);return fr&&Math.round(c.horas_minutos/60)>fr}).length
+  const g=companyStats('all'),mgC=g.margem==null?'#94a3b8':g.margem<0?'#ef4444':g.margem<20?'#f59e0b':'#22c55e'
+  const empRows=['4Seniors','S4SYS','Porto Virtual'].map(emp=>{const d=companyStats(emp),c=d.margem==null?'#94a3b8':d.margem<0?'#ef4444':d.margem<20?'#f59e0b':'#22c55e';return`<div style="display:flex;align-items:center;gap:.6rem;padding:.4rem 0;border-bottom:1px solid #f8fafc;"><span style="font-size:.72rem;font-weight:700;min-width:6rem;">${emp}</span><span style="font-size:.68rem;color:#166534;">${fmtR(d.receita)}</span><span style="font-size:.68rem;color:#854d0e;">custo ${fmtR(d.custo)}</span><span style="margin-left:auto;font-size:.78rem;font-weight:800;color:${c};">${d.margem!=null?d.margem+'%':'—'}</span></div>`}).join('')
+  const critList=criticos.slice(0,10).map(alertCard).join('')||'<div style="color:#22c55e;font-size:.74rem;text-align:center;padding:1rem;">Nenhum alerta crítico. 👍</div>'
+  return`<div style="display:flex;align-items:baseline;gap:.6rem;margin-bottom:.8rem;"><span style="font-size:1.05rem;font-weight:900;">Painel executivo de alertas</span><span style="font-size:.68rem;color:#94a3b8;">visão macro · ${MD.loaded?'Milldesk ao vivo':'dados locais'}</span></div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(fmt(criticos.length),'Alertas críticos',criticos.length?'#ef4444':'#22c55e','triangle-alert',altos.length+' altos')}${kpiCard(fmt(incPend),'Inconsistências abertas',incPend?'#E04622':'#22c55e','search-x')}${kpiCard(fmt(franqExtrap),'Clientes fora da franquia',franqExtrap?'#f59e0b':'#22c55e','gauge')}${kpiCard(g.margem!=null?g.margem+'%':'—','Margem global',mgC,'trending-up')}</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="card">${ST('Pontos críticos de atenção')}<div style="display:flex;flex-direction:column;gap:.28rem;">${critList}</div>${criticos.length>10?`<div style="font-size:.66rem;color:#94a3b8;margin-top:.4rem;">+${criticos.length-10} outros críticos</div>`:''}<div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid #f1f5f9;"><button onclick="setSection('tech');setSub('alertas')" style="font-size:.7rem;color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Ver todos os alertas técnicos →</button></div></div>
+<div class="card">${ST('Resultado financeiro por empresa')}${empRows}<div style="display:flex;align-items:center;gap:.6rem;padding:.5rem 0 0;margin-top:.3rem;border-top:2px solid #f1f5f9;"><span style="font-size:.74rem;font-weight:800;min-width:6rem;">Global</span><span style="font-size:.7rem;color:#166534;font-weight:700;">${fmtR(g.receita)}</span><span style="margin-left:auto;font-size:.85rem;font-weight:900;color:${mgC};">${g.margem!=null?g.margem+'%':'—'}</span></div>${incPend?`<div style="margin-top:.7rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:.4rem;padding:.5rem .7rem;font-size:.68rem;color:#9a3412;">${incPend} inconsistência(s) de horas/contrato em aberto — <button onclick="setSection('tech');setSub('incid')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">tratar na Técnica</button></div>`:''}</div>
+</div>`
+}
+async function rAlertasTec(){
   const auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts())
   const ord={critica:0,alta:1,media:2,baixa:3};auto.sort((a,b)=>ord[a.lv]-ord[b.lv])
   const AG={profissional:[],cliente:[],usuario:[],custo:[]};auto.forEach(a=>AG[alertGrp(a)].push(a))
@@ -695,6 +717,7 @@ window.mdSync=async function(){
   }catch(e){MD.loading=false;toast('Falha Milldesk: '+e.message,false)}
   renderContent()
 }
+window.mdConnect=function(){const k=document.getElementById('mdBannerKey').value.trim();if(!k){toast('Cole a chave da API do Milldesk.',false);return}setMD({base:getMD().base,key:k});document.getElementById('mdBanner').classList.add('hidden');toast('Conectando ao Milldesk…');mdSync()}
 function mdMetrics(){
   const cfg=getAlertCfg(),diasInat=cfg.dias_inat||3,minRec=Math.max(2,cfg.tickets_rec||3),now=new Date()
   const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});const U=Object.values(uniq)
@@ -783,7 +806,8 @@ async function rFila(){
   }
   const M=mdMetrics()
   const stColors={Fechado:'#22c55e',Aberto:'#3b82f6',Pendente:'#f59e0b','Em Execução':'#7c3aed',Aguardando:'#f97316',Agendado:'#64748b'}
-  const kpis=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(fmt(M.total),'Chamados no Período','#E04622','ticket',MD.periodo)}${kpiCard(fmt(M.fechados),'Fechados','#22c55e','check-circle')}${kpiCard(fmt(M.backlogOpen),'Fila Aberta','#3b82f6','inbox','abertos+pendentes')}${kpiCard(fmt(M.foraSLA.length),'Fora do SLA',M.foraSLA.length?'#ef4444':'#22c55e','shield-alert')}${kpiCard(fmt(M.recentes),'C/ atividade recente','#22c55e','activity','≤ '+(cfg.dias_inat||3)+' dias')}${kpiCard(fmt(M.semRec),'S/ atividade recente',M.semRec?'#f59e0b':'#22c55e','clock-alert')}${kpiCard(fmt(M.semAtual.length),'Sem Atualização',M.semAtual.length?'#ef4444':'#22c55e','history','> '+(cfg.dias_inat||3)+' dias')}${kpiCard(fmt(M.reinc.length),'Reincidentes',M.reinc.length?'#f59e0b':'#22c55e','repeat')}</div>`
+  const qTile=(val,lbl,cor,icon,sub='')=>`<div class="card" style="background:${cor}0d;border:1px solid ${cor}33;border-left:3px solid ${cor};padding:.9rem 1rem;"><div style="display:flex;align-items:flex-start;justify-content:space-between;"><div><div style="font-size:1.75rem;font-weight:900;color:${cor};line-height:1;letter-spacing:-.02em;">${val}</div><div style="font-size:.62rem;color:#475569;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-top:.35rem;">${lbl}</div>${sub?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.1rem;">${sub}</div>`:''}</div><div style="background:${cor}1a;border-radius:.5rem;padding:.4rem;color:${cor};flex-shrink:0;"><i data-lucide="${icon}" style="width:1rem;height:1rem;"></i></div></div></div>`
+  const kpis=`<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Situação da fila — ${MD.periodo}</div><div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${qTile(fmt(M.total),'Chamados no período','#2B4C9B','ticket')}${qTile(fmt(M.backlogOpen),'Abertos / na fila','#3b82f6','inbox')}${qTile(fmt(M.fechados),'Fechados','#22c55e','check-circle')}${qTile(fmt(M.foraSLA.length),'Fora do SLA',M.foraSLA.length?'#ef4444':'#22c55e','shield-alert')}${qTile(fmt(M.recentes),'Com atividade recente','#16a34a','activity','≤ '+(cfg.dias_inat||3)+'d')}${qTile(fmt(M.semRec),'Sem atividade recente',M.semRec?'#f59e0b':'#22c55e','pause-circle')}${qTile(fmt(M.semAtual.length),'Sem atualização',M.semAtual.length?'#ef4444':'#22c55e','history','> '+(cfg.dias_inat||3)+'d')}${qTile(fmt(M.reinc.length),'Reincidentes',M.reinc.length?'#f97316':'#22c55e','repeat')}</div>`
   const statusBadges=Object.entries(M.byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge" style="background:${(stColors[k]||'#64748b')}22;color:${stColors[k]||'#64748b'};margin:.1rem;">${esc(k)}: ${fmt(v)}</span>`).join('')
   const cliRows=M.porCliente.slice(0,20).map(c=>`<tr><td>${empBadge(c.emp)}</td><td style="font-weight:600;">${esc(c.nome)}</td><td style="font-weight:700;">${fmt(c.total)}</td><td style="color:${c.aberto?'#3b82f6':'#94a3b8'};font-weight:${c.aberto?700:400};">${fmt(c.aberto)}</td></tr>`).join('')
   const tecRows=M.porTecnico.map(t=>`<tr><td style="font-weight:600;">${esc(t.ag)}</td><td><span class="tag">${esc(t.lv||'—')}</span></td><td style="font-weight:700;">${fmt(t.total)}</td><td style="color:#22c55e;">${fmt(t.fechados)}</td><td style="color:${(t.total-t.fechados)?'#3b82f6':'#94a3b8'};font-weight:${(t.total-t.fechados)?700:400};">${fmt(t.total-t.fechados)}</td></tr>`).join('')
@@ -986,8 +1010,7 @@ function initRealtime(){sb.channel('sbi-live').on('postgres_changes',{event:'*',
 async function boot(){
   try{seedLocalData();await loadMeses();renderSubTabs()
     if(getMD().key){mdSync()}
-    else if(MES)await loadMonth(MES)
-    else document.getElementById('main').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:16rem;gap:.62rem;color:#94a3b8;font-size:.875rem;text-align:center;">Sem dados. Configure a chave Milldesk em <b>Admin → Config Alertas</b> para carregar ao vivo,<br>ou rode <code style="font-size:.74rem;background:#f1f5f9;padding:.16rem .43rem;border-radius:.27rem;">push-mes.ps1</code>.</div>`
+    else{document.getElementById('mdBanner').classList.remove('hidden');if(MES)await loadMonth(MES);else document.getElementById('main').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:14rem;gap:.62rem;color:#94a3b8;font-size:.875rem;text-align:center;">Conecte ao Milldesk na barra acima para carregar chamados e horas ao vivo.<br>Contratos e funcionários já estão disponíveis em <b>Admin</b>.</div>`}
     initRealtime();startRot()}
   catch(e){document.getElementById('main').innerHTML=`<div class="card" style="border-left:3px solid #ef4444;color:#ef4444;padding:1.25rem;font-size:.875rem;">Erro: ${esc(e.message)}</div>`}
   finally{document.getElementById('loading').style.display='none';document.getElementById('app').classList.remove('hidden');lucide.createIcons()}
