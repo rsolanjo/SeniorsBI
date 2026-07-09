@@ -2,3 +2,11 @@
 *.pdf
 data/meses/*.json
 node_modules/
+
+# Dados de trabalho internos (nomes/volumes de funcionarios) — repo publico, nao commitar.
+# O dashboard nao le esses arquivos; usa APIs ao vivo + localStorage.
+/data/*.json
+# PNGs soltos na raiz sao duplicatas dos que ficam em dashboard/
+/4sr.png
+/s4sys.jpg
+/portovirtual.png
