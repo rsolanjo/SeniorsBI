@@ -92,7 +92,7 @@ textarea.fi{resize:vertical;min-height:2.7rem}
         <button class="sec-btn" onclick="setSection('admin')" id="sb-admin">Admin</button>
       </div>
       <div style="width:1px;height:1.25rem;background:#e2e8f0;"></div>
-      <div class="flex items-center gap-1.5"><div class="pulse" id="liveDot"></div><span style="font-size:.68rem;color:#64748b;" id="liveStatus">…</span><span id="zbxStatus" style="font-size:.62rem;font-weight:700;"></span><span id="appVersion" style="font-size:.62rem;font-weight:800;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;padding:.05rem .32rem;border-radius:.3rem;"></span></div>
+      <div id="demo-live" class="flex items-center gap-1.5"><div class="pulse" id="liveDot"></div><span style="font-size:.68rem;color:#64748b;" id="liveStatus">…</span><span id="zbxStatus" style="font-size:.62rem;font-weight:700;"></span><span id="appVersion" style="font-size:.62rem;font-weight:800;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;padding:.05rem .32rem;border-radius:.3rem;"></span></div>
       <span style="font-size:.58rem;color:#94a3b8;" id="lastUpdate"></span>
     </div>
   </div>
@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v15'
+const APP_VERSION='v16'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='exec',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos'
