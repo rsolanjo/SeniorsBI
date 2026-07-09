@@ -11,6 +11,19 @@
 :root{--brand:#2B4C9B;--accent:#E04622;--bg:#f0f4fa;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;--subtle:#94a3b8}
 body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 .hidden{display:none!important}
+/* Fallback de utilidades (caso o CDN Tailwind não carregue) */
+.grid{display:grid}.flex{display:flex}.flex-col{flex-direction:column}.flex-1{flex:1 1 0%}.flex-wrap{flex-wrap:wrap}
+.items-center{align-items:center}.justify-between{justify-content:space-between}.justify-center{justify-content:center}
+.text-center{text-align:center}.mx-auto{margin-left:auto;margin-right:auto}.w-full{width:100%}.min-h-screen{min-height:100vh}
+.overflow-auto{overflow:auto}.overflow-x-auto{overflow-x:auto}
+.p-4{padding:1rem}.px-4{padding-left:1rem;padding-right:1rem}.py-1\.5{padding-top:.375rem;padding-bottom:.375rem}
+.mb-2{margin-bottom:.5rem}.mb-2\.5{margin-bottom:.625rem}.mb-4{margin-bottom:1rem}.mt-3{margin-top:.75rem}
+.gap-1{gap:.25rem}.gap-1\.5{gap:.375rem}.gap-2{gap:.5rem}.gap-2\.5{gap:.625rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}
+.space-y-3>*+*{margin-top:.75rem}
+.grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}.grid-cols-6{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media(min-width:768px){.md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.md\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.md\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.md\:grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media(min-width:1024px){.lg\:grid-cols-6{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media(min-width:1280px){.xl\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:#f1f5f9}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
 .card{background:var(--card);border-radius:.875rem;padding:1.25rem;border:1px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,.05)}
 .kpi-big{font-size:1.7rem;font-weight:800;color:var(--text);line-height:1.1;letter-spacing:-.02em}
@@ -217,6 +230,10 @@ const NIVEL_DEFAULTS={N1:6000,N2:9000,N3:14000,'Gestão':20000,LGPD:15000}
 const aC={critica:'#ef4444',alta:'#f97316',media:'#f59e0b',baixa:'#3b82f6'}
 const aB={critica:'#fee2e2',alta:'#ffedd5',media:'#fef9c3',baixa:'#dbeafe'}
 const aI={critica:'triangle-alert',alta:'alert-circle',media:'info',baixa:'info'}
+// Agrupamento macro dos alertas
+const ALERT_GRP={FTE:'profissional',Horas:'profissional',Grupo:'profissional',Franquia:'cliente','Reincidência':'cliente',Checklist:'cliente',Mensal:'cliente',SLA:'usuario',CSAT:'usuario','Sem update':'usuario',Custo:'custo',Margem:'custo'}
+const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
+const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Usuário',ic:'user',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
   exec:[['geral','Visão Geral'],['empresa','Por Empresa'],['contrato','Por Contrato'],['tecnico','Por Técnico'],['alertas','Alertas']],
   tech:[['prod','Produtividade'],['fila','Fila de Chamados'],['clientes','Clientes'],['equipe','Equipe'],['historico','Histórico']],
@@ -444,6 +461,8 @@ function buildAutoAlerts(){
   D.clientes.forEach(c=>{const fran=cliFranquia(c.nome);if(!fran)return;const uso=pct(Math.round(c.horas_minutos/60),fran);if(uso>100)auto.push({lv:'critica',cat:'Franquia',msg:`${c.nome}: ${uso}% — extrapolada`,det:`${Math.round(c.horas_minutos/60)}h vs ${fran}h`});else if(uso>=lim)auto.push({lv:'alta',cat:'Franquia',msg:`${c.nome}: ${uso}% da franquia`,det:`Atingiu ${lim}%+ das horas contratadas`})})
   if(D.sla&&D.sla.dentro_sla_pct<90)auto.push({lv:'alta',cat:'SLA',msg:`SLA: ${D.sla.dentro_sla_pct}% dentro do prazo`,det:`${D.sla.chamados_fora} chamados vencidos`})
   if(D.sat){if(D.sat.csat<75)auto.push({lv:'critica',cat:'CSAT',msg:`CSAT: ${D.sat.csat}% — crítico`,det:'Satisfação comprometida'});else if(D.sat.csat<85)auto.push({lv:'media',cat:'CSAT',msg:`CSAT: ${D.sat.csat}%`,det:'Monitorar tendência'})}
+  // Custo — margem por empresa
+  ;['4Seniors','S4SYS','Porto Virtual'].forEach(emp=>{const d=companyStats(emp);if(d.receita>0&&d.margem!=null){if(d.margem<0)auto.push({lv:'critica',cat:'Custo',msg:`${emp}: margem negativa (${d.margem}%)`,det:`Custo ${fmtR(d.custo)} > Receita ${fmtR(d.receita)}`});else if(d.margem<20)auto.push({lv:'media',cat:'Custo',msg:`${emp}: margem baixa (${d.margem}%)`,det:`Receita ${fmtR(d.receita)} · custo ${fmtR(d.custo)}`})}})
   const ord={critica:0,alta:1,media:2,baixa:3}
   return auto.sort((a,b)=>ord[a.lv]-ord[b.lv])
 }
@@ -519,7 +538,7 @@ const kpiCard=(val,lbl,col,icon,sub='')=>`<div class="card" style="border-left:3
 // ═══════ EXECUTIVA ══════════════════════════════════════════════════════════
 
 function rExecGeral(){
-  const g=companyStats('all'),auto=buildAutoAlerts(),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)
+  const g=companyStats('all'),auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)
   const fteC=D.fte<60?'#ef4444':D.fte<80?'#f59e0b':'#22c55e',mgC=g.margem==null?'#94a3b8':g.margem<0?'#ef4444':g.margem<20?'#f59e0b':'#22c55e',alerC=auto.some(a=>a.lv==='critica')?'#ef4444':auto.length?'#f59e0b':'#22c55e'
   const empCards=['4Seniors','S4SYS','Porto Virtual'].map(emp=>{
     const d=companyStats(emp),ec=emp==='4Seniors'?'#2B4C9B':emp==='S4SYS'?'#7c3aed':'#166534',mC=d.margem==null?'#94a3b8':d.margem<0?'#ef4444':d.margem<20?'#f59e0b':'#22c55e'
@@ -577,6 +596,8 @@ function rExecTecnico(){
 async function rAlertas(){
   const auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0),custoPorCh=D.totalChamados>0?totalCusto/D.totalChamados:0
   const ord={critica:0,alta:1,media:2,baixa:3};auto.sort((a,b)=>ord[a.lv]-ord[b.lv])
+  const AG={profissional:[],cliente:[],usuario:[],custo:[]};auto.forEach(a=>AG[alertGrp(a)].push(a))
+  const grpCard=key=>{const m=GRP_META[key],arr=AG[key],crit=arr.filter(x=>x.lv==='critica').length;return`<div class="card"><div style="display:flex;align-items:center;gap:.42rem;margin-bottom:.55rem;"><div style="background:${m.cor}18;color:${m.cor};border-radius:.42rem;padding:.3rem;display:flex;"><i data-lucide="${m.ic}" style="width:.82rem;height:.82rem;"></i></div><span style="font-size:.75rem;font-weight:800;color:${m.cor};">${m.lbl}</span><span class="badge" style="background:${m.cor}18;color:${m.cor};margin-left:auto;">${arr.length}${crit?' · '+crit+' críticos':''}</span></div><div style="display:flex;flex-direction:column;gap:.26rem;max-height:20rem;overflow-y:auto;">${arr.map(alertCard).join('')||'<div style="color:#94a3b8;font-size:.7rem;text-align:center;padding:.7rem;">Sem alertas nesta categoria</div>'}</div></div>`}
   const techRows=D.recursos.map(r=>{const fte=pct(r.trab_minutos,r.cap_minutos),fC=fte>90?'#ef4444':fte<60?'#f59e0b':'#22c55e',sal=getSalario(r.nome,r.nivel),vh=getVH(r.nome,r.nivel),cr=vh>0?Math.round(r.trab_minutos/60*vh):sal;return`<tr><td style="font-weight:600;">${esc(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td>${minToHM(r.trab_minutos)}h</td><td style="color:${fC};font-weight:800;">${fte}%</td><td style="color:#854d0e;">${fmtR(sal)}</td><td style="color:#64748b;">${vh>0?fmtR(Math.round(vh))+'/h':'—'}</td><td style="color:#166534;font-weight:700;">${fmtR(cr)}</td></tr>`}).join('')
   // Validação de apontamentos (itens registrados p/ revisão do líder)
   const rev=getApontRev(),revArr=Object.entries(rev).map(([id,v])=>({id,...v})).sort((a,b)=>(b.ts||0)-(a.ts||0))
@@ -584,8 +605,12 @@ async function rAlertas(){
   const zbx=getZbx(),zlast=lsGet('sbi_zbx_last')
   // Inconsistências de contrato — gatilhos da base de conhecimento (reclassificar do C.Custo GERAL)
   const gat=Object.entries(CONTRACT_KB).flatMap(([k,v])=>(v.gatilhos||[]).map(g=>({cli:k,g}))).map(x=>`<div style="display:flex;gap:.4rem;align-items:flex-start;font-size:.68rem;padding:.25rem 0;border-bottom:1px solid #f8fafc;"><span class="tag" style="text-transform:capitalize;flex-shrink:0;">${x.cli}</span><span style="color:#475569;">${esc(x.g)}</span></div>`).join('')
-  return`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(auto.length,'Alertas Ativos',auto.some(a=>a.lv==='critica')?'#ef4444':auto.length?'#f59e0b':'#22c55e','triangle-alert',auto.filter(a=>a.lv==='critica').length+' críticos')}${kpiCard(revArr.filter(a=>!a.verificado).length,'Apontamentos a revisar','#E04622','search-check')}${kpiCard(zbx.url?(zlast?fmt(zlast.count):'0'):'—','Alertas Zabbix',zbx.url?'#7c3aed':'#94a3b8','server')}${kpiCard(custoPorCh>0?fmtR(Math.round(custoPorCh)):'—','Custo/Chamado','#2B4C9B','calculator')}</div>
-<div class="card mb-4">${ST('Alertas Automáticos (FTE · horas 80% · grupo · franquia · checklist · SLA)')}<div style="display:flex;flex-direction:column;gap:.28rem;">${auto.map(alertCard).join('')||'<div style="color:#94a3b8;font-size:.74rem;text-align:center;padding:.68rem;">Sem alertas.</div>'}</div>${D.alertas.length?`<div style="margin-top:.62rem;padding-top:.62rem;border-top:1px solid #f1f5f9;"><div style="font-size:.6rem;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:.38rem;">Manuais (${D.alertas.length})</div><div style="display:flex;flex-direction:column;gap:.23rem;">${D.alertas.map(a=>`<div style="display:flex;align-items:center;gap:.43rem;font-size:.72rem;"><span class="badge badge-r" style="flex-shrink:0;">${a.tipo}</span><span>${esc(a.titulo||'')}${a.descricao?' — '+esc(a.descricao):''}</span><button onclick="dismissAlerta('${a.id}')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#cbd5e1;">✕</button></div>`).join('')}</div></div>`:''}</div>
+  const gc=k=>AG[k].length,gcrit=k=>AG[k].filter(x=>x.lv==='critica').length
+  return`<div style="display:flex;align-items:baseline;gap:.6rem;margin-bottom:.7rem;"><span style="font-size:1rem;font-weight:900;">Alertas ativos</span><span style="font-size:.85rem;font-weight:800;color:${auto.some(a=>a.lv==='critica')?'#ef4444':auto.length?'#f59e0b':'#22c55e'};">${auto.length}</span><span style="font-size:.68rem;color:#94a3b8;">${auto.filter(a=>a.lv==='critica').length} críticos · ${MD.loaded?'Milldesk ao vivo':'dados locais'}</span></div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${['profissional','cliente','usuario','custo'].map(k=>{const m=GRP_META[k];return kpiCard(gc(k),m.lbl,m.cor,m.ic,gcrit(k)?gcrit(k)+' críticos':'sem críticos')}).join('')}</div>
+<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Alertas ativos por categoria</div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">${['profissional','cliente','usuario','custo'].map(grpCard).join('')}</div>
+${D.alertas.length?`<div class="card mb-4">${ST('Alertas manuais ('+D.alertas.length+')')}<div style="display:flex;flex-direction:column;gap:.23rem;">${D.alertas.map(a=>`<div style="display:flex;align-items:center;gap:.43rem;font-size:.72rem;"><span class="badge badge-r" style="flex-shrink:0;">${a.tipo}</span><span>${esc(a.titulo||'')}${a.descricao?' — '+esc(a.descricao):''}</span><button onclick="dismissAlerta('${a.id}')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#cbd5e1;">✕</button></div>`).join('')}</div></div>`:''}
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
 <div class="card">${ST('Zabbix — Alertas de Monitoramento')}${zbx.url?`<div style="font-size:.7rem;color:#64748b;margin-bottom:.5rem;">Servidor: <code style="background:#f1f5f9;padding:0 .25rem;border-radius:.2rem;">${esc(zbx.url)}</code></div><button onclick="zbxSync()" style="display:inline-flex;align-items:center;gap:.3rem;padding:.33rem .72rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.7rem;font-weight:700;cursor:pointer;"><i data-lucide="refresh-cw" style="width:.72rem;height:.72rem;"></i>Sincronizar</button>${zlast?`<div style="margin-top:.6rem;font-size:.68rem;color:#64748b;">Última sync: ${new Date(zlast.ts).toLocaleString('pt-BR')} — <b>${fmt(zlast.count)}</b> problema(s)${zlast.error?` <span style="color:#ef4444;">(${esc(zlast.error)})</span>`:''}</div>${(zlast.items||[]).slice(0,8).map(p=>`<div class="alrt-c" style="background:#ede9fe;border-color:#7c3aed;margin-top:.3rem;"><i data-lucide="server" style="width:.7rem;height:.7rem;color:#7c3aed;flex-shrink:0;margin-top:.1rem;"></i><div style="flex:1;"><div style="font-size:.72rem;font-weight:700;">${esc(p.name||'')}</div><div style="font-size:.64rem;color:#64748b;">${esc(p.host||'')} · sev ${esc(p.severity||'')}</div></div></div>`).join('')}`:'<div style="font-size:.66rem;color:#94a3b8;margin-top:.5rem;">Ainda não sincronizado.</div>'}`:`<div style="font-size:.7rem;color:#64748b;line-height:1.6;">Configure a URL e o token do Zabbix em <button onclick="setSection('admin');setSub('alertcfg')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Admin → Config Alertas</button> para puxar os problemas ativos.</div>`}
 <div style="margin-top:.6rem;background:#fffbeb;border:1px solid #fde68a;border-radius:.4rem;padding:.4rem .6rem;font-size:.63rem;color:#854d0e;">A leitura direta do Zabbix a partir do navegador depende de CORS liberado no servidor Zabbix. Se bloquear, use um proxy/edge function (a arquitetura já está pronta para receber os dados).</div></div>
@@ -619,10 +644,9 @@ window.mdSync=async function(){
   try{
     const per=await fetch(`${base}/showTicketsPerPeriod?start=${start}&end=${end}`).then(r=>r.json())
     if(per&&per.error)throw new Error(per.error)
-    let backlog=[];for(const s of['Aberto','Pendente','Em Execução','Aguardando','Agendado']){try{const d=await fetch(`${base}/showTicketsByStatus?status=${encodeURIComponent(s)}`).then(r=>r.json());if(Array.isArray(d))backlog=backlog.concat(d)}catch(e){}}
     const rawArr=Array.isArray(per)?per:[]
     MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag))
-    const seen={};MD.backlog=backlog.map(mdCompact).filter(t=>{if(seen[t.id])return false;seen[t.id]=1;return true})
+    const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});MD.backlog=Object.values(uniq).filter(t=>mdIsOpen(t.st))
     if(!MES||TIME==='atual')MES=start.slice(0,7)
     mdApplyToD(rawArr)
     MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
@@ -634,24 +658,18 @@ window.mdSync=async function(){
 }
 function mdMetrics(){
   const cfg=getAlertCfg(),diasInat=cfg.dias_inat||3,minRec=Math.max(2,cfg.tickets_rec||3),now=new Date()
-  const T=MD.tickets,B=MD.backlog
-  const byStatus={};T.forEach(t=>byStatus[t.st]=(byStatus[t.st]||0)+1)
-  const fechados=T.filter(t=>!mdIsOpen(t.st)).length
-  // Sem atualização: fila aberta com última data (analysis||start) além de N dias
-  const semAtual=B.filter(t=>mdIsOpen(t.st)).map(t=>{const d=mdDate(t.ana)||mdDate(t.start);const dias=d?Math.floor((now-d)/864e5):null;return{...t,dias}}).filter(t=>t.dias!=null&&t.dias>=diasInat).sort((a,b)=>b.dias-a.dias)
-  // Reincidência: mesmo cc + título normalizado, ≥minRec chamados
-  const grp={};T.forEach(t=>{const k=(t.cc||t.loc)+'§'+mdNorm(t.t);if(!mdNorm(t.t))return;(grp[k]=grp[k]||{loc:t.loc,cc:t.cc,titulo:t.t,ids:[]}).ids.push(t.id)})
+  const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});const U=Object.values(uniq)
+  const byStatus={};U.forEach(t=>byStatus[t.st]=(byStatus[t.st]||0)+1)
+  const fechados=U.filter(t=>!mdIsOpen(t.st)).length,open=U.filter(t=>mdIsOpen(t.st))
+  const semAtual=open.map(t=>{const d=mdDate(t.ana)||mdDate(t.start);const dias=d?Math.floor((now-d)/864e5):null;return{...t,dias}}).filter(t=>t.dias!=null&&t.dias>=diasInat).sort((a,b)=>b.dias-a.dias)
+  const grp={};U.forEach(t=>{const nt=mdNorm(t.t);if(!nt)return;const k=(t.cc||t.loc)+'§'+nt;(grp[k]=grp[k]||{loc:t.loc,cc:t.cc,titulo:t.t,ids:[]}).ids.push(t.id)})
   const reinc=Object.values(grp).filter(g=>g.ids.length>=minRec).sort((a,b)=>b.ids.length-a.ids.length)
-  // Por cliente (cc)
-  const cli={};T.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'—'),emp=c?c.empresa:getClientEmpresa(t.loc);(cli[nome]=cli[nome]||{nome,emp,total:0,aberto:0}).total++;if(mdIsOpen(t.st))cli[nome].aberto++})
+  const cli={};U.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'—'),emp=c?c.empresa:getClientEmpresa(t.loc);(cli[nome]=cli[nome]||{nome,emp,total:0,aberto:0}).total++;if(mdIsOpen(t.st))cli[nome].aberto++})
   const porCliente=Object.values(cli).sort((a,b)=>b.total-a.total)
-  // Por técnico
-  const tec={};T.forEach(t=>{if(!t.ag)return;(tec[t.ag]=tec[t.ag]||{ag:t.ag,lv:t.lv,total:0,fechados:0}).total++;if(!mdIsOpen(t.st))tec[t.ag].fechados++})
+  const tec={};U.forEach(t=>{if(!t.ag)return;(tec[t.ag]=tec[t.ag]||{ag:t.ag,lv:t.lv,total:0,fechados:0}).total++;if(!mdIsOpen(t.st))tec[t.ag].fechados++})
   const porTecnico=Object.values(tec).sort((a,b)=>b.total-a.total)
-  // Top categorias
-  const cat={};T.forEach(t=>{const c=t.cat||'—';cat[c]=(cat[c]||0)+1});const topCat=Object.entries(cat).map(([k,v])=>({cat:k,n:v})).sort((a,b)=>b.n-a.n).slice(0,10)
-  const backlogOpen=B.filter(t=>mdIsOpen(t.st)).length
-  return{total:T.length,fechados,byStatus,backlogOpen,semAtual,reinc,porCliente,porTecnico,topCat}
+  const cat={};U.forEach(t=>{const c=t.cat||'—';cat[c]=(cat[c]||0)+1});const topCat=Object.entries(cat).map(([k,v])=>({cat:k,n:v})).sort((a,b)=>b.n-a.n).slice(0,10)
+  return{total:U.length,fechados,byStatus,backlogOpen:open.length,semAtual,reinc,porCliente,porTecnico,topCat}
 }
 async function rFila(){
   const s=D.sla,[start,end]=mdPeriodRange(),cfg=getAlertCfg()
