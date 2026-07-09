@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SeniorsBI — Apresentação</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0b1220;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;height:100vh;overflow:hidden}
+#stage{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column}
+#frameWrap{flex:1;position:relative;background:#0b1220;overflow:hidden}
+iframe{width:100%;height:100%;border:0;background:#f0f4fa}
+#cap{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(0deg,rgba(11,18,32,.96),rgba(11,18,32,.75) 70%,transparent);padding:1.4rem 2rem 1.6rem;pointer-events:none}
+#chip{display:inline-block;font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#93c5fd;background:rgba(43,76,155,.35);border:1px solid rgba(147,197,253,.4);padding:.2rem .6rem;border-radius:.4rem;margin-bottom:.5rem}
+#txt{font-size:1.35rem;font-weight:600;line-height:1.35;max-width:70rem;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+#prog{position:absolute;top:0;left:0;height:3px;background:linear-gradient(90deg,#2B4C9B,#E04622);width:0;transition:width .3s linear}
+#start{position:fixed;inset:0;background:radial-gradient(circle at 50% 40%,#12203a,#0b1220);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.4rem;z-index:20;text-align:center;padding:2rem}
+#start h1{font-size:2.6rem;font-weight:900;letter-spacing:-.02em}
+#start h1 span{color:#E04622}
+#start p{color:#94a3b8;max-width:38rem;line-height:1.6;font-size:1rem}
+#go{background:#2B4C9B;color:#fff;border:none;border-radius:.7rem;padding:.9rem 2.2rem;font-size:1.05rem;font-weight:800;cursor:pointer;box-shadow:0 8px 30px rgba(43,76,155,.4);transition:transform .15s}
+#go:hover{transform:translateY(-2px)}
+.hint{font-size:.8rem;color:#64748b}
+#logo{width:70px;height:52px}
+#badge{position:absolute;top:1rem;right:1.4rem;font-size:.7rem;font-weight:800;color:#93c5fd;opacity:.8;z-index:5}
+#skip{position:absolute;bottom:1.2rem;right:1.6rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#cbd5e1;border-radius:.4rem;padding:.3rem .7rem;font-size:.72rem;cursor:pointer;z-index:6;pointer-events:auto}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="prog"></div>
+  <div id="badge">SeniorsBI · demo</div>
+  <div id="frameWrap"><iframe id="app" src="index.html"></iframe>
+    <div id="cap"><div id="chip"></div><div id="txt"></div></div>
+    <button id="skip" onclick="next()">Pular ▸</button>
+  </div>
+</div>
+
+<div id="start">
+  <svg id="logo" viewBox="0 0 80 56"><ellipse cx="40" cy="28" rx="38" ry="24" fill="#2B4C9B" stroke="#E04622" stroke-width="3"/><text x="40" y="27" text-anchor="middle" font-size="19" font-weight="900" fill="#fff" font-family="Arial Black,Arial">4</text><text x="40" y="41" text-anchor="middle" font-size="9" font-weight="700" fill="#93c5fd" font-family="Arial">SENIORS</text></svg>
+  <h1>Seniors<span>BI</span></h1>
+  <p>Um tour narrado de 1 minuto pelo painel de operações — Executiva, Técnica e Admin, com dados reais ao vivo.</p>
+  <button id="go" onclick="begin()">▶ Iniciar apresentação</button>
+  <div class="hint">Dica: abra no <b>Microsoft Edge</b> para narração com voz masculina (Antônio). Para os dados reais, conecte o Milldesk uma vez no painel antes.</div>
+</div>
+
+<script>
+const F=document.getElementById('app');
+const chip=document.getElementById('chip'),txt=document.getElementById('txt'),prog=document.getElementById('prog');
+// Sequência: [seção, sub, título-chip, narração]
+const STEPS=[
+ ['exec','geral','Executiva · Visão Geral','SeniorsBI, o painel de operações da 4 Seniors, ao vivo. Na visão geral executiva você tem receita, custo, margem, total de chamados e os alertas mais relevantes para a diretoria. O resultado da área técnica aparece separado do resultado da empresa, além da posição macro de cada empresa do grupo. E tudo pode ser filtrado por dia, semana ou mês.'],
+ ['exec','clientes','Executiva · Por Clientes','Para se aprofundar, a tela Por Clientes traz cada contrato com receita, custo, margem, uso da franquia e SLA.'],
+ ['exec','tecnico','Executiva · Por Técnico','Por Técnico, você vê horas trabalhadas, FTE, custo e alocação de cada profissional.'],
+ ['exec','alertas','Executiva · Alertas','Os alertas executivos concentram só o macro: críticos, inconsistências em aberto e a margem de cada empresa.'],
+ ['tech','fila','Técnica · Fila de Chamados','Na área técnica, a fila de chamados: abertos, fechados, fora do SLA, sem atualização e reincidentes, direto do Milldesk.'],
+ ['tech','equipe','Técnica · Equipe','Em Equipe, a produtividade do time e a matriz de conhecimento, apontando os riscos de dependência de uma única pessoa.'],
+ ['tech','clientes','Técnica · Clientes','Aqui, horas e franquia por cliente, e as horas a cobrar com controle de aprovação por e-mail.'],
+ ['tech','historico','Técnica · Histórico','O histórico mostra a evolução de chamados, horas e FTE, por mês, por técnico e por cliente.'],
+ ['tech','incid','Técnica · Inconsistências','As inconsistências apontam chamados fora do padrão de horas ou de contrato, com contexto, para o líder técnico tratar.'],
+ ['tech','alertas','Técnica · Alertas','Os alertas técnicos completos, incluindo o Zabbix, com quedas de link e de equipamento em tempo real.'],
+ ['tech','checklists','Técnica · Checklists','E os checklists, diário e mensal, ticados por cliente.'],
+ ['admin','contratos','Admin · Contratos','No Admin fica a base: os contratos, com escopo, tecnologias, gatilhos e SLA.'],
+ ['admin','funcionarios','Admin · Funcionários','Os funcionários, com salários e alocação.'],
+ ['admin','custos','Admin · Custos','E os custos por departamento, que revelam o lucro real da empresa, não só da área técnica.'],
+ ['admin','alertcfg','Admin · Configurações','Além de SLA, integrações e configurações de alerta, tudo em um só lugar.'],
+ ['exec','geral','SeniorsBI','SeniorsBI. Decisão com dados, em tempo real.']
+];
+let idx=-1,voice=null,speaking=false;
+
+function pickVoice(){
+  const vs=speechSynthesis.getVoices();
+  return vs.find(v=>/pt.?BR/i.test(v.lang)&&/ant[oô]nio|daniel|male|masc|jo[aã]o|felipe|ricardo|thiago/i.test(v.name))
+    || vs.find(v=>/pt.?BR/i.test(v.lang)) || vs.find(v=>/^pt/i.test(v.lang)) || vs[0] || null;
+}
+function nav(sec,sub){
+  try{const w=F.contentWindow;if(w&&w.setSection){w.setSection(sec);if(w.setSub)w.setSub(sub);}}catch(e){}
+}
+function speak(t,cb){
+  try{
+    const u=new SpeechSynthesisUtterance(t);
+    if(voice)u.voice=voice; u.lang='pt-BR'; u.rate=1.06; u.pitch=.96;
+    u.onend=cb; u.onerror=cb;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){ setTimeout(cb, 3500); }
+}
+function next(){
+  idx++;
+  if(idx>=STEPS.length){ finish(); return; }
+  const [sec,sub,title,narr]=STEPS[idx];
+  nav(sec,sub);
+  chip.textContent=title; txt.textContent=narr;
+  prog.style.width=Math.round((idx+1)/STEPS.length*100)+'%';
+  // fallback de tempo caso a fala não dispare onend
+  const fb=setTimeout(()=>{ if(!advanced){ advanced=true; next(); } }, Math.min(9000, 2200+narr.length*45));
+  let advanced=false;
+  speak(narr, ()=>{ if(!advanced){ advanced=true; clearTimeout(fb); setTimeout(next, 400); } });
+}
+function finish(){
+  chip.textContent=''; txt.textContent='Obrigado. — SeniorsBI';
+  prog.style.width='100%';
+}
+function begin(){
+  document.getElementById('start').style.display='none';
+  // garante vozes carregadas
+  voice=pickVoice();
+  if(!voice){ speechSynthesis.onvoiceschanged=()=>{voice=pickVoice();}; }
+  // dá um tempinho pro iframe/app carregar antes de começar
+  setTimeout(next, 1200);
+}
+window.begin=begin; window.next=next;
+</script>
+</body>
+</html>
