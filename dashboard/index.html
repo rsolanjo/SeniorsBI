@@ -354,6 +354,25 @@ const mdNorm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 const mdCompact=r=>({id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:r.agent,dep:r.department,lv:r.level,st:r.status,start:r.start,end:r.end,ana:r.analysis,reab:r.reopening,cat:r.category,pri:r.priority})
 const mdIsOpen=st=>!/fechad|resolvid|cancelad/i.test(st||'')
 function mdContractForCC(cc){return CONTRACTS.find(c=>String(c.cc)===String(cc))||null}
+const mdWorkedMin=s=>{const v=parseFloat(String(s==null?'':s).replace(',','.'));return isNaN(v)?0:Math.round(v*60)}
+const _topKey=o=>Object.entries(o||{}).sort((a,b)=>b[1]-a[1])[0]?.[0]
+function matchFuncByAgent(agent){const t=normName(agent);if(!t)return null;return FUNCS.find(f=>{const n=normName(f.nome);return n&&(n===t||t.includes(n)||n.includes(t))})||null}
+// Deriva D.recursos e D.clientes a partir dos registros crus do Milldesk (worked_hour por atividade)
+function mdApplyToD(raw){
+  const recs={},clis={}
+  raw.forEach(r=>{
+    if(isExcludedTech(r.agent))return
+    const wm=mdWorkedMin(r.worked_hour)
+    if(r.agent){const ro=recs[r.agent]=recs[r.agent]||{nome:r.agent,trab_minutos:0,ids:new Set(),lv:{}};ro.trab_minutos+=wm;ro.ids.add(r.id);if(r.level)ro.lv[r.level]=(ro.lv[r.level]||0)+1}
+    const loc=r.location||'—',cc=mdCC(loc),ct=mdContractForCC(cc),nome=ct?ct.cliente:loc
+    const co=clis[nome]=clis[nome]||{nome,horas_minutos:0,ids:new Set()};co.horas_minutos+=wm;co.ids.add(r.id)
+  })
+  D.recursos=Object.values(recs).map(ro=>{const f=matchFuncByAgent(ro.nome);return{nome:f?f.nome:ro.nome,nivel:f?f.nivel:(_topKey(ro.lv)||'—'),equipe:f?f.equipe:'',trab_minutos:ro.trab_minutos,avulsa_minutos:0,cap_minutos:(f?f.cap_horas:168)*60,chamados:ro.ids.size,mes_slug:MES}}).sort((a,b)=>b.trab_minutos-a.trab_minutos)
+  D.clientes=Object.values(clis).map(c=>({nome:c.nome,horas_minutos:c.horas_minutos,chamados:c.ids.size})).sort((a,b)=>b.horas_minutos-a.horas_minutos)
+  D.totalHoras=D.recursos.reduce((s,r)=>s+r.trab_minutos,0);D.totalCap=D.recursos.reduce((s,r)=>s+r.cap_minutos,0)
+  D.totalChamados=D.clientes.reduce((s,c)=>s+c.chamados,0);D.fte=pct(D.totalHoras,D.totalCap)
+  D.skills=D.skills||[];D.alertas=D.alertas||[];if(!('sla'in D))D.sla=null;if(!('sat'in D))D.sat=null;D._src='milldesk'
+}
 const todayISO=()=>new Date().toISOString().slice(0,10)
 const RISK_KW=['erro','falha','offline','down','crítico','critico','pendente','vencido','risco','sem backup','backup falh','não','nao ','indisponível','indisponivel','alerta','degradad','lento','estourou','expirou','expirad']
 const hasRisk=t=>{const s=(t||'').toLowerCase();return RISK_KW.some(k=>s.includes(k))}
@@ -482,7 +501,9 @@ function renderContent(){
 
 async function loadMeses(){const{data}=await sb.from('meses').select('slug,competencia,updated_at').order('slug',{ascending:false});MESES_LIST=data||[];const sel=document.getElementById('selMes');sel.innerHTML=MESES_LIST.length?MESES_LIST.map(m=>`<option value="${m.slug}">${m.competencia}</option>`).join(''):'<option>Sem dados</option>';if(MESES_LIST.length){MES=MESES_LIST[0].slug;sel.value=MES}}
 async function loadMonth(slug){
-  if(!slug)return;MES=slug;D={}
+  if(!slug)return
+  if(getMD().key){MES=slug;const el=document.getElementById('selMes');if(el)el.value=slug;return mdSync()}
+  MES=slug;D={}
   const[rec,cli,sla,sat,prem,sk,alt]=await Promise.all([sb.from('recursos').select('*').eq('mes_slug',slug),sb.from('clientes').select('*').eq('mes_slug',slug),sb.from('sla').select('*').eq('mes_slug',slug).maybeSingle(),sb.from('satisfacao').select('*').eq('mes_slug',slug).maybeSingle(),sb.from('premissas').select('*'),sb.from('skills').select('*'),sb.from('alertas').select('*').eq('mes_slug',slug).eq('resolvido',false)])
   D.recursos=(rec.data||[]).filter(r=>!isExcludedTech(r.nome));D.clientes=(cli.data||[]).sort((a,b)=>b.horas_minutos-a.horas_minutos)
   D.sla=sla.data||null;D.sat=sat.data||null;D.premissas=prem.data||[];D.skills=sk.data||[];D.alertas=alt.data||[]
@@ -599,10 +620,15 @@ window.mdSync=async function(){
     const per=await fetch(`${base}/showTicketsPerPeriod?start=${start}&end=${end}`).then(r=>r.json())
     if(per&&per.error)throw new Error(per.error)
     let backlog=[];for(const s of['Aberto','Pendente','Em Execução','Aguardando','Agendado']){try{const d=await fetch(`${base}/showTicketsByStatus?status=${encodeURIComponent(s)}`).then(r=>r.json());if(Array.isArray(d))backlog=backlog.concat(d)}catch(e){}}
-    MD.tickets=(Array.isArray(per)?per:[]).map(mdCompact).filter(t=>!isExcludedTech(t.ag))
+    const rawArr=Array.isArray(per)?per:[]
+    MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag))
     const seen={};MD.backlog=backlog.map(mdCompact).filter(t=>{if(seen[t.id])return false;seen[t.id]=1;return true})
+    if(!MES||TIME==='atual')MES=start.slice(0,7)
+    mdApplyToD(rawArr)
     MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
-    toast(`Milldesk: ${MD.tickets.length} chamados no período, ${MD.backlog.length} na fila.`)
+    document.getElementById('lastUpdate').textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
+    const _ld=document.getElementById('liveDot'),_ls=document.getElementById('liveStatus');if(_ld)_ld.style.background='#22c55e';if(_ls)_ls.textContent='Milldesk'
+    toast(`Milldesk: ${MD.tickets.length} chamados, ${minToHM(D.totalHoras)}h, ${D.recursos.length} técnicos.`)
   }catch(e){MD.loading=false;toast('Falha Milldesk: '+e.message,false)}
   renderContent()
 }
@@ -773,7 +799,11 @@ async function dismissAlerta(id){await sb.from('alertas').update({resolvido:true
 function initRealtime(){sb.channel('sbi-live').on('postgres_changes',{event:'*',schema:'public',table:'meses'},async()=>{await loadMeses();if(MESES_LIST.length){MES=MESES_LIST[0].slug;await loadMonth(MES)}}).on('postgres_changes',{event:'*',schema:'public',table:'recursos'},()=>loadMonth(MES)).on('postgres_changes',{event:'*',schema:'public',table:'clientes'},()=>loadMonth(MES)).subscribe(st=>{const d=document.getElementById('liveDot'),l=document.getElementById('liveStatus');if(st==='SUBSCRIBED'){d.style.background='#22c55e';l.textContent='Live'}else{d.style.background='#f59e0b';l.textContent='Reconectando…'}})}
 
 async function boot(){
-  try{seedLocalData();await loadMeses();renderSubTabs();if(MES)await loadMonth(MES);else document.getElementById('main').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:16rem;gap:.62rem;color:#94a3b8;font-size:.875rem;text-align:center;">Banco vazio.<br><code style="font-size:.74rem;background:#f1f5f9;padding:.16rem .43rem;border-radius:.27rem;margin-top:.32rem;">push-mes.ps1 -Slug 2026-07</code></div>`;initRealtime();startRot()}
+  try{seedLocalData();await loadMeses();renderSubTabs()
+    if(getMD().key){mdSync()}
+    else if(MES)await loadMonth(MES)
+    else document.getElementById('main').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:16rem;gap:.62rem;color:#94a3b8;font-size:.875rem;text-align:center;">Sem dados. Configure a chave Milldesk em <b>Admin → Config Alertas</b> para carregar ao vivo,<br>ou rode <code style="font-size:.74rem;background:#f1f5f9;padding:.16rem .43rem;border-radius:.27rem;">push-mes.ps1</code>.</div>`
+    initRealtime();startRot()}
   catch(e){document.getElementById('main').innerHTML=`<div class="card" style="border-left:3px solid #ef4444;color:#ef4444;padding:1.25rem;font-size:.875rem;">Erro: ${esc(e.message)}</div>`}
   finally{document.getElementById('loading').style.display='none';document.getElementById('app').classList.remove('hidden');lucide.createIcons()}
 }
