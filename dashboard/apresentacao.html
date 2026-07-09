@@ -4,132 +4,164 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SeniorsBI — Apresentação</title>
 <style>
+:root{--brand:#2B4C9B;--accent:#E04622}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0b1220;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;height:100vh;overflow:hidden}
-#stage{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column}
-#frameWrap{flex:1;position:relative;background:#0b1220;overflow:hidden}
-iframe{width:100%;height:100%;border:0;background:#f0f4fa;transform-origin:center center;transition:transform 1.6s cubic-bezier(.33,0,.2,1)}
-#cap{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(0deg,rgba(11,18,32,.96),rgba(11,18,32,.75) 70%,transparent);padding:1.4rem 2rem 1.6rem;pointer-events:none}
-#chip{display:inline-block;font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#93c5fd;background:rgba(43,76,155,.35);border:1px solid rgba(147,197,253,.4);padding:.2rem .6rem;border-radius:.4rem;margin-bottom:.5rem}
-#txt{font-size:1.35rem;font-weight:600;line-height:1.35;max-width:70rem;text-shadow:0 2px 8px rgba(0,0,0,.6)}
-#prog{position:absolute;top:0;left:0;height:3px;background:linear-gradient(90deg,#2B4C9B,#E04622);width:0;transition:width .3s linear}
-#start{position:fixed;inset:0;background:radial-gradient(circle at 50% 40%,#12203a,#0b1220);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.4rem;z-index:20;text-align:center;padding:2rem}
-#start h1{font-size:2.6rem;font-weight:900;letter-spacing:-.02em}
-#start h1 span{color:#E04622}
-#start p{color:#94a3b8;max-width:38rem;line-height:1.6;font-size:1rem}
-#go{background:#2B4C9B;color:#fff;border:none;border-radius:.7rem;padding:.9rem 2.2rem;font-size:1.05rem;font-weight:800;cursor:pointer;box-shadow:0 8px 30px rgba(43,76,155,.4);transition:transform .15s}
-#go:hover{transform:translateY(-2px)}
-.hint{font-size:.8rem;color:#64748b}
-#logo{width:70px;height:52px}
-#badge{position:absolute;top:1rem;right:1.4rem;font-size:.7rem;font-weight:800;color:#93c5fd;opacity:.8;z-index:5}
-#skip{position:absolute;bottom:1.2rem;right:1.6rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#cbd5e1;border-radius:.4rem;padding:.3rem .7rem;font-size:.72rem;cursor:pointer;z-index:6;pointer-events:auto}
+body{background:#0a0f1c;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;height:100vh;overflow:hidden}
+#stage{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;background:radial-gradient(1200px 600px at 50% -10%,#16233f,#0a0f1c)}
+#frameWrap{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:18px 44px 0}
+#frameInner{width:100%;max-width:1360px;height:100%;border-radius:14px 14px 0 0;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5);background:#f0f4fa;position:relative}
+iframe{width:100%;height:100%;border:0;background:#f0f4fa;display:block}
+#cap{position:absolute;left:0;right:0;bottom:0;padding:26px 40px 30px;background:linear-gradient(0deg,rgba(10,15,28,.97) 8%,rgba(10,15,28,.7) 55%,transparent);pointer-events:none;transform:translateY(8px);opacity:0;transition:transform .5s cubic-bezier(.2,.8,.2,1),opacity .5s}
+#cap.show{transform:translateY(0);opacity:1}
+#chip{display:inline-block;font-size:.7rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#9fc0ff;background:rgba(43,76,155,.4);border:1px solid rgba(159,192,255,.35);padding:.22rem .7rem;border-radius:.5rem;margin-bottom:.6rem}
+#txt{font-size:1.4rem;font-weight:600;line-height:1.4;max-width:60rem;text-shadow:0 2px 12px rgba(0,0,0,.7)}
+/* Barra de controles estilo player */
+#bar{display:flex;align-items:center;gap:14px;padding:10px 24px;background:#0a0f1c;border-top:1px solid rgba(255,255,255,.06)}
+.ctrl{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#e7edf7;width:38px;height:38px;border-radius:10px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,transform .1s}
+.ctrl:hover{background:rgba(255,255,255,.16)}.ctrl:active{transform:scale(.94)}
+.ctrl.big{width:46px;height:46px;background:var(--brand);border-color:var(--brand);font-size:17px}
+.ctrl.big:hover{background:#3559ad}
+#track{flex:1;height:6px;background:rgba(255,255,255,.12);border-radius:99px;overflow:hidden;cursor:pointer}
+#fill{height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--accent));transition:width .4s linear}
+#count{font-size:.72rem;color:#8ea2c4;min-width:52px;text-align:right;font-variant-numeric:tabular-nums}
+#skip{background:none;border:none;color:#8ea2c4;font-size:.75rem;cursor:pointer;font-weight:700}
+#skip:hover{color:#fff}
+/* Intro */
+#intro{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;padding:2rem;
+  background:radial-gradient(900px 500px at 50% 30%,#17284a,#080d18);overflow:hidden}
+#intro::before{content:"";position:absolute;inset:-2px;background:
+  radial-gradient(500px 300px at 15% 20%,rgba(43,76,155,.35),transparent 60%),
+  radial-gradient(500px 300px at 85% 80%,rgba(224,70,34,.22),transparent 60%);animation:drift 12s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate(30px,-20px) scale(1.05)}}
+.logos{display:flex;gap:16px;align-items:center;justify-content:center;margin-bottom:6px;opacity:0;transform:translateY(14px);animation:rise .8s .1s forwards}
+.logos .pill{background:#fff;border-radius:12px;padding:10px 14px;height:56px;display:flex;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.logos img{height:34px;width:auto;object-fit:contain;display:block}
+#intro h1{font-size:3.2rem;font-weight:900;letter-spacing:-.02em;opacity:0;transform:translateY(14px);animation:rise .8s .28s forwards}
+#intro h1 span{color:var(--accent)}
+#intro p{color:#a9b8d4;max-width:40rem;line-height:1.65;font-size:1.05rem;opacity:0;transform:translateY(14px);animation:rise .8s .42s forwards}
+#go{margin-top:6px;background:var(--brand);color:#fff;border:none;border-radius:.8rem;padding:1rem 2.4rem;font-size:1.1rem;font-weight:800;cursor:pointer;
+  box-shadow:0 14px 40px rgba(43,76,155,.5);opacity:0;transform:translateY(14px);animation:rise .8s .56s forwards;transition:transform .15s}
+#go:hover{transform:translateY(-3px)}
+.hint{font-size:.82rem;color:#5f7196;max-width:42rem;line-height:1.5;opacity:0;animation:fade 1s 1s forwards}
+@keyframes rise{to{opacity:1;transform:translateY(0)}}@keyframes fade{to{opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 <div id="stage">
-  <div id="prog"></div>
-  <div id="badge">SeniorsBI · demo</div>
-  <div id="frameWrap"><iframe id="app" src="index.html"></iframe>
+  <div id="frameWrap"><div id="frameInner"><iframe id="app" src="index.html"></iframe>
     <div id="cap"><div id="chip"></div><div id="txt"></div></div>
-    <button id="skip" onclick="next()">Pular ▸</button>
+  </div></div>
+  <div id="bar">
+    <button class="ctrl" onclick="prev()" title="Anterior">⏮</button>
+    <button class="ctrl big" id="pp" onclick="togglePlay()" title="Pausar/Continuar">⏸</button>
+    <button class="ctrl" onclick="next()" title="Próximo">⏭</button>
+    <div id="track" onclick="seekBar(event)"><div id="fill"></div></div>
+    <span id="count">0 / 0</span>
+    <button id="skip" onclick="skip()">Pular tour ▸</button>
   </div>
 </div>
 
-<div id="start">
-  <svg id="logo" viewBox="0 0 80 56"><ellipse cx="40" cy="28" rx="38" ry="24" fill="#2B4C9B" stroke="#E04622" stroke-width="3"/><text x="40" y="27" text-anchor="middle" font-size="19" font-weight="900" fill="#fff" font-family="Arial Black,Arial">4</text><text x="40" y="41" text-anchor="middle" font-size="9" font-weight="700" fill="#93c5fd" font-family="Arial">SENIORS</text></svg>
+<div id="intro">
+  <div class="logos">
+    <div class="pill"><img src="4sr.png" alt="4Seniors"></div>
+    <div class="pill"><img src="s4sys.jpg" alt="S4SYS"></div>
+    <div class="pill"><img src="portovirtual.png" alt="Porto Virtual"></div>
+  </div>
   <h1>Seniors<span>BI</span></h1>
-  <p>Um tour narrado de 1 minuto pelo painel de operações — Executiva, Técnica e Admin, com dados reais ao vivo.</p>
+  <p>O painel de operações do Grupo 4 Seniors. Um tour narrado, com dados reais ao vivo — do executivo ao técnico.</p>
   <button id="go" onclick="begin()">▶ Iniciar apresentação</button>
-  <div class="hint">Dica: abra no <b>Microsoft Edge</b> para a narração com voz feminina neural (Francisca), bem fluida. Para os dados reais, conecte o Milldesk uma vez no painel antes.</div>
+  <div class="hint">Dica: abra no <b>Microsoft Edge</b> para a narração com voz feminina neural (Francisca). Para os dados reais, conecte o Milldesk uma vez no painel antes.</div>
 </div>
 
 <script>
-const F=document.getElementById('app');
-const chip=document.getElementById('chip'),txt=document.getElementById('txt'),prog=document.getElementById('prog');
-// Sequência: [seção, sub, título-chip, narração]. A Visão Geral executiva é a mais detalhada.
-// [seção, sub, título, narração, foco(fração 0-1 da rolagem), zoom]
-const STEPS=[
- ['exec','geral','Executiva · Visão Geral','Este é o SeniorsBI, o painel de operações da 4 Seniors, com dados ao vivo. Vamos começar pela visão geral executiva, a tela mais importante para a diretoria.',0,1.02],
- ['exec','geral','Executiva · Visão Geral','No topo, os números que mais importam: a receita total dos contratos, o custo da equipe, a margem global, o total de chamados no período e a quantidade de alertas ativos.',0,1.14],
- ['exec','geral','Executiva · Visão Geral','Logo abaixo, o resultado aparece separado em duas visões. À esquerda, a área técnica: receita menos os salários do time, que é a área que gera a receita. À direita, a empresa inteira: receita menos todos os custos, incluindo os outros departamentos.',0.28,1.16],
- ['exec','geral','Executiva · Visão Geral','Assim, num olhar, o executivo entende se a margem está sendo pressionada pela área técnica ou pelas demais áreas da empresa.',0.28,1.16],
- ['exec','geral','Executiva · Visão Geral','Em seguida, a posição macro de cada empresa do grupo: 4 Seniors, S4SYS e Porto Virtual, cada uma com sua receita, custo e margem. E tudo pode ser filtrado por dia, semana, mês ou pelos últimos doze meses.',0.52,1.12],
- ['exec','clientes','Executiva · Por Clientes','Para aprofundar, a tela Por Clientes detalha cada contrato: horas, uso da franquia, receita, custo, margem e SLA.',0.12,1.12],
- ['exec','tecnico','Executiva · Por Técnico','Em Por Técnico, você vê horas trabalhadas, FTE, custo e alocação de cada profissional.',0.12,1.12],
- ['exec','alertas','Executiva · Alertas','Os alertas executivos concentram apenas o essencial: os críticos, as inconsistências em aberto e a margem por empresa.',0.05,1.1],
- ['tech','fila','Técnica · Fila de Chamados','Na área técnica, a fila de chamados: abertos, fechados, fora do SLA, sem atualização e reincidentes, direto do Milldesk, com as horas de cada cliente e técnico.',0.1,1.1],
- ['tech','equipe','Técnica · Equipe','Em Equipe, a produtividade do time e a matriz de conhecimento, que aponta em vermelho os riscos de depender de uma única pessoa.',0.4,1.12],
- ['tech','clientes','Técnica · Clientes','Aqui, as horas e a franquia por cliente, e as horas a cobrar, com controle de aprovação por e-mail.',0.12,1.12],
- ['tech','historico','Técnica · Histórico','O histórico mostra a evolução de chamados, horas e produtividade, mês a mês, por técnico e por cliente.',0.15,1.1],
- ['tech','incid','Técnica · Inconsistências','As inconsistências apontam chamados fora do padrão de horas ou de contrato, com contexto, para o líder técnico tratar.',0.12,1.12],
- ['tech','alertas','Técnica · Alertas','Os alertas técnicos completos, incluindo o Zabbix, com quedas de link e de equipamento em tempo real.',0.4,1.1],
- ['admin','contratos','Admin · Contratos','No Admin fica a base do negócio: os contratos, com escopo, tecnologias, gatilhos e SLA.',0.1,1.1],
- ['admin','custos','Admin · Custos','E os custos por departamento, que revelam o lucro real da empresa, não apenas o da área técnica.',0.12,1.12],
- ['exec','geral','SeniorsBI','O SeniorsBI. Decisão com dados, em tempo real.',0,1.02]
-];
-let idx=0,voice=null,running=false;
+const F=document.getElementById('app'),chip=document.getElementById('chip'),txt=document.getElementById('txt'),cap=document.getElementById('cap');
+const fill=document.getElementById('fill'),count=document.getElementById('count'),pp=document.getElementById('pp');
 
-// Pronúncia: "SeniorsBI" falado como em inglês (Seniors B-I)
-function speechText(t){return String(t).replace(/SeniorsBI/gi,'Siniôrs Bí Ái').replace(/\bBI\b/g,'Bí Ái');}
-function pickVoice(){
-  const vs=speechSynthesis.getVoices()||[];
-  return vs.find(v=>/pt.?BR/i.test(v.lang)&&/francisca/i.test(v.name))            // Edge neural feminina (mais fluida)
-    || vs.find(v=>/pt.?BR/i.test(v.lang)&&/natural|online/i.test(v.name)&&/female|femin|francisca|thalita|brenda/i.test(v.name))
-    || vs.find(v=>/pt.?BR/i.test(v.lang)&&/google/i.test(v.name))                 // Chrome feminina
-    || vs.find(v=>/pt.?BR/i.test(v.lang)&&/maria|femin|female/i.test(v.name))
-    || vs.find(v=>/pt.?BR/i.test(v.lang)) || vs.find(v=>/^pt/i.test(v.lang)) || vs[0] || null;
-}
-function nav(sec,sub){
-  try{const w=F.contentWindow;if(w&&typeof w.setSection==='function'){w.setSection(sec);if(typeof w.setSub==='function')w.setSub(sub);}}catch(e){}
-}
-function focusOn(frac,zoom){
-  try{
-    const m=F.contentDocument&&F.contentDocument.getElementById('main');
-    if(m){const top=Math.max(0,(m.scrollHeight-m.clientHeight)*(frac||0));m.scrollTo({top,behavior:'smooth'});}
-    F.style.transformOrigin='center '+((frac||0)<0.34?'top':(frac||0)>0.6?'bottom':'center');
-    F.style.transform='scale('+(zoom||1.08)+')';
-  }catch(e){}
-}
-function speakNow(t,cb){
+// [seção, sub, título, narração, alvo-do-foco(selector ou null)]
+const STEPS=[
+ ['exec','geral','SeniorsBI','Este é o SeniorsBI, o painel de operações do Grupo 4 Seniors, com dados reais ao vivo, vindos do Milldesk e do Zabbix.',null],
+ ['exec','geral','Duas visões','O painel tem duas visões que se completam. A visão executiva traz o resultado do negócio: receita, custo e margem, para a diretoria decidir. A visão técnica traz a operação: chamados, horas e riscos, para o time entregar. A mesma verdade, em duas linguagens.',null],
+ ['exec','geral','Executiva · Visão Geral','Começamos pela visão geral executiva. No topo, os números que mais importam: receita total, custo da equipe, margem, total de chamados e alertas ativos.','#demo-kpis'],
+ ['exec','geral','Executiva · Resultado','Logo abaixo, o resultado aparece separado. À esquerda, a área técnica: receita menos os salários do time, que é a área que gera a receita.','#demo-pnl'],
+ ['exec','geral','Executiva · Resultado','À direita, a empresa inteira: receita menos todos os custos, incluindo os outros departamentos. Assim, num olhar, o executivo entende se a margem é pressionada pela área técnica ou pelas demais áreas.','#demo-pnl'],
+ ['exec','geral','Executiva · Empresas','E a posição de cada empresa do grupo: 4 Seniors, S4SYS e Porto Virtual, cada uma com sua receita, custo e margem. Tudo filtrável por dia, semana, mês ou os últimos doze meses.','#demo-empresas'],
+ ['exec','clientes','Executiva · Por Clientes','Para aprofundar, a tela Por Clientes detalha cada contrato: tipo de atendimento, horas, uso da franquia, receita, custo, margem e SLA.',null],
+ ['exec','tecnico','Executiva · Por Técnico','Em Por Técnico, o executivo vê horas trabalhadas, FTE, custo e alocação de cada profissional.',null],
+ ['exec','alertas','Executiva · Alertas','Os alertas executivos concentram só o macro: os críticos, as inconsistências em aberto e a margem por empresa.',null],
+ ['tech','fila','Técnica · Fila de Chamados','Agora a visão técnica. A fila de chamados: abertos, fechados, fora do SLA, sem atualização e reincidentes, ao vivo, com as horas de cada cliente e técnico.',null],
+ ['tech','equipe','Técnica · Equipe','Em Equipe, a produtividade do time e a matriz de conhecimento, que aponta em vermelho os riscos de depender de uma única pessoa.',null],
+ ['tech','clientes','Técnica · Clientes','As horas e a franquia por cliente, e as horas a cobrar, com controle de aprovação por e-mail.',null],
+ ['tech','incid','Técnica · Inconsistências','As inconsistências apontam chamados fora do padrão de horas ou de contrato, com contexto, para o líder técnico tratar.',null],
+ ['tech','alertas','Técnica · Alertas','E os alertas técnicos, incluindo o Zabbix, com quedas de link e de equipamento por cliente, em tempo real.',null],
+ ['admin','custos','Admin · Custos','No Admin, os custos por departamento revelam o lucro real da empresa, não apenas o da área técnica.',null],
+ ['exec','geral','SeniorsBI','SeniorsBI. Do executivo ao técnico, decisão com dados, em tempo real.',null]
+];
+
+let idx=0, voice=null, paused=false, running=false, safety=null;
+
+// Pronúncia: "SeniorsBI" como em inglês (Seniors B-I)
+function speechText(t){return String(t).replace(/SeniorsBI/gi,'Siniôrs Bí Ái');}
+function pickVoice(){const vs=speechSynthesis.getVoices()||[];
+  return vs.find(v=>/pt.?BR/i.test(v.lang)&&/francisca/i.test(v.name))
+    || vs.find(v=>/pt.?BR/i.test(v.lang)&&/(natural|online)/i.test(v.name)&&/female|femin|thalita|brenda|francisca/i.test(v.name))
+    || vs.find(v=>/pt.?BR/i.test(v.lang)&&/google/i.test(v.name))
+    || vs.find(v=>/pt.?BR/i.test(v.lang)&&/maria|female|femin/i.test(v.name))
+    || vs.find(v=>/pt.?BR/i.test(v.lang)) || vs.find(v=>/^pt/i.test(v.lang)) || vs[0] || null;}
+
+function nav(sec,sub){try{const w=F.contentWindow;if(w&&typeof w.setSection==='function'){w.setSection(sec);if(typeof w.setSub==='function')w.setSub(sub);}}catch(e){}}
+function ensureSpotStyle(){try{const d=F.contentDocument;if(d&&d.head&&!d.getElementById('__spotcss')){const st=d.createElement('style');st.id='__spotcss';st.textContent='#main.__dim > *:not(.__spot){opacity:.14;filter:saturate(.45)}#main > *{transition:opacity .7s ease,filter .7s ease,box-shadow .7s ease,transform .7s ease}.__spot{box-shadow:0 0 0 3px rgba(43,76,155,.55),0 26px 70px rgba(0,0,0,.22);border-radius:.9rem;transform:scale(1.012);position:relative;z-index:4}';d.head.appendChild(st);}}catch(e){}}
+function focusTarget(sel){try{const d=F.contentDocument,m=d&&d.getElementById('main');if(!m)return;ensureSpotStyle();m.querySelectorAll('.__spot').forEach(e=>e.classList.remove('__spot'));if(sel){const el=d.querySelector(sel);if(el){m.classList.add('__dim');el.classList.add('__spot');el.scrollIntoView({behavior:'smooth',block:'center'});return;}}m.classList.remove('__dim');m.scrollTo({top:0,behavior:'smooth'});}catch(e){}}
+
+function clearSafety(){if(safety){clearTimeout(safety);safety=null;}}
+function speakCurrent(){
+  const narr=STEPS[idx][3];
   try{
     speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(speechText(t));
+    const u=new SpeechSynthesisUtterance(speechText(narr));
     if(voice)u.voice=voice; u.lang='pt-BR'; u.rate=1.0; u.pitch=1.02;
-    u.onend=cb; u.onerror=cb;
-    setTimeout(()=>{ try{ speechSynthesis.speak(u); }catch(e){ cb(); } }, 140);
-  }catch(e){ setTimeout(cb, 500); }
+    u.onend=()=>{ if(!paused) advance(); };
+    u.onerror=()=>{ if(!paused) advance(); };
+    clearSafety(); safety=setTimeout(()=>{ if(!paused) advance(); }, Math.max(7000, narr.length*95));
+    setTimeout(()=>{ try{ speechSynthesis.speak(u); }catch(e){} }, 140);
+  }catch(e){ clearSafety(); safety=setTimeout(()=>{ if(!paused) advance(); }, 5000); }
 }
-function runStep(){
-  if(idx>=STEPS.length){ finish(); return; }
-  const s=STEPS[idx], sec=s[0], sub=s[1], title=s[2], narr=s[3], frac=s[4], zoom=s[5];
-  nav(sec,sub);
-  chip.textContent=title; txt.textContent=narr;
-  prog.style.width=Math.round((idx+1)/STEPS.length*100)+'%';
-  // dá um instante pro conteúdo renderizar antes de focar/zoom
-  setTimeout(()=>focusOn(frac,zoom), 350);
-  let done=false;
-  const advance=()=>{ if(done)return; done=true; idx++; setTimeout(runStep, 650); };
-  const safety=setTimeout(advance, Math.max(7000, narr.length*95));
-  speakNow(narr, ()=>{ clearTimeout(safety); advance(); });
+function renderStep(){
+  const s=STEPS[idx];
+  nav(s[0],s[1]);
+  chip.textContent=s[2]; txt.textContent=s[3];
+  cap.classList.remove('show'); void cap.offsetWidth; cap.classList.add('show');
+  fill.style.width=Math.round((idx+1)/STEPS.length*100)+'%';
+  count.textContent=(idx+1)+' / '+STEPS.length;
+  setTimeout(()=>focusTarget(s[4]), 420); // deixa o conteúdo montar antes do foco
 }
+function advance(){ clearSafety(); if(idx>=STEPS.length-1){ finish(); return; } idx++; renderStep(); if(!paused) speakCurrent(); }
+function goTo(i){ clearSafety(); speechSynthesis.cancel(); idx=Math.max(0,Math.min(STEPS.length-1,i)); renderStep(); if(!paused) speakCurrent(); }
+function next(){ goTo(idx+1); }
+function prev(){ goTo(idx-1); }
+function seekBar(ev){ const t=document.getElementById('track'); const r=t.getBoundingClientRect(); const frac=(ev.clientX-r.left)/r.width; goTo(Math.floor(frac*STEPS.length)); }
+function togglePlay(){
+  paused=!paused; pp.textContent=paused?'▶':'⏸';
+  if(paused){ clearSafety(); try{speechSynthesis.pause();}catch(e){} }
+  else{ try{speechSynthesis.resume();}catch(e){} // se não havia fala pausada, refala o passo atual
+        if(!speechSynthesis.speaking){ speakCurrent(); } else { clearSafety(); safety=setTimeout(()=>{ if(!paused) advance(); }, 8000); } }
+}
+function skip(){ clearSafety(); try{speechSynthesis.cancel();}catch(e){} finish(); }
 function finish(){
-  chip.textContent=''; txt.textContent='SeniorsBI — obrigado.';
-  prog.style.width='100%';
-  F.style.transform='scale(1)';
-  try{ const w=F.contentWindow; if(w&&w.setSection){ w.setSection('exec'); w.setSub&&w.setSub('geral'); } }catch(e){}
+  clearSafety(); idx=STEPS.length-1;
+  chip.textContent=''; txt.textContent='SeniorsBI — obrigado.'; fill.style.width='100%'; count.textContent=STEPS.length+' / '+STEPS.length; pp.textContent='▶'; paused=true;
+  try{focusTarget(null); const w=F.contentWindow; if(w&&w.setSection){w.setSection('exec');w.setSub&&w.setSub('geral');}}catch(e){}
 }
 function begin(){
   if(running)return; running=true;
-  document.getElementById('start').style.display='none';
-  voice=pickVoice();
-  speechSynthesis.onvoiceschanged=()=>{ if(!voice)voice=pickVoice(); };
-  // "aquece" a fala (alguns navegadores exigem um primeiro speak após gesto)
+  document.getElementById('intro').style.display='none';
+  voice=pickVoice(); speechSynthesis.onvoiceschanged=()=>{ if(!voice)voice=pickVoice(); };
   try{ speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); }catch(e){}
-  idx=0;
-  setTimeout(runStep, 900); // dá tempo do app no iframe montar
+  idx=0; paused=false; pp.textContent='⏸';
+  setTimeout(()=>{ renderStep(); speakCurrent(); }, 900);
 }
 window.begin=begin;
-window.next=()=>{ try{ speechSynthesis.cancel(); }catch(e){} }; // Pular: cancela a fala e o onend avança
+document.addEventListener('keydown',e=>{ if(e.code==='Space'){e.preventDefault();togglePlay();} else if(e.code==='ArrowRight')next(); else if(e.code==='ArrowLeft')prev(); });
 </script>
 </body>
 </html>
