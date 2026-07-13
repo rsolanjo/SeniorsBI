@@ -244,10 +244,10 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v34'
+const APP_VERSION='v35'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
-let SECTION='tech',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos',SEC_AUTH=false
+let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false
 let ROT_PAUSED=false,rotTimer=null,rotSec=30,rotIdx=0
 let FUNCS=[],CONTRACTS=[]
 const ROT_SEQ=['all','4Seniors','S4SYS','Porto Virtual']
@@ -262,7 +262,7 @@ const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Usuário',ic:'user',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
   exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['custohora','Custo-Hora'],['tecnico','Por Técnico'],['alertas','Alertas']],
-  tech:[['fila','Fila de Chamados'],['atividades','Atividades'],['equipe','Equipe & Entrega'],['incid','Inconsistências'],['alertas','Alertas'],['checklists','Checklists']],
+  tech:[['chamados','Chamados & Atividades'],['equipe','Equipe & Entrega'],['incid','Inconsistências'],['alertas','Alertas'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['matriz','Matriz'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
 }
 
@@ -441,9 +441,19 @@ const DEPTS=['TI / Técnico','Comercial','Administrativo','Financeiro','RH','Inf
 // ─── Milldesk (chamados ao vivo) ───
 let MD={loaded:false,loading:false,periodo:'',ts:0,tickets:[],backlog:[],ativs:[],ativsTs:0,ativsLoading:false}
 let MD_ATV_START='',MD_ATV_END='',ATV_TEC='',ATV_DAY='',ATV_EXPAND=false
-window.setAtvTec=function(v){ATV_TEC=v||'';if(SECTION==='tech'&&TECH_SUB==='atividades')renderContent()}
-window.setAtvDay=function(v){ATV_DAY=v||'';if(SECTION==='tech'&&TECH_SUB==='atividades')renderContent()}
-window.toggleAtvExpand=function(){ATV_EXPAND=!ATV_EXPAND;if(SECTION==='tech'&&TECH_SUB==='atividades')renderContent()}
+let CH_SUB='fila'
+window.setChSub=function(v){CH_SUB=v||'fila';if(SECTION==='tech'&&TECH_SUB==='chamados')renderContent()}
+window.setAtvTec=function(v){ATV_TEC=v||'';if(SECTION==='tech'&&TECH_SUB==='chamados')renderContent()}
+window.setAtvDay=function(v){ATV_DAY=v||'';if(SECTION==='tech'&&TECH_SUB==='chamados')renderContent()}
+window.toggleAtvExpand=function(){ATV_EXPAND=!ATV_EXPAND;if(SECTION==='tech'&&TECH_SUB==='chamados')renderContent()}
+async function rChamadosAtiv(){
+  const tabs=[['fila','Fila de Chamados'],['atividades','Atividades']].map(([k,l])=>`<button onclick="setChSub('${k}')" style="padding:.36rem .85rem;border:1px solid ${CH_SUB===k?'#2B4C9B':'#e2e8f0'};border-radius:.45rem;font-size:.73rem;font-weight:800;cursor:pointer;background:${CH_SUB===k?'#2B4C9B':'#fff'};color:${CH_SUB===k?'#fff':'#475569'};">${l}</button>`).join('')
+  const bar=`<div style="display:flex;gap:.45rem;margin-bottom:.85rem;">${tabs}</div>`
+  let body=''
+  if(CH_SUB==='atividades')body=rAtividades()
+  else{try{body=await rFila()}catch(e){body='<div class="card" style="color:#ef4444;padding:1rem;">Erro ao carregar a fila.</div>'}}
+  return bar+body
+}
 let CMP={a:'',b:'',SA:null,SB:null,loading:false}
 const getMD=()=>{const s=lsGet('sbi_md')||{};return{base:s.base||'https://v1.milldesk.com/api',key:s.key||''}}
 const setMD=v=>lsSet('sbi_md',v)
@@ -652,15 +662,15 @@ function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TE
 function renderContent(){
   const el=document.getElementById('main')
   if(TIME==='comparar'){renderCompare();return}
-  const standalone=SECTION==='admin'||(SECTION==='tech'&&['fila','atividades','checklists','incid'].includes(TECH_SUB))
+  const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','checklists','incid'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
   if(SECTION==='exec'){
     const sync={geral:rExecGeral,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecAlertas}
     el.innerHTML=(sync[EXEC_SUB]||rExecGeral)();lucide.createIcons()
   }else if(SECTION==='tech'){
-    const sync={incid:rIncidencias,checklists:rChecklists,atividades:rAtividades}
+    const sync={incid:rIncidencias,checklists:rChecklists}
     if(TECH_SUB==='equipe')rEquipeEntrega().then(h=>{el.innerHTML=h;lucide.createIcons()})
-    else if(TECH_SUB==='fila')rFila().then(h=>{el.innerHTML=h;lucide.createIcons()})
+    else if(TECH_SUB==='chamados')rChamadosAtiv().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else if(TECH_SUB==='alertas')rAlertasTec().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else{el.innerHTML=(sync[TECH_SUB]||rProd)();lucide.createIcons()}
   }else{
@@ -1158,7 +1168,7 @@ async function rFila(){
 
 function rIncidencias(){
   if(D._src==='milldesk-12m')return`<div class="card" style="color:#64748b;text-align:center;padding:2rem;">As inconsistências são analisadas por período (ticket a ticket). Selecione <b>Diário</b>, <b>7/30 dias</b> ou um <b>mês</b>.</div>`
-  if(!MD.loaded)return`<div class="card" style="color:#64748b;text-align:center;padding:2rem;">Sincronize o Milldesk em <button onclick="setSub('fila')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Fila de Chamados</button> para detectar inconsistências de horas e contrato.</div>`
+  if(!MD.loaded)return`<div class="card" style="color:#64748b;text-align:center;padding:2rem;">Sincronize o Milldesk em <button onclick="setSub('chamados')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Chamados & Atividades</button> para detectar inconsistências de horas e contrato.</div>`
   const inc=mdInconsistencias(),treat=getIncid()
   const pend=inc.filter(x=>(treat[x.key]&&treat[x.key].status)!=='resolvido'),resolv=inc.length-pend.length
   const tb=t=>t==='Tempo'?'badge-y':t==='Contrato'?'badge-r':'badge-b'
