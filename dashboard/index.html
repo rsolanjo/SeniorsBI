@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v40'
+const APP_VERSION='v41'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false
@@ -509,7 +509,7 @@ function mdApplyToD(raw){
     const loc=r.location||'-',cc=mdCC(loc),ct=mdContractForCC(cc),nome=ct?ct.cliente:loc
     const co=clis[nome]=clis[nome]||{nome,horas_minutos:0,cobrar_minutos:0,ids:new Set()};co.horas_minutos+=wm;co.cobrar_minutos+=cm;co.ids.add(r.id)
   })
-  D.recursos=Object.values(recs).map(ro=>{const f=matchFuncByAgent(ro.nome);return{nome:f?f.nome:ro.nome,nivel:f?f.nivel:(_topKey(ro.lv)||'-'),equipe:f?f.equipe:'',trab_minutos:ro.trab_minutos,avulsa_minutos:ro.avulsa_minutos,cap_minutos:Math.round((f?f.cap_horas:168)*60*mdPeriodFactor()),chamados:ro.ids.size,mes_slug:MES}}).sort((a,b)=>b.trab_minutos-a.trab_minutos)
+  D.recursos=Object.values(recs).map(ro=>{const f=matchFuncByAgent(ro.nome);return{nome:f?f.nome:ro.nome,nivel:f?f.nivel:(_topKey(ro.lv)||'-'),equipe:f?f.equipe:'',trab_minutos:ro.trab_minutos,avulsa_minutos:ro.avulsa_minutos,cap_minutos:Math.round((f?f.cap_horas:168)*60*mdCapFactor()),chamados:ro.ids.size,mes_slug:MES}}).sort((a,b)=>b.trab_minutos-a.trab_minutos)
   D.clientes=Object.values(clis).map(c=>({nome:c.nome,horas_minutos:c.horas_minutos,cobrar_minutos:c.cobrar_minutos,chamados:c.ids.size})).sort((a,b)=>b.horas_minutos-a.horas_minutos)
   D.totalHoras=D.recursos.reduce((s,r)=>s+r.trab_minutos,0);D.totalCap=D.recursos.reduce((s,r)=>s+r.cap_minutos,0)
   D.totalChamados=D.clientes.reduce((s,c)=>s+c.chamados,0);D.fte=pct(D.totalHoras,D.totalCap)
@@ -526,7 +526,7 @@ function mdApplyFromAtivs(){
     const ro=recs[a.ag]=recs[a.ag]||{nome:a.ag,trab_minutos:0,avulsa_minutos:0,ids:new Set(),lv:{}};ro.trab_minutos+=a.wh;ro.avulsa_minutos+=a.ch;ro.ids.add(a.tid);if(a.lv)ro.lv[a.lv]=(ro.lv[a.lv]||0)+1
     const co=clis[a.cliente]=clis[a.cliente]||{nome:a.cliente,horas_minutos:0,cobrar_minutos:0,ids:new Set()};co.horas_minutos+=a.wh;co.cobrar_minutos+=a.ch;co.ids.add(a.tid)
   })
-  D.recursos=Object.values(recs).map(ro=>{const f=matchFuncByAgent(ro.nome);return{nome:f?f.nome:ro.nome,nivel:f?f.nivel:(_topKey(ro.lv)||'-'),equipe:f?f.equipe:'',trab_minutos:ro.trab_minutos,avulsa_minutos:ro.avulsa_minutos,cap_minutos:Math.round((f?f.cap_horas:168)*60*mdPeriodFactor()),chamados:ro.ids.size,mes_slug:MES}}).sort((a,b)=>b.trab_minutos-a.trab_minutos)
+  D.recursos=Object.values(recs).map(ro=>{const f=matchFuncByAgent(ro.nome);return{nome:f?f.nome:ro.nome,nivel:f?f.nivel:(_topKey(ro.lv)||'-'),equipe:f?f.equipe:'',trab_minutos:ro.trab_minutos,avulsa_minutos:ro.avulsa_minutos,cap_minutos:Math.round((f?f.cap_horas:168)*60*mdCapFactor()),chamados:ro.ids.size,mes_slug:MES}}).sort((a,b)=>b.trab_minutos-a.trab_minutos)
   const tkCli={};(MD.tickets||[]).forEach(t=>{const ct=mdContractForCC(t.cc),nm=ct?ct.cliente:(t.loc||'-');(tkCli[nm]=tkCli[nm]||new Set()).add(t.id)})
   D.clientes=Object.values(clis).map(c=>({nome:c.nome,horas_minutos:c.horas_minutos,cobrar_minutos:c.cobrar_minutos,chamados:(tkCli[c.nome]?tkCli[c.nome].size:c.ids.size)})).sort((a,b)=>b.horas_minutos-a.horas_minutos)
   D.totalHoras=D.recursos.reduce((s,r)=>s+r.trab_minutos,0);D.totalCap=D.recursos.reduce((s,r)=>s+r.cap_minutos,0)
@@ -562,6 +562,9 @@ function getClientContracts(nome){
 }
 // Fator do período: valores mensais (receita/salário/custos) escalam pelo tamanho do período selecionado.
 function mdPeriodFactor(){if(!MD_ATV_START||!MD_ATV_END)return 1;const d=(new Date(MD_ATV_END+'T12:00:00')-new Date(MD_ATV_START+'T12:00:00'))/864e5+1;return Math.max(0.01,d/30.44)}
+// Capacidade (FTE): dias ÚTEIS no período × 8h/dia. Dia=8h, semana=40h, mês=~168h. Mesma matemática em todos os períodos.
+function mdBizDays(s,e){if(!s||!e)return 21;let d=new Date(s+'T12:00:00');const end=new Date(e+'T12:00:00');let n=0;while(d<=end){const w=d.getDay();if(w>=1&&w<=5)n++;d=new Date(d.getTime()+864e5)}return n}
+function mdCapFactor(){if(!MD_ATV_START||!MD_ATV_END)return 1;return Math.max(1,mdBizDays(MD_ATV_START,MD_ATV_END))/21}
 function contractReceita(c,chamados){if(!c||c.tipo_cobranca==='interno')return 0;if(c.tipo_cobranca==='chamado')return(c.valor_chamado||0)*(chamados||0);return Math.round((c.valor_mensal||0)*mdPeriodFactor())}
 function cliValor(nome){const cli=(D.clientes||[]).find(x=>x.nome===nome);const ch=cli?cli.chamados:0;return getClientContracts(nome).reduce((s,c)=>s+contractReceita(c,ch),0)}
 function cliFranquia(nome){return getClientContracts(nome).reduce((s,c)=>s+(c.franquia_horas||0),0)}
@@ -597,9 +600,8 @@ function buildAutoAlerts(){
   D.recursos.forEach(r=>{
     if(!getFunc(r.nome))return
     const f=pct(r.trab_minutos,r.cap_minutos)
-    const longP=mdPeriodFactor()>=0.85 // ocioso/sobrecarga só fazem sentido no mês+ (no diário/semana vira ruído)
-    if(longP&&f>cfg.fte_max)auto.push({lv:'critica',cat:'FTE',msg:`${r.nome}: FTE ${f}% - sobrecarga`,det:'Risco de burnout'})
-    else if(longP&&f<cfg.fte_min)auto.push({lv:'media',cat:'FTE',msg:`${r.nome}: FTE ${f}% - ocioso`,det:`Dentro da margem é ${cfg.fte_min}-${cfg.fte_max}%`})
+    if(f>cfg.fte_max)auto.push({lv:'critica',cat:'FTE',msg:`${r.nome}: FTE ${f}% - sobrecarga`,det:`${minToHM(r.trab_minutos)}h de ${minToHM(r.cap_minutos)}h no período`})
+    else if(f<cfg.fte_min)auto.push({lv:'media',cat:'FTE',msg:`${r.nome}: FTE ${f}% - ocioso`,det:`${minToHM(r.trab_minutos)}h de ${minToHM(r.cap_minutos)}h · margem ${cfg.fte_min}-${cfg.fte_max}%`})
   })
   // Por grupo/nível (N1, N2, N3) - agregado do roster ativo
   ;['N1','N2','N3'].forEach(nv=>{
@@ -1065,7 +1067,7 @@ function mdMetrics(){
   // Backlog ABERTO inteiro (showTicketsByStatus) — independe do período; se indisponível, usa os abertos do período.
   const open=(MD.backlogFull&&MD.backlogFull.length)?MD.backlogFull.filter(inCo):U.filter(t=>mdIsOpen(t.st))
   // Sem atualização = hoje − DATA DA ÚLTIMA ATIVIDADE do chamado (não a data do ticket).
-  const lastAtv={},firstAtv={};(MD.ativs||[]).forEach(a=>{const iso=mdActISO(a.start);if(!iso)return;if(!lastAtv[a.tid]||iso>lastAtv[a.tid])lastAtv[a.tid]=iso;if(!firstAtv[a.tid]||iso<firstAtv[a.tid])firstAtv[a.tid]=iso})
+  const lastAtv={},firstAtv={},firstAtvDT={};(MD.ativs||[]).forEach(a=>{const iso=mdActISO(a.start);if(!iso)return;if(!lastAtv[a.tid]||iso>lastAtv[a.tid])lastAtv[a.tid]=iso;if(!firstAtv[a.tid]||iso<firstAtv[a.tid])firstAtv[a.tid]=iso;let tm=(a.hm&&/^\d{1,2}:\d{2}$/.test(a.hm))?a.hm:'00:00';if(tm.length===4)tm='0'+tm;const dt=new Date(iso+'T'+tm+':00').getTime();if(!firstAtvDT[a.tid]||dt<firstAtvDT[a.tid])firstAtvDT[a.tid]=dt})
   const semAtual=open.map(t=>{const la=lastAtv[t.id],lad=la?new Date(la+'T12:00:00'):null;const d=lad||mdDate(t.ana)||mdDate(t.start);const dias=d?Math.floor((now-d)/864e5):null;return{...t,dias,ultAtiv:la||null}}).filter(t=>t.dias!=null&&t.dias>=diasInat).sort((a,b)=>b.dias-a.dias)
   const REINC_SKIP=/checklist|rotina di[aá]ria|relat[oó]rio di[aá]rio|monitoramento di[aá]rio|backup di[aá]rio/i
   const grp={};open.forEach(t=>{if(REINC_SKIP.test(t.t||''))return;const nt=mdNorm(t.t);if(!nt)return;const k=(t.cc||t.loc)+'§'+nt;(grp[k]=grp[k]||{loc:t.loc,cc:t.cc,titulo:t.t,ids:[]}).ids.push(t.id)})
@@ -1088,7 +1090,9 @@ function mdMetrics(){
   if(!topCat.length){const cat={};U.forEach(t=>{const c=t.cat||'-';if(c==='-'||CAT_SKIP.test(c))return;cat[c]=(cat[c]||0)+1});topCat=Object.entries(cat).map(([k,v])=>({cat:k,n:v,min:hCat[k]||0})).sort((a,b)=>b.min-a.min).slice(0,12)}
   const recD=diasInat,recente=t=>{const d=mdDate(t.ana)||mdDate(t.end)||mdDate(t.start);return d?((now-d)/864e5)<=recD:false}
   const recentes=open.filter(recente).length,semRec=open.length-recentes
-  const foraSLA=open.map(t=>{const d=mdDate(t.start),dias=d?Math.floor((now-d)/864e5):0,ct=mdContractForCC(t.cc),lim=Math.max(1,Math.ceil((ct?(ct.sla_resol_h||24):48)/24));const pa=firstAtv[t.id];const resp=(pa&&d)?Math.max(0,Math.floor((new Date(pa+'T12:00:00')-d)/864e5)):null;const exp=mdDate(t.slaexp);return{...t,dias,lim,primAtiv:pa||null,respDias:resp,slaexpD:exp,slaVenc:exp?exp<now:null}}).filter(t=>t.slaVenc===true).sort((a,b)=>(a.slaexpD&&b.slaexpD?a.slaexpD-b.slaexpD:0)||b.dias-a.dias)
+  // SLA: abertura -> 1ª atividade (resposta, def. 4h); resolução (def. 24h). Usa o SLA do contrato quando houver.
+  const nowMs=now.getTime()
+  const foraSLA=open.map(t=>{const od=mdDate(t.start),odMs=od?od.getTime():null,ct=mdContractForCC(t.cc),slaResp=(ct&&ct.sla_atend_h)||4,slaResol=(ct&&ct.sla_resol_h)||24;const fa=firstAtvDT[t.id];const hOpen=odMs?(nowMs-odMs)/36e5:0,hResp=(fa&&odMs)?Math.max(0,(fa-odMs)/36e5):null,dias=Math.floor(hOpen/24);let motivo='',lv='alta';if(!fa&&hOpen>=slaResp){motivo=`sem 1ª resposta (SLA ${slaResp}h)`;lv='critica'}else if(hOpen>=slaResol){motivo=`resolução ${slaResol}h vencida`;lv=hOpen>=slaResol*2?'critica':'alta'}return{...t,dias,hOpen,hResp,slaResp,slaResol,motivo,slaLv:lv,primAtiv:firstAtv[t.id]||null,respDias:hResp}}).filter(t=>t.motivo).sort((a,b)=>b.hOpen-a.hOpen)
   const pTec={};open.forEach(t=>{const ag=t.ag||'-';pTec[ag]=(pTec[ag]||0)+1});const pendTec=Object.entries(pTec).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v)
   const pCli={};open.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'-');pCli[nome]=(pCli[nome]||0)+1});const pendCli=Object.entries(pCli).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v)
   const semReg=open.filter(t=>!t.ag||!t.loc||/n[aã]o cadastrad/i.test(t.loc||''))
@@ -1197,7 +1201,7 @@ async function rFila(){
   const cliRows=M.porCliente.filter(c=>COMPANY==='all'||c.emp===COMPANY).slice(0,25).map(c=>`<tr><td>${empBadge(c.emp)}</td><td style="font-weight:600;">${cliDisp(c.nome)}</td><td style="font-weight:700;">${fmt(c.total)}</td><td style="color:#7c3aed;font-weight:700;">${fmt(c.atividades)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(c.min)}h</td><td style="color:${c.aberto?'#3b82f6':'#94a3b8'};font-weight:${c.aberto?700:400};">${fmt(c.aberto)}</td></tr>`).join('')
   const tecRows=M.porTecnico.map(t=>`<tr><td style="font-weight:600;">${techDisp(t.ag)}</td><td><span class="tag">${esc(t.lv||'-')}</span></td><td>${fmt(t.chamados)}</td><td style="color:#854d0e;">${fmt(t.ativ)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(t.min)}h</td></tr>`).join('')
   const tecCliRows=M.tecCliente.map(x=>`<tr><td style="font-weight:600;">${techDisp(x.ag)}</td><td>${cliDisp(x.cli)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(x.min)}h</td><td>${fmt(x.ids)}</td></tr>`).join('')
-  const slaRows=M.foraSLA.slice(0,25).map(t=>{const c=mdContractForCC(t.cc);return`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:16rem;">${esc((t.t||'').slice(0,55))}</td><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:t.loc)}</td><td style="font-size:.68rem;">${esc(t.ag||'-')}</td><td style="font-size:.66rem;color:${t.respDias==null?'#f59e0b':t.respDias>t.lim?'#ef4444':'#64748b'};">${t.respDias==null?'sem interação':t.respDias===0?'no mesmo dia':t.respDias+'d'}</td><td style="color:#ef4444;font-weight:800;">${t.dias}d</td><td style="font-size:.66rem;color:#64748b;">limite ${t.lim}d</td></tr>`}).join('')
+  const slaRows=M.foraSLA.slice(0,30).map(t=>{const c=mdContractForCC(t.cc);const rt=t.respDias==null?'sem resposta':(t.respDias<24?Math.round(t.respDias)+'h':Math.round(t.respDias/24)+'d');const mc=t.slaLv==='critica'?'#dc2626':'#f59e0b';return`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:15rem;">${esc((t.t||'').slice(0,50))}</td><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:t.loc)}</td><td style="font-size:.68rem;">${esc(t.ag||'-')}</td><td style="font-size:.66rem;color:${t.respDias==null?'#ef4444':'#64748b'};font-weight:${t.respDias==null?700:400};">${rt}</td><td style="color:#ef4444;font-weight:800;">${t.dias}d</td><td style="font-size:.64rem;font-weight:700;color:${mc};">${esc(t.motivo)}</td></tr>`}).join('')
   const semTag='<span style="color:#ef4444;font-weight:700;">'
   const semRegRows=M.semReg.slice(0,25).map(t=>`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:18rem;">${esc((t.t||'').slice(0,55))}</td><td style="font-size:.68rem;">${t.ag?esc(t.ag):semTag+'sem técnico</span>'}</td><td style="font-size:.68rem;">${t.loc&&!/n[aã]o cadastrad/i.test(t.loc)?esc(t.loc):semTag+'sem cliente</span>'}</td><td style="font-size:.68rem;">${t.grupo?esc(t.grupo):semTag+'sem fila</span>'}</td></tr>`).join('')
   const saRows=M.semAtual.slice(0,25).map(t=>{const c=mdContractForCC(t.cc);return`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:16rem;">${esc((t.t||'').slice(0,60))}</td><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:t.loc)}</td><td style="font-size:.68rem;">${esc(t.ag||'-')}</td><td><span class="badge" style="background:${stColors[t.st]||'#64748b'}22;color:${stColors[t.st]||'#64748b'};">${esc(t.st)}</span></td><td style="font-size:.66rem;color:#64748b;">${t.ultAtiv?brDate(t.ultAtiv):'<span style="color:#f59e0b;">sem atividade</span>'}</td><td style="color:#ef4444;font-weight:800;">${t.dias}d</td></tr>`}).join('')
@@ -1215,7 +1219,7 @@ async function rFila(){
 <div class="card overflow-x-auto" style="border-left:3px solid #f59e0b;">${ST('Reincidentes - mesmo assunto/cliente (≥'+Math.max(2,cfg.tickets_rec||3)+'×)')}<table><thead><tr><th>Cliente</th><th>Assunto</th><th>Qtd</th><th>Chamados</th></tr></thead><tbody>${reRows||'<tr><td colspan="4" style="color:#22c55e;padding:1rem;text-align:center;">Sem reincidência relevante.</td></tr>'}</tbody></table></div>
 <div class="card overflow-x-auto">${ST('Top Categorias (por horas de atividade)')}<table><thead><tr><th>Categoria</th><th>Horas</th><th>Atividades</th></tr></thead><tbody>${catRows||'<tr><td colspan="3" style="color:#94a3b8;padding:1rem;text-align:center;">-</td></tr>'}</tbody></table></div>
 </div>
-<div class="card mb-4 mt-4 overflow-x-auto" style="border-left:3px solid #ef4444;">${ST('Fora do SLA - abertos além do prazo de resolução do contrato')}<div style="font-size:.6rem;color:#94a3b8;margin-bottom:.3rem;">"1ª resposta" = tempo da abertura até a 1ª atividade lançada no chamado.</div><table><thead><tr><th>ID</th><th>Assunto</th><th>Cliente</th><th>Técnico</th><th>1ª resposta</th><th>Aberto há</th><th>SLA</th></tr></thead><tbody>${slaRows||'<tr><td colspan="7" style="color:#22c55e;padding:1rem;text-align:center;">Nenhum chamado fora do SLA. 👍</td></tr>'}</tbody></table></div>
+<div class="card mb-4 mt-4 overflow-x-auto" style="border-left:3px solid #ef4444;">${ST('Fora do SLA - resposta e resolução')}<div style="font-size:.6rem;color:#94a3b8;margin-bottom:.3rem;">Abertura → 1ª atividade (SLA resposta, padrão 4h) e resolução (padrão 24h, ou o SLA do contrato). Se lançou atividade dentro do prazo, sai da lista.</div><table><thead><tr><th>ID</th><th>Assunto</th><th>Cliente</th><th>Técnico</th><th>1ª resposta</th><th>Aberto há</th><th>SLA</th></tr></thead><tbody>${slaRows||'<tr><td colspan="7" style="color:#22c55e;padding:1rem;text-align:center;">Nenhum chamado fora do SLA. 👍</td></tr>'}</tbody></table></div>
 <div class="card overflow-x-auto" style="border-left:3px solid #f59e0b;">${ST('Chamados sem registro - sem cliente ou sem técnico ('+M.semReg.length+')')}<div style="font-size:.6rem;color:#94a3b8;margin-bottom:.3rem;">Só chamados sem técnico ou sem cliente/local cadastrado (a etapa/stage não conta).</div><table><thead><tr><th>ID</th><th>Assunto</th><th>Técnico</th><th>Cliente/Local</th><th>Etapa</th></tr></thead><tbody>${semRegRows||'<tr><td colspan="5" style="color:#22c55e;padding:1rem;text-align:center;">Todos os chamados têm fila, cliente e técnico. 👍</td></tr>'}</tbody></table></div>`
 }
 
