@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v43'
+const APP_VERSION='v44'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false
@@ -1276,7 +1276,15 @@ function rEquipe(){
   // Produtividade (mesclado da antiga aba Produtividade)
   const prodRows=fRec().map(r=>{const fte=pct(r.trab_minutos,r.cap_minutos),c=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e';return`<tr><td style="font-weight:600;">${techDisp(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td style="color:#64748b;">${esc(r.equipe||'-')}</td><td>${minToHM(r.trab_minutos)}h</td><td style="color:#94a3b8;">${minToHM(r.avulsa_minutos)}h</td><td><div style="display:flex;align-items:center;gap:.43rem;"><div style="flex:1;height:.28rem;background:#f1f5f9;border-radius:9999px;min-width:3.5rem;overflow:hidden;"><div style="height:100%;width:${Math.min(fte,100)}%;background:${c};"></div></div><span style="font-size:.72rem;font-weight:800;color:${c};min-width:2.1rem;">${fte}%</span></div></td></tr>`}).join('')
   const prodCard=`<div class="card mb-4 overflow-x-auto">${ST('Produtividade por Técnico')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Equipe</th><th>H. Trabalhadas</th><th>H. Avulsas</th><th>FTE %</th></tr></thead><tbody>${prodRows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.5rem;text-align:center;">Sem dados.</td></tr>'}</tbody></table></div>`
-  return prodCard
+  // FTE por nível (N1/N2/N3)
+  const nivFte=['N1','N2','N3'].map(nv=>{const g=fRec().filter(r=>r.nivel===nv);const trab=g.reduce((s,r)=>s+r.trab_minutos,0),cap=g.reduce((s,r)=>s+r.cap_minutos,0),fte=pct(trab,cap);return{nv,n:g.length,trab,cap,fte}}).filter(x=>x.n>0)
+  const totFte=(()=>{const g=fRec(),trab=g.reduce((s,r)=>s+r.trab_minutos,0),cap=g.reduce((s,r)=>s+r.cap_minutos,0);return{trab,cap,fte:pct(trab,cap),n:g.length}})()
+  const fteC=v=>v<60?'#ef4444':v<=90?'#22c55e':'#ef4444'
+  const nivCard=`<div class="card mb-4 overflow-x-auto">${ST('FTE por Nível')}<table><thead><tr><th>Nível</th><th>Técnicos</th><th>Horas</th><th>Capacidade</th><th>FTE %</th></tr></thead><tbody>${nivFte.map(x=>`<tr><td style="font-weight:800;">${esc(x.nv)}</td><td>${x.n}</td><td style="font-weight:700;">${minToHM(x.trab)}h</td><td style="color:#64748b;">${minToHM(x.cap)}h</td><td style="font-weight:800;color:${fteC(x.fte)};">${x.fte}%</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:1rem;">Sem dados.</td></tr>'}</tbody><tfoot><tr style="font-weight:800;border-top:2px solid #cbd5e1;background:#f8fafc;"><td>TOTAL</td><td>${totFte.n}</td><td>${minToHM(totFte.trab)}h</td><td style="color:#64748b;">${minToHM(totFte.cap)}h</td><td style="color:${fteC(totFte.fte)};">${totFte.fte}%</td></tr></tfoot></table></div>`
+  // Top 5 categorias
+  let topCat5='';try{if(MD.loaded){topCat5=mdMetrics().topCat.slice(0,5).map(c=>`<tr><td style="font-weight:600;">${NM(c.cat)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(c.min)}h</td><td style="color:#64748b;">${fmt(c.n)}</td></tr>`).join('')}}catch(e){}
+  const catCard=`<div class="card mb-4 overflow-x-auto">${ST('Top 5 Categorias (por horas de atividade)')}<table><thead><tr><th>Categoria</th><th>Horas</th><th>Atividades</th></tr></thead><tbody>${topCat5||'<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:1rem;">-</td></tr>'}</tbody></table></div>`
+  return `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${nivCard}${catCard}</div>`+prodCard
 }
 // Matriz de conhecimento (movida para Admin) - editável, clique nas células
 function rMatriz(){
