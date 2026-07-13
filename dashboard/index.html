@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v41'
+const APP_VERSION='v42'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false
@@ -456,7 +456,7 @@ const setSkillsLS=v=>lsSet('sbi_skills',v)
 function effGatilhos(c){if(!c)return[];const o=getGatilhos()[c.id];if(o)return o;return(c.kb&&CONTRACT_KB[c.kb])?CONTRACT_KB[c.kb].gatilhos.slice():[]}
 const DEPTS=['TI / Técnico','Comercial','Administrativo','Financeiro','RH','Infraestrutura','Diretoria','Outros']
 // ─── Milldesk (chamados ao vivo) ───
-let MD={loaded:false,loading:false,periodo:'',ts:0,tickets:[],backlog:[],backlogFull:[],ativs:[],ativsTs:0,ativsLoading:false}
+let MD={loaded:false,loading:false,periodo:'',ts:0,tickets:[],backlog:[],backlogFull:[],ativs:[],ativsTs:0,ativsLoading:false,tkCat:{}}
 let MD_ATV_START='',MD_ATV_END='',ATV_TEC='',ATV_DAY='',ATV_EXPAND=false
 let CH_SUB='fila'
 window.setChSub=function(v){CH_SUB=v||'fila';if(SECTION==='tech'&&TECH_SUB==='chamados')renderContent()}
@@ -518,7 +518,7 @@ function mdApplyToD(raw){
 // Atividades = fonte das horas: cada apontamento tem seu técnico/horas; cliente/categoria vêm do chamado (id_ticket).
 function mdEnrichedAtivs(){
   const s=MD_ATV_START,e=MD_ATV_END,tk={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t&&!tk[t.id])tk[t.id]=t})
-  return (MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)).map(a=>{const t=tk[a.tid],loc=a.loc||(t&&t.loc)||'';return{ag:a.ag,tid:a.tid,wh:a.wh||0,ch:a.ch||0,iso:mdActISO(a.start),cliente:mdLocCliente(loc),cat:(t&&t.cat)||'-',lv:(t&&t.lv)||''}}).filter(a=>!(s&&e)||(a.iso>=s&&a.iso<=e))
+  return (MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)).map(a=>{const t=tk[a.tid],loc=a.loc||(t&&t.loc)||'';return{ag:a.ag,tid:a.tid,wh:a.wh||0,ch:a.ch||0,iso:mdActISO(a.start),cliente:mdLocCliente(loc),cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'-',lv:(t&&t.lv)||''}}).filter(a=>!(s&&e)||(a.iso>=s&&a.iso<=e))
 }
 function mdApplyFromAtivs(){
   const recs={},clis={}
@@ -611,7 +611,8 @@ function buildAutoAlerts(){
     if(f>=lim)auto.push({lv:f>cfg.fte_max?'critica':'alta',cat:'Grupo',msg:`Grupo ${nv}: ${f}% da capacidade`,det:`${g.length} téc · ${minToHM(trab)}h de ${minToHM(cap)}h`})
   })
   // Por cliente - franquia contratada
-  D.clientes.forEach(c=>{const fran=cliFranquia(c.nome);if(!fran)return;const uso=pct(Math.round(c.horas_minutos/60),fran);if(uso>100)auto.push({lv:'critica',cat:'Franquia',msg:`${c.nome}: ${uso}% - extrapolada`,det:`${Math.round(c.horas_minutos/60)}h vs ${fran}h`});else if(uso>=lim)auto.push({lv:'alta',cat:'Franquia',msg:`${c.nome}: ${uso}% da franquia`,det:`Atingiu ${lim}%+ das horas contratadas`})})
+  // Estouro de franquia (contratos de horas fixas) — escala pela proporção do período; alerta no grupo Cliente.
+  D.clientes.forEach(c=>{const fran=cliFranquia(c.nome);if(!fran)return;const franP=Math.max(1,fran*mdPeriodFactor()),uso=pct(Math.round(c.horas_minutos/60),franP);if(uso>100)auto.push({lv:'critica',cat:'Franquia',msg:`${c.nome}: ${uso}% da franquia (${fran}h/mês) - estourando`,det:`${Math.round(c.horas_minutos/60)}h no período vs ${Math.round(franP)}h proporcionais`});else if(uso>=lim)auto.push({lv:'alta',cat:'Franquia',msg:`${c.nome}: ${uso}% da franquia (${fran}h/mês)`,det:`Ritmo atingiu ${lim}%+ do proporcional`})})
   if(D.sla&&D.sla.dentro_sla_pct<90)auto.push({lv:'alta',cat:'SLA',msg:`SLA: ${D.sla.dentro_sla_pct}% dentro do prazo`,det:`${D.sla.chamados_fora} chamados vencidos`})
   if(D.sat){if(D.sat.csat<75)auto.push({lv:'critica',cat:'CSAT',msg:`CSAT: ${D.sat.csat}% - crítico`,det:'Satisfação comprometida'});else if(D.sat.csat<85)auto.push({lv:'media',cat:'CSAT',msg:`CSAT: ${D.sat.csat}%`,det:'Monitorar tendência'})}
   // Custo - margem por empresa
@@ -929,6 +930,12 @@ async function mdFetchBacklog(base){
     arr.forEach(r=>{if(!r||byId[r.id]||isExcludedTech(r.agent))return;byId[r.id]={id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:r.agent,st,start:r.start,ana:r.analysis,end:r.end,grupo:r.stage,cat:r.category,slaexp:r.slasexpirationdate}})}
   return Object.values(byId)
 }
+// Categoria por chamado (activitiesWorkedHours nao traz categoria) - puxa showTicket dos chamados do periodo, limitado.
+async function mdFetchTicketCats(base,tids){
+  MD.tkCat=MD.tkCat||{}
+  const need=[...new Set(tids)].filter(id=>id&&MD.tkCat[id]===undefined).slice(0,80)
+  for(const id of need){try{const r=await fetch(`${base}/showTicket?id=${encodeURIComponent(id)}`).then(x=>x.json());MD.tkCat[id]=(r&&!r.error&&(r.category||r.subcategory))||''}catch(e){MD.tkCat[id]=''}}
+}
 window.mdSync=async function(){
   const cfg=getMD();if(!cfg.key){toast('Configure a chave da API Milldesk em Admin → Config Alertas.',false);setSection('admin');setSub('alertcfg');return}
   const[start,end]=mdPeriodRange(),base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key
@@ -944,6 +951,7 @@ window.mdSync=async function(){
     if(ar.ativs&&ar.ativs.length){MD.ativs=ar.ativs;MD.ativsTs=Date.now();try{lsSet('sbi_md_ativs',{ts:MD.ativsTs,start,end,ativs:MD.ativs.slice(0,6000)})}catch(e){}mdApplyFromAtivs()}
     else{mdApplyToD(rawArr);if(ar.err&&ar.err!=='no-key')toast('Atividades indisponíveis ('+ar.err+') — usando horas por chamado.',false)}
     try{MD.backlogFull=await mdFetchBacklog(base)}catch(e){MD.backlogFull=MD.backlogFull||[]}
+    try{const tkK={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkK[t.id]=1});const ptids=(MD.ativs||[]).filter(a=>{const iso=mdActISO(a.start);return iso>=start&&iso<=end}).map(a=>a.tid).filter(id=>id&&!tkK[id]);await mdFetchTicketCats(base,ptids)}catch(e){}
     MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
     document.getElementById('lastUpdate').textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
     const _ld=document.getElementById('liveDot'),_ls=document.getElementById('liveStatus');if(_ld)_ld.style.background='#22c55e';if(_ls)_ls.textContent='Milldesk'
