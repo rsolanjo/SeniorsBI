@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v31'
+const APP_VERSION='v32'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos',SEC_AUTH=false
@@ -262,8 +262,8 @@ const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Usuário',ic:'user',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
   exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['custohora','Custo-Hora'],['tecnico','Por Técnico'],['alertas','Alertas']],
-  tech:[['fila','Fila de Chamados'],['atividades','Atividades'],['equipe','Equipe'],['clientes','Clientes'],['historico','Histórico'],['incid','Inconsistências'],['alertas','Alertas'],['checklists','Checklists']],
-  admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
+  tech:[['fila','Fila de Chamados'],['atividades','Atividades'],['equipe','Equipe & Entrega'],['incid','Inconsistências'],['alertas','Alertas'],['checklists','Checklists']],
+  admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['matriz','Matriz'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
 }
 
 // ─── Técnicos excluídos das métricas (gestão/pré-venda, não entram em custo/FTE/alertas) ───
@@ -651,13 +651,13 @@ function renderContent(){
     const sync={geral:rExecGeral,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecAlertas}
     el.innerHTML=(sync[EXEC_SUB]||rExecGeral)();lucide.createIcons()
   }else if(SECTION==='tech'){
-    const sync={clientes:rCli,equipe:rEquipe,incid:rIncidencias,checklists:rChecklists,atividades:rAtividades}
-    if(TECH_SUB==='historico')rTrend().then(h=>{el.innerHTML=h;lucide.createIcons()})
+    const sync={incid:rIncidencias,checklists:rChecklists,atividades:rAtividades}
+    if(TECH_SUB==='equipe')rEquipeEntrega().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else if(TECH_SUB==='fila')rFila().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else if(TECH_SUB==='alertas')rAlertasTec().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else{el.innerHTML=(sync[TECH_SUB]||rProd)();lucide.createIcons()}
   }else{
-    const sync={contratos:rContratos,funcionarios:rFuncionarios,custos:rCustos,'sla-edit':rSLAAdmin,alertcfg:rAlertCfg}
+    const sync={contratos:rContratos,funcionarios:rFuncionarios,matriz:rMatriz,custos:rCustos,'sla-edit':rSLAAdmin,alertcfg:rAlertCfg}
     if(ADMIN_SUB==='log')rIngest().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else{el.innerHTML=(sync[ADMIN_SUB]||rContratos)();lucide.createIcons()}
   }
@@ -1176,7 +1176,10 @@ function rEquipe(){
   // Produtividade (mesclado da antiga aba Produtividade)
   const prodRows=fRec().map(r=>{const fte=pct(r.trab_minutos,r.cap_minutos),c=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e';return`<tr><td style="font-weight:600;">${techDisp(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td style="color:#64748b;">${esc(r.equipe||'-')}</td><td>${minToHM(r.trab_minutos)}h</td><td style="color:#94a3b8;">${minToHM(r.avulsa_minutos)}h</td><td><div style="display:flex;align-items:center;gap:.43rem;"><div style="flex:1;height:.28rem;background:#f1f5f9;border-radius:9999px;min-width:3.5rem;overflow:hidden;"><div style="height:100%;width:${Math.min(fte,100)}%;background:${c};"></div></div><span style="font-size:.72rem;font-weight:800;color:${c};min-width:2.1rem;">${fte}%</span></div></td></tr>`}).join('')
   const prodCard=`<div class="card mb-4 overflow-x-auto">${ST('Produtividade por Técnico')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Equipe</th><th>H. Trabalhadas</th><th>H. Avulsas</th><th>FTE %</th></tr></thead><tbody>${prodRows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.5rem;text-align:center;">Sem dados.</td></tr>'}</tbody></table></div>`
-  // Matriz de conhecimento (editável - clique nas células p/ mudar o nível)
+  return prodCard
+}
+// Matriz de conhecimento (movida para Admin) - editável, clique nas células
+function rMatriz(){
   const SK=getSkillsLS()||BASE_SKILLS
   const tecnicos=[...new Set(SK.map(s=>s.tecnico))].sort((a,b)=>a.localeCompare(b,'pt'))
   const skills=[...new Set(SK.map(s=>s.skill))].sort((a,b)=>String(a).localeCompare(String(b),'pt'))
@@ -1184,9 +1187,11 @@ function rEquipe(){
   const spofs=skills.filter(sk=>SK.filter(s=>s.skill===sk&&s.nivel===3).length<2)
   const rows=skills.map(sk=>{const isSp=spofs.includes(sk);return`<tr><td style="font-size:.72rem;padding-right:.4rem;white-space:nowrap;font-weight:800;color:${isSp?'#ef4444':'#2B4C9B'};"><button onclick="delSkill('${esc(sk)}')" title="Remover skill" style="background:none;border:none;color:#cbd5e1;cursor:pointer;margin-right:.2rem;">✕</button>${NM(sk)} ${isSp?'<span style="background:#fee2e2;color:#991b1b;padding:.07rem .27rem;border-radius:.19rem;font-size:.54rem;font-weight:800;">RISCO</span>':''}</td>${tecnicos.map(t=>{const e=SK.find(s=>s.tecnico===t&&s.skill===sk),n=e?e.nivel:0;return`<td style="text-align:center;"><div class="hcell mx-auto" onclick="cycleSkill('${esc(t)}','${esc(sk)}')" title="Clique p/ mudar (0→1→2→3)" style="cursor:pointer;background:${n?bg[n]:'#f8fafc'};color:${n?tx[n]:'#cbd5e1'};">${n||''}</div></td>`}).join('')}</tr>`}).join('')
   const matriz=`<div class="card overflow-x-auto"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem;margin-bottom:.3rem;">${ST('Matriz de Conhecimento - clique nas células · 1 básico · 2 pleno · 3 especialista')}<div style="display:flex;gap:.35rem;"><button onclick="addSkill()" style="background:var(--brand);color:white;border:none;border-radius:.4rem;padding:.28rem .6rem;font-size:.66rem;font-weight:700;cursor:pointer;">+ Skill</button><button onclick="addSkillTec()" style="background:#f1f5f9;color:#334155;border:1px solid #e2e8f0;border-radius:.4rem;padding:.28rem .6rem;font-size:.66rem;font-weight:700;cursor:pointer;">+ Técnico</button></div></div><div style="font-size:.63rem;color:#64748b;margin-bottom:.4rem;"><span style="color:#2B4C9B;font-weight:800;">■</span> coberta · <span style="color:#ef4444;font-weight:800;">■ RISCO</span> = menos de 2 especialistas</div><table><thead><tr><th>Skill</th>${tecnicos.map(t=>`<th style="text-align:center;min-width:2rem;font-size:.58rem;">${NM(t.split(' ')[0])}${(typeof matchFuncByAgent==='function'&&!matchFuncByAgent(t))?' <span style="color:#ef4444;">*</span>':''}</th>`).join('')}</tr></thead><tbody>${rows||'<tr><td colspan="'+(tecnicos.length+1)+'" style="text-align:center;color:#94a3b8;padding:1rem;">Sem skills. Clique em + Skill.</td></tr>'}</tbody></table></div>${spofs.length?`<div class="card mt-3" style="border-left:3px solid #ef4444;">${ST('Riscos de dependência - skill com menos de 2 especialistas')}<div style="display:flex;flex-wrap:wrap;gap:.28rem;">${spofs.map(s=>`<span class="badge badge-r">${NM(s)}</span>`).join('')}</div></div>`:''}`
-  return prodCard+matriz
+  return matriz
 }
-window.cycleSkill=function(tec,skill){let SK=getSkillsLS()||BASE_SKILLS.map(s=>({...s}));const e=SK.find(s=>s.tecnico===tec&&s.skill===skill);const nv=e?((e.nivel+1)%4):1;if(e){if(nv===0)SK=SK.filter(s=>!(s.tecnico===tec&&s.skill===skill));else e.nivel=nv}else SK.push({tecnico:tec,skill,nivel:1});setSkillsLS(SK);if(SECTION==='tech'&&TECH_SUB==='equipe')renderContent()}
+// Aba unificada: Produtividade + Clientes (horas/franquia/a cobrar) + Histórico
+async function rEquipeEntrega(){let hist='';try{hist=await rTrend()}catch(e){hist='<div class="card" style="color:#94a3b8;padding:1rem;text-align:center;">Histórico indisponível.</div>'}return rEquipe()+rCli()+'<div style="height:.1rem;"></div>'+hist}
+window.cycleSkill=function(tec,skill){let SK=getSkillsLS()||BASE_SKILLS.map(s=>({...s}));const e=SK.find(s=>s.tecnico===tec&&s.skill===skill);const nv=e?((e.nivel+1)%4):1;if(e){if(nv===0)SK=SK.filter(s=>!(s.tecnico===tec&&s.skill===skill));else e.nivel=nv}else SK.push({tecnico:tec,skill,nivel:1});setSkillsLS(SK);if(SECTION==='admin'&&ADMIN_SUB==='matriz')renderContent()}
 window.addSkill=function(){const nome=prompt('Nome da nova skill/tecnologia:');if(!nome||!nome.trim())return;const SK=getSkillsLS()||BASE_SKILLS.map(s=>({...s}));const t0=[...new Set(SK.map(s=>s.tecnico))][0]||(FUNCS[0]&&FUNCS[0].nome);if(t0)SK.push({tecnico:t0,skill:nome.trim(),nivel:1});setSkillsLS(SK);renderContent()}
 window.delSkill=function(skill){confirmAction('Remover a skill "'+skill+'" da matriz?',()=>{const SK=(getSkillsLS()||[]).filter(s=>s.skill!==skill);setSkillsLS(SK);renderContent()})}
 window.addSkillTec=function(){const roster=FUNCS.filter(f=>!f._removed).map(f=>f.nome);const nome=prompt('Técnico a adicionar na matriz (do cadastro):\n'+roster.join(', '));if(!nome||!nome.trim())return;const SK=getSkillsLS()||BASE_SKILLS.map(s=>({...s}));const sk0=[...new Set(SK.map(s=>s.skill))][0]||'Microsoft';if(!SK.some(s=>s.tecnico===nome.trim()))SK.push({tecnico:nome.trim(),skill:sk0,nivel:1});setSkillsLS(SK);renderContent()}
