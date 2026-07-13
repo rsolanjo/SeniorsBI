@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v24'
+const APP_VERSION='v25'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='exec',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos'
@@ -444,13 +444,15 @@ let MD_ATV_START='',MD_ATV_END=''
 let CMP={a:'',b:'',SA:null,SB:null,loading:false}
 const getMD=()=>{const s=lsGet('sbi_md')||{};return{base:s.base||'https://v1.milldesk.com/api',key:s.key||''}}
 const setMD=v=>lsSet('sbi_md',v)
-const mdCC=loc=>{const p=String(loc||'').split('|');return p.length>1?p[1].trim():''}
+const mdCC=loc=>{const p=String(loc||'').split('|');if(p.length<2)return'';const m=p[1].match(/\d+/);return m?m[0]:p[1].trim()}
 const mdDate=s=>{if(!s)return null;const p=String(s).split('/');return p.length===3?new Date(+p[2],+p[1]-1,+p[0]):null}
 const mdNorm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[0-9]+/g,' ').replace(/[^a-z ]+/g,' ').replace(/\s+/g,' ').trim().split(' ').filter(w=>w.length>2).slice(0,6).join(' ')
 const stripHtml=s=>String(s==null?'':s).replace(/<[^>]+>/g,' ').replace(/&[a-z#0-9]+;/gi,' ').replace(/\s+/g,' ').trim()
 const mdCompact=r=>({id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:r.agent,dep:r.department,lv:r.level,st:r.status,start:r.start,end:r.end,ana:r.analysis,reab:r.reopening,cat:r.category,subcat:r.subcategory,pri:r.priority,wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour),req:r.requester,grupo:r.stage,desc:stripHtml(r.description).slice(0,300)})
 const mdIsOpen=st=>!/fechad|resolvid|cancelad/i.test(st||'')
 function mdContractForCC(cc){return CONTRACTS.find(c=>String(c.cc)===String(cc))||null}
+// Resolve o nome do cliente a partir do "local" da atividade: CC numérico → nome (antes do 1º |) → interno.
+function mdLocCliente(loc){loc=String(loc||'').trim();if(!loc)return'-';const cc=mdCC(loc),ct=cc?mdContractForCC(cc):null;if(ct)return ct.cliente;const nm=loc.split('|')[0].trim();if(nm){const t=_norm(nm);const c2=CONTRACTS.find(c=>c.status!=='arquivado'&&_norm(c.cliente)&&(_norm(c.cliente)===t||_norm(c.cliente).includes(t)||t.includes(_norm(c.cliente))));if(c2)return c2.cliente}if(cc==='9'||cc==='10'||/geral/i.test(loc))return'Interno (Geral)';return nm||'-'}
 // Milldesk manda horas em "HH:MM" (ex.: 00:20 = 20 min); também aceita decimal (1.5) como fallback.
 const mdWorkedMin=s=>{s=String(s==null?'':s).trim();const hm=s.match(/^(\d{1,4}):(\d{2})$/);if(hm)return(+hm[1])*60+(+hm[2]);const v=parseFloat(s.replace(',','.'));return isNaN(v)?0:Math.round(v*60)}
 const mdActISO=s=>{const m=String(s||'').match(/(\d{2})\/(\d{2})\/(\d{4})/);return m?`${m[3]}-${m[2]}-${m[1]}`:''}
@@ -476,7 +478,7 @@ function mdApplyToD(raw){
 // Atividades = fonte das horas: cada apontamento tem seu técnico/horas; cliente/categoria vêm do chamado (id_ticket).
 function mdEnrichedAtivs(){
   const s=MD_ATV_START,e=MD_ATV_END,tk={};(MD.tickets||[]).forEach(t=>{tk[t.id]=t})
-  return (MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)).map(a=>{const t=tk[a.tid],loc=a.loc||(t&&t.loc)||'',cc=loc?mdCC(loc):(t?t.cc:''),ct=cc?mdContractForCC(cc):null;return{ag:a.ag,tid:a.tid,wh:a.wh||0,ch:a.ch||0,iso:mdActISO(a.start),cliente:ct?ct.cliente:(loc||'-'),cat:(t&&t.cat)||'-',lv:(t&&t.lv)||''}}).filter(a=>!(s&&e)||(a.iso>=s&&a.iso<=e))
+  return (MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)).map(a=>{const t=tk[a.tid],loc=a.loc||(t&&t.loc)||'';return{ag:a.ag,tid:a.tid,wh:a.wh||0,ch:a.ch||0,iso:mdActISO(a.start),cliente:mdLocCliente(loc),cat:(t&&t.cat)||'-',lv:(t&&t.lv)||''}}).filter(a=>!(s&&e)||(a.iso>=s&&a.iso<=e))
 }
 function mdApplyFromAtivs(){
   const recs={},clis={}
@@ -895,10 +897,11 @@ async function fetchAtivs(){
   const cfg=getMD();if(!cfg.key)return{err:'no-key'};
   atvDefaults();
   const base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key,start=MD_ATV_START,end=MD_ATV_END;
-  const parse=arr=>arr.map(r=>({id:r.id,tid:(r.id_ticket||r.ticket_id||r.id_solicitacao||''),atv:r.activity,tipo:r.typeofactivity,assunto:(r.ticket||r.ticet||''),ag:r.agent,loc:(r.location||r.local||''),start:r.start,end:r.end,wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour)})).filter(a=>a.ag);
+  const parse=arr=>arr.map(r=>({tid:(r.id_ticket||r.ticket_id||''),atv:r.activity,tipo:r.typeofactivity,assunto:(r.ticket||''),desc:(r.activitiesdescription||r.description||''),ag:r.agent,loc:(r.location||r.local||''),start:r.start,hm:(r.start_time||''),wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour)})).filter(a=>a.ag);
+  const ep='activitiesWorkedHours'; // traz location + agent + worked_hour por atividade (é o relatório do Milldesk)
   try{
-    let arr=await fetch(`${base}/listTicketsActivities?start=${start}&end=${end}`).then(r=>r.json());
-    if(arr&&arr.error)arr=await fetch(`${base}/listTicketsActivities`).then(r=>r.json());
+    let arr=await fetch(`${base}/${ep}?start=${start}&end=${end}`).then(r=>r.json());
+    if(arr&&arr.error)arr=await fetch(`${base}/${ep}`).then(r=>r.json());
     if(arr&&arr.error)return{err:arr.error};
     if(!Array.isArray(arr))return{err:'resposta inesperada'};
     return{ativs:parse(arr)};
@@ -918,21 +921,20 @@ function rAtividades(){
   if((!MD.ativs||!MD.ativs.length)&&!MD.ativsLoading){const c=lsGet('sbi_md_ativs');if(c&&c.ativs){MD.ativs=c.ativs;MD.ativsTs=c.ts;if(c.start)MD_ATV_START=c.start;if(c.end)MD_ATV_END=c.end}}
   const cfg=getMD();
   const perTxt=MD_ATV_START===MD_ATV_END?brDate(MD_ATV_START):(brDate(MD_ATV_START)+' a '+brDate(MD_ATV_END));
-  const presets=[['hoje','Hoje'],['ontem','Ontem'],['7d','7 dias'],['mes','Mês']].map(([k,l])=>`<button onclick="atvPreset('${k}')" class="badge" style="cursor:pointer;font-weight:700;border:none;background:#eef2f9;color:#475569;">${l}</button>`).join('');
-  const dateInputs=`<span style="display:flex;align-items:center;gap:.34rem;font-size:.66rem;color:#475569;">De <input type="date" id="atvDe" value="${MD_ATV_START}" style="padding:.24rem .4rem;border:1px solid var(--border);border-radius:.35rem;font-size:.7rem;"> até <input type="date" id="atvAte" value="${MD_ATV_END}" style="padding:.24rem .4rem;border:1px solid var(--border);border-radius:.35rem;font-size:.7rem;"></span>`;
-  const syncBtn=`<button onclick="atvApply()" class="act-btn" style="background:#2B4C9B;color:#fff;font-weight:700;">${MD.ativsLoading?'Sincronizando…':'⟳ Sincronizar'}</button>`;
+  const syncBtn=`<button onclick="mdSync()" class="act-btn" style="background:#2B4C9B;color:#fff;font-weight:700;">${(MD.ativsLoading||MD.loading)?'Sincronizando…':'⟳ Sincronizar'}</button>`;
   const tsTxt=MD.ativsTs?('atualizado '+new Date(MD.ativsTs).toLocaleString('pt-BR')):'';
   const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
     <span style="font-size:.92rem;font-weight:800;color:#0f172a;">Atividades ao vivo</span>
-    <span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">● MILLDESK</span>${presets}${dateInputs}
+    <span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">● MILLDESK</span>
+    <span class="badge" style="background:#eef2f9;color:#2B4C9B;font-weight:800;">${perTxt}</span>
     <span style="margin-left:auto;display:flex;gap:.5rem;align-items:center;"><span style="font-size:.6rem;color:#94a3b8;">${tsTxt}</span>${syncBtn}</span></div>
-    <div style="font-size:.66rem;color:#64748b;margin-top:.4rem;">Cada linha é uma atividade lançada pelo técnico no chamado — quem, quando e quantas horas. A <b>soma das atividades = horas do chamado</b>. O período é buscado direto no Milldesk (fiel à data escolhida).</div></div>`;
+    <div style="font-size:.66rem;color:#64748b;margin-top:.4rem;">Cada linha é uma atividade lançada pelo técnico — quem, quando, quantas horas. A <b>soma das atividades = horas do chamado</b>. Use o <b>filtro de período no topo</b> (Diário/Semana/Mensal/Anual/Período).</div></div>`;
   if(!cfg.key)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Configure a chave da API do Milldesk em <b>Admin → Config Alertas</b> para puxar as atividades ao vivo.</div>`;
   if(MD.ativsLoading&&(!MD.ativs||!MD.ativs.length))return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Buscando atividades no Milldesk…</div>`;
   if(!MD.ativs||!MD.ativs.length)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Clique em <b>⟳ Sincronizar atividades</b> para trazer os lançamentos do Milldesk.</div>`;
   const tkById={};(MD.tickets||[]).forEach(t=>{tkById[t.id]=t});
-  const rows=MD.ativs.map(a=>{const iso=mdActISO(a.start),tk=tkById[a.tid],loc=a.loc||(tk&&tk.loc)||'',cc=loc?mdCC(loc):(tk?tk.cc:'');const cli=cc?(mdContractForCC(cc)?.cliente||loc||'-'):(loc||'-');return{...a,iso,hm:mdActTime(a.start),cli,assunto:a.assunto||(tk?tk.t:''),sk:iso+' '+(mdActTime(a.start)||'')}}).filter(a=>atvInRange(a.iso));
-  if(!rows.length)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Nenhuma atividade em <b>${perTxt}</b>. Ajuste as datas (De/Até) e sincronize.</div>`;
+  const rows=MD.ativs.map(a=>{const iso=mdActISO(a.start),tk=tkById[a.tid],loc=a.loc||(tk&&tk.loc)||'';const cli=mdLocCliente(loc),hm=a.hm||mdActTime(a.start);return{...a,iso,hm,cli,assunto:a.assunto||(tk?tk.t:''),sk:iso+' '+(hm||'')}}).filter(a=>atvInRange(a.iso));
+  if(!rows.length)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Nenhuma atividade em <b>${perTxt}</b>. Ajuste o período no topo e sincronize.</div>`;
   rows.sort((x,y)=>y.sk.localeCompare(x.sk)||y.wh-x.wh);
   const byTec={};rows.forEach(a=>{const k=a.ag;(byTec[k]=byTec[k]||{ag:k,min:0,tk:new Set(),n:0});byTec[k].min+=a.wh;byTec[k].tk.add(a.tid);byTec[k].n++});
   const tecs=Object.values(byTec).sort((a,b)=>b.min-a.min);
@@ -940,9 +942,9 @@ function rAtividades(){
   const tks=Object.values(byTk).sort((a,b)=>b.min-a.min);
   const totMin=rows.reduce((s,a)=>s+a.wh,0);
   const kpis=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(minToHM(totMin)+'h','Horas lançadas','#2B4C9B','clock',perTxt)}${kpiCard(fmt(tecs.length),'Técnicos ativos','#0891b2','users')}${kpiCard(fmt(tks.length),'Chamados tocados','#7c3aed','ticket')}${kpiCard(fmt(rows.length),'Atividades','#854d0e','list-checks')}</div>`;
-  const tecTbl=`<div class="card mb-4 overflow-x-auto"><div style="font-size:.72rem;font-weight:800;color:#0f172a;margin-bottom:.6rem;">Por técnico</div><table><thead><tr><th>Técnico</th><th>Horas</th><th>Chamados</th><th>Atividades</th></tr></thead><tbody>${tecs.map(t=>`<tr><td style="font-weight:600;">${techDisp(t.ag)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(t.min)}h</td><td>${t.tk.size}</td><td>${t.n}</td></tr>`).join('')}</tbody></table></div>`;
-  const atvTbl=`<div class="card mb-4 overflow-x-auto"><div style="font-size:.72rem;font-weight:800;color:#0f172a;margin-bottom:.6rem;">Atividades (mais recentes primeiro)</div><table><thead><tr><th>Data/Hora</th><th>Técnico</th><th>Chamado</th><th>Cliente</th><th>Atividade</th><th>Horas</th></tr></thead><tbody>${rows.slice(0,200).map(a=>`<tr><td style="white-space:nowrap;color:#64748b;">${a.iso.split('-').reverse().join('/')}${a.hm?' '+a.hm:''}</td><td style="font-weight:600;">${techDisp(a.ag)}</td><td style="color:#64748b;">#${esc(a.tid)} ${esc((a.assunto||'').slice(0,38))}</td><td>${a.cli!=='-'?cliDisp(a.cli):'<span style="color:#cbd5e1;">-</span>'}</td><td style="color:#475569;">${esc((a.atv||'').slice(0,46))}</td><td style="font-weight:700;">${minToHM(a.wh)}h</td></tr>`).join('')}</tbody></table>${rows.length>200?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Mostrando as 200 mais recentes de ${rows.length}.</div>`:''}</div>`;
-  const tkTbl=`<div class="card overflow-x-auto"><div style="font-size:.72rem;font-weight:800;color:#0f172a;margin-bottom:.6rem;">Por chamado <span style="font-weight:500;color:#94a3b8;">(soma das atividades = horas do chamado)</span></div><table><thead><tr><th>Chamado</th><th>Cliente</th><th>Atividades</th><th>Técnicos</th><th>Horas do chamado</th></tr></thead><tbody>${tks.map(t=>`<tr><td style="color:#64748b;">#${esc(t.tid)} ${esc((t.assunto||'').slice(0,40))}</td><td>${t.cli!=='-'?cliDisp(t.cli):'<span style="color:#cbd5e1;">-</span>'}</td><td>${t.n}</td><td style="font-size:.62rem;color:#64748b;">${[...t.tecs].map(x=>esc(String(x).split(' ')[0])).join(', ')}</td><td style="font-weight:800;color:#166534;">${minToHM(t.min)}h</td></tr>`).join('')}</tbody></table></div>`;
+  const tecTbl=`<div class="card mb-4 overflow-x-auto"><div style="font-size:.72rem;font-weight:800;color:#0f172a;margin-bottom:.6rem;">Por técnico</div><table><thead><tr><th>Técnico</th><th>Horas</th><th>Chamados</th><th>Atividades</th></tr></thead><tbody>${tecs.map(t=>`<tr><td style="font-weight:600;">${techDisp(t.ag)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(t.min)}h</td><td>${t.tk.size}</td><td>${t.n}</td></tr>`).join('')}</tbody><tfoot><tr style="font-weight:800;border-top:2px solid #cbd5e1;background:#f8fafc;"><td>TOTAL</td><td style="color:#2B4C9B;">${minToHM(totMin)}h</td><td>${tks.length}</td><td>${rows.length}</td></tr></tfoot></table></div>`;
+  const atvTbl=`<div class="card mb-4 overflow-x-auto"><div style="font-size:.72rem;font-weight:800;color:#0f172a;margin-bottom:.6rem;">Atividades (mais recentes primeiro)</div><table><thead><tr><th>Data/Hora</th><th>Técnico</th><th>Chamado</th><th>Cliente</th><th>Atividade</th><th>Horas</th></tr></thead><tbody>${rows.slice(0,200).map(a=>`<tr><td style="white-space:nowrap;color:#64748b;">${a.iso.split('-').reverse().join('/')}${a.hm?' '+a.hm:''}</td><td style="font-weight:600;">${techDisp(a.ag)}</td><td style="color:#64748b;">#${esc(a.tid)} ${esc((a.assunto||'').slice(0,38))}</td><td>${a.cli!=='-'?cliDisp(a.cli):'<span style="color:#cbd5e1;">-</span>'}</td><td style="color:#475569;">${esc((a.atv||'').slice(0,46))}</td><td style="font-weight:700;">${minToHM(a.wh)}h</td></tr>`).join('')}</tbody><tfoot><tr style="font-weight:800;border-top:2px solid #cbd5e1;background:#f8fafc;"><td colspan="5" style="text-align:right;">TOTAL do período</td><td style="color:#2B4C9B;">${minToHM(totMin)}h</td></tr></tfoot></table>${rows.length>200?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Tabela mostra as 200 mais recentes; o TOTAL considera todas as ${rows.length}.</div>`:''}</div>`;
+  const tkTbl=`<div class="card overflow-x-auto"><div style="font-size:.72rem;font-weight:800;color:#0f172a;margin-bottom:.6rem;">Por chamado <span style="font-weight:500;color:#94a3b8;">(soma das atividades = horas do chamado)</span></div><table><thead><tr><th>Chamado</th><th>Cliente</th><th>Atividades</th><th>Técnicos</th><th>Horas do chamado</th></tr></thead><tbody>${tks.map(t=>`<tr><td style="color:#64748b;">#${esc(t.tid)} ${esc((t.assunto||'').slice(0,40))}</td><td>${t.cli!=='-'?cliDisp(t.cli):'<span style="color:#cbd5e1;">-</span>'}</td><td>${t.n}</td><td style="font-size:.62rem;color:#64748b;">${[...t.tecs].map(x=>esc(String(x).split(' ')[0])).join(', ')}</td><td style="font-weight:800;color:#166534;">${minToHM(t.min)}h</td></tr>`).join('')}</tbody><tfoot><tr style="font-weight:800;border-top:2px solid #cbd5e1;background:#f8fafc;"><td colspan="4" style="text-align:right;">TOTAL</td><td style="color:#166534;">${minToHM(totMin)}h</td></tr></tfoot></table></div>`;
   return head+kpis+tecTbl+atvTbl+tkTbl;
 }
 window.mdConnect=function(){const k=(document.getElementById('mdBannerKey').value||'').trim(),zt=(document.getElementById('mdBannerZbx').value||'').trim();
@@ -1039,9 +1041,9 @@ async function mdFetchSummary(ym){
   const tkMap={},uids=new Set(),chCli={}
   raw.forEach(r=>{uids.add(r.id);tkMap[r.id]={cc:mdCC(r.location||''),loc:r.location||'-'};const ct=mdContractForCC(mdCC(r.location||'')),nm=ct?ct.cliente:(r.location||'-');(chCli[nm]=chCli[nm]||new Set()).add(r.id)})
   // atividades = fonte das horas
-  let av=[];try{av=await fetch(`${base}/listTicketsActivities?start=${start}&end=${end}`).then(r=>r.json());if(av&&av.error)av=await fetch(`${base}/listTicketsActivities`).then(r=>r.json())}catch(e){av=[]}
+  let av=[];try{av=await fetch(`${base}/activitiesWorkedHours?start=${start}&end=${end}`).then(r=>r.json());if(av&&av.error)av=await fetch(`${base}/activitiesWorkedHours`).then(r=>r.json())}catch(e){av=[]}
   const hTec={},hCli={};let horas=0,useAtiv=false
-  if(Array.isArray(av)&&av.length){av.forEach(a=>{if(isExcludedTech(a.agent))return;const iso=mdActISO(a.start);if(iso<start||iso>end)return;const wm=mdWorkedMin(a.worked_hour);horas+=wm;useAtiv=true;if(a.agent)hTec[a.agent]=(hTec[a.agent]||0)+wm;const t=tkMap[a.id_ticket||a.ticket_id||''],loc=a.location||a.local||(t&&t.loc)||'',cc=loc?mdCC(loc):(t?t.cc:''),ct=cc?mdContractForCC(cc):null,nome=ct?ct.cliente:(loc||'-');hCli[nome]=(hCli[nome]||0)+wm})}
+  if(Array.isArray(av)&&av.length){av.forEach(a=>{if(isExcludedTech(a.agent))return;const iso=mdActISO(a.start);if(iso<start||iso>end)return;const wm=mdWorkedMin(a.worked_hour);horas+=wm;useAtiv=true;if(a.agent)hTec[a.agent]=(hTec[a.agent]||0)+wm;const t=tkMap[a.id_ticket||a.ticket_id||''],loc=a.location||a.local||(t&&t.loc)||'',nome=mdLocCliente(loc);hCli[nome]=(hCli[nome]||0)+wm})}
   if(!useAtiv){raw.forEach(r=>{const wm=mdWorkedMin(r.worked_hour);horas+=wm;if(r.agent)hTec[r.agent]=(hTec[r.agent]||0)+wm;const ct=mdContractForCC(mdCC(r.location||'')),nome=ct?ct.cliente:(r.location||'-');hCli[nome]=(hCli[nome]||0)+wm})}
   const cap=Object.keys(hTec).reduce((s,ag)=>{const f=matchFuncByAgent(ag);return s+((f?f.cap_horas:168)*60)},0)
   return{ym,chamados:uids.size,horas,fte:pct(horas,cap),src:useAtiv?'atividades':'chamados',tecnicos:Object.entries(hTec).map(([k,v])=>({k,v})),clientes:Object.entries(hCli).map(([k,v])=>({k,v,ch:(chCli[k]?chCli[k].size:0)}))}
