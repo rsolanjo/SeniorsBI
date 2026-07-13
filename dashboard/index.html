@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v21'
+const APP_VERSION='v22'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='exec',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos'
@@ -944,20 +944,20 @@ window.mdConnect=function(){const k=(document.getElementById('mdBannerKey').valu
 let MD12={ts:0,agg:null}
 async function mdSync12(){
   const cfg=getMD();if(!cfg.key){toast('Conecte o Milldesk.',false);return}
-  MD.loading=true;const el=document.getElementById('main');if(el)el.innerHTML='<div style="padding:2.5rem;text-align:center;color:#94a3b8;">Agregando os últimos 12 meses do Milldesk… (pode levar alguns segundos)</div>'
+  MD.loading=true;const el=document.getElementById('main');if(el)el.innerHTML='<div style="padding:2.5rem;text-align:center;color:#94a3b8;">Agregando os últimos 12 meses do Milldesk (horas das atividades)… pode levar alguns segundos</div>'
   const now=new Date(),months=[];for(let i=11;i>=0;i--)months.push(new Date(now.getFullYear(),now.getMonth()-i,1).toISOString().slice(0,7))
   let agg=MD12.agg
-  if(!agg||MD12.months!==months.join()){const cli={},tec={},tecLv={};let totCh=0
-    for(const ym of months){const s=await mdFetchSummary(ym);if(!s)continue;totCh+=s.chamados;s.clientes.forEach(c=>{cli[c.k]=(cli[c.k]||0)+c.v});s.tecnicos.forEach(t=>{if(isExcludedTech(t.k))return;tec[t.k]=(tec[t.k]||0)+t.v})}
-    agg={cli,tec,totCh};MD12={ts:Date.now(),agg,months:months.join()}}
+  if(!agg||MD12.months!==months.join()){const cli={},tec={};let totCh=0,anyAtiv=false
+    for(const ym of months){const s=await mdFetchSummary(ym);if(!s)continue;totCh+=s.chamados;if(s.src==='atividades')anyAtiv=true;s.clientes.forEach(c=>{cli[c.k]=(cli[c.k]||0)+c.v});s.tecnicos.forEach(t=>{if(isExcludedTech(t.k))return;tec[t.k]=(tec[t.k]||0)+t.v})}
+    agg={cli,tec,totCh,anyAtiv};MD12={ts:Date.now(),agg,months:months.join()}}
   D.recursos=Object.entries(agg.tec).map(([ag,min])=>{const f=matchFuncByAgent(ag);return{nome:f?f.nome:ag,nivel:f?f.nivel:'-',equipe:f?f.equipe:'',trab_minutos:min,avulsa_minutos:0,cap_minutos:(f?f.cap_horas:168)*60*12,chamados:0,mes_slug:'12m'}}).sort((a,b)=>b.trab_minutos-a.trab_minutos)
   D.clientes=Object.entries(agg.cli).map(([nome,horas])=>({nome,horas_minutos:horas,cobrar_minutos:0,chamados:0})).sort((a,b)=>b.horas_minutos-a.horas_minutos)
   D.totalHoras=D.recursos.reduce((s,r)=>s+r.trab_minutos,0);D.totalCap=D.recursos.reduce((s,r)=>s+r.cap_minutos,0);D.totalChamados=agg.totCh;D.fte=pct(D.totalHoras,D.totalCap)
-  D.skills=D.skills||[];if(!('sla'in D))D.sla=null;if(!('sat'in D))D.sat=null;D._src='milldesk-12m'
+  D.skills=D.skills||[];if(!('sla'in D))D.sla=null;if(!('sat'in D))D.sat=null;D._src='milldesk-12m';D._hsrc=agg.anyAtiv?'atividades':'chamados'
   MD.loaded=true;MD.periodo='últimos 12 meses';MD.loading=false;MES=months[months.length-1]
   document.getElementById('lastUpdate').textContent='Milldesk · 12 meses · '+new Date().toLocaleString('pt-BR')
   const _ld=document.getElementById('liveDot'),_ls=document.getElementById('liveStatus');if(_ld)_ld.style.background='#22c55e';if(_ls)_ls.textContent='Milldesk 12m'
-  toast('12 meses agregados: '+minToHM(D.totalHoras)+'h, '+fmt(D.totalChamados)+' chamados.')
+  toast('12 meses agregados ('+(agg.anyAtiv?'atividades':'chamados')+'): '+minToHM(D.totalHoras)+'h, '+fmt(D.totalChamados)+' chamados.')
   renderContent()
 }
 function mdMetrics(){
@@ -1021,14 +1021,18 @@ async function mdFetchSummary(ym){
   const cfg=getMD();if(!cfg.key||!/^\d{4}-\d{2}$/.test(ym))return null
   const[y,m]=ym.split('-').map(Number),last=new Date(y,m,0).getDate(),start=`${ym}-01`,end=`${ym}-${String(last).padStart(2,'0')}`
   const base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key
+  // chamados: contagem + mapa id->cliente (para resolver o cliente das atividades)
   let per=[];try{per=await fetch(`${base}/showTicketsPerPeriod?start=${start}&end=${end}`).then(r=>r.json())}catch(e){per=[]}
   const raw=Array.isArray(per)?per.filter(r=>!isExcludedTech(r.agent)):[]
-  const uids=new Set(),hTec={},hCli={},chCli={};let horas=0
-  raw.forEach(r=>{const wm=mdWorkedMin(r.worked_hour);horas+=wm;uids.add(r.id)
-    if(r.agent)hTec[r.agent]=(hTec[r.agent]||0)+wm
-    const loc=r.location||'-',ct=mdContractForCC(mdCC(loc)),nome=ct?ct.cliente:loc;hCli[nome]=(hCli[nome]||0)+wm;(chCli[nome]=chCli[nome]||new Set()).add(r.id)})
+  const tkMap={},uids=new Set(),chCli={}
+  raw.forEach(r=>{uids.add(r.id);tkMap[r.id]={cc:mdCC(r.location||''),loc:r.location||'-'};const ct=mdContractForCC(mdCC(r.location||'')),nm=ct?ct.cliente:(r.location||'-');(chCli[nm]=chCli[nm]||new Set()).add(r.id)})
+  // atividades = fonte das horas
+  let av=[];try{av=await fetch(`${base}/listTicketsActivities?start=${start}&end=${end}`).then(r=>r.json());if(av&&av.error)av=await fetch(`${base}/listTicketsActivities`).then(r=>r.json())}catch(e){av=[]}
+  const hTec={},hCli={};let horas=0,useAtiv=false
+  if(Array.isArray(av)&&av.length){av.forEach(a=>{if(isExcludedTech(a.agent))return;const iso=mdActISO(a.start);if(iso<start||iso>end)return;const wm=mdWorkedMin(a.worked_hour);horas+=wm;useAtiv=true;if(a.agent)hTec[a.agent]=(hTec[a.agent]||0)+wm;const t=tkMap[a.id_ticket],ct=t?mdContractForCC(t.cc):null,nome=ct?ct.cliente:((t&&t.loc)||'-');hCli[nome]=(hCli[nome]||0)+wm})}
+  if(!useAtiv){raw.forEach(r=>{const wm=mdWorkedMin(r.worked_hour);horas+=wm;if(r.agent)hTec[r.agent]=(hTec[r.agent]||0)+wm;const ct=mdContractForCC(mdCC(r.location||'')),nome=ct?ct.cliente:(r.location||'-');hCli[nome]=(hCli[nome]||0)+wm})}
   const cap=Object.keys(hTec).reduce((s,ag)=>{const f=matchFuncByAgent(ag);return s+((f?f.cap_horas:168)*60)},0)
-  return{ym,chamados:uids.size,horas,fte:pct(horas,cap),tecnicos:Object.entries(hTec).map(([k,v])=>({k,v})),clientes:Object.entries(hCli).map(([k,v])=>({k,v,ch:chCli[k].size}))}
+  return{ym,chamados:uids.size,horas,fte:pct(horas,cap),src:useAtiv?'atividades':'chamados',tecnicos:Object.entries(hTec).map(([k,v])=>({k,v})),clientes:Object.entries(hCli).map(([k,v])=>({k,v,ch:(chCli[k]?chCli[k].size:0)}))}
 }
 function renderCompareHtml(A,B){
   if(!A||!B)return '<div class="card" style="color:#94a3b8;text-align:center;padding:2rem;">Sem dados para comparar.</div>'
