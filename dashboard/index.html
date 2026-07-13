@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v39'
+const APP_VERSION='v40'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false
@@ -597,9 +597,9 @@ function buildAutoAlerts(){
   D.recursos.forEach(r=>{
     if(!getFunc(r.nome))return
     const f=pct(r.trab_minutos,r.cap_minutos)
-    if(f>cfg.fte_max)auto.push({lv:'critica',cat:'FTE',msg:`${r.nome}: FTE ${f}% - sobrecarga`,det:'Risco de burnout'})
-    else if(f>=lim)auto.push({lv:'alta',cat:'Horas',msg:`${r.nome}: atingiu ${f}% da capacidade`,det:`${minToHM(r.trab_minutos)}h de ${minToHM(r.cap_minutos)}h`})
-    else if(f<cfg.fte_min)auto.push({lv:'media',cat:'FTE',msg:`${r.nome}: FTE ${f}% - ocioso`,det:'Capacidade ociosa'})
+    const longP=mdPeriodFactor()>=0.85 // ocioso/sobrecarga só fazem sentido no mês+ (no diário/semana vira ruído)
+    if(longP&&f>cfg.fte_max)auto.push({lv:'critica',cat:'FTE',msg:`${r.nome}: FTE ${f}% - sobrecarga`,det:'Risco de burnout'})
+    else if(longP&&f<cfg.fte_min)auto.push({lv:'media',cat:'FTE',msg:`${r.nome}: FTE ${f}% - ocioso`,det:`Dentro da margem é ${cfg.fte_min}-${cfg.fte_max}%`})
   })
   // Por grupo/nível (N1, N2, N3) - agregado do roster ativo
   ;['N1','N2','N3'].forEach(nv=>{
@@ -967,6 +967,7 @@ async function fetchAtivs(){
     if(arr&&arr.error)arr=await fetch(`${base}/${ep}`).then(r=>r.json());
     if(arr&&arr.error)return{err:arr.error};
     if(!Array.isArray(arr))return{err:'resposta inesperada'};
+    try{MD.ativsRawN=arr.length;MD.ativsRaw=arr.slice(0,3)}catch(e){}
     return{ativs:parse(arr)};
   }catch(e){return{err:e.message}}
 }
@@ -1017,7 +1018,16 @@ function rAtividades(){
   const tecTbl=`<div class="card mb-4 overflow-x-auto"><div style="font-size:.72rem;font-weight:800;color:#0f172a;margin-bottom:.6rem;">Por técnico</div><table><thead><tr><th>Técnico</th><th>Horas</th><th>Chamados</th><th>Atividades</th></tr></thead><tbody>${tecs.map(t=>`<tr><td style="font-weight:600;">${techDisp(t.ag)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(t.min)}h</td><td>${t.tk.size}</td><td>${t.n}</td></tr>`).join('')}</tbody><tfoot><tr style="font-weight:800;border-top:2px solid #cbd5e1;background:#f8fafc;"><td>TOTAL</td><td style="color:#2B4C9B;">${minToHM(totMin)}h</td><td>${tks.length}</td><td>${vrows.length}</td></tr></tfoot></table></div>`;
   const atvTbl=`<div class="card mb-4 overflow-x-auto"><div style="font-size:.72rem;font-weight:800;color:#0f172a;margin-bottom:.6rem;">Atividades (mais recentes primeiro)</div><table><thead><tr><th>Data/Hora</th><th>Técnico</th><th>Chamado</th><th>Cliente</th><th>Atividade</th><th>Horas</th></tr></thead><tbody>${vrows.slice(0,CAP).map(a=>`<tr><td style="white-space:nowrap;color:#64748b;">${a.iso.split('-').reverse().join('/')}${a.hm?' '+a.hm:''}</td><td style="font-weight:600;">${techDisp(a.ag)}</td><td style="color:#64748b;">#${esc(a.tid)} ${esc((a.assunto||'').slice(0,38))}</td><td>${a.cli!=='-'?cliDisp(a.cli):'<span style="color:#cbd5e1;">-</span>'}</td><td style="color:#475569;">${esc((a.atv||'').slice(0,46))}</td><td style="font-weight:700;">${minToHM(a.wh)}h</td></tr>`).join('')}</tbody><tfoot><tr style="font-weight:800;border-top:2px solid #cbd5e1;background:#f8fafc;"><td colspan="5" style="text-align:right;">TOTAL (${vrows.length} ativ.)</td><td style="color:#2B4C9B;">${minToHM(totMin)}h</td></tr></tfoot></table>${vrows.length>CAP?`<div style="text-align:center;margin-top:.5rem;"><button onclick="toggleAtvExpand()" style="background:#eef2f9;border:1px solid #e2e8f0;border-radius:.4rem;padding:.3rem .85rem;font-size:.68rem;font-weight:700;color:#2B4C9B;cursor:pointer;">${ATV_EXPAND?'▲ Recolher':'▼ Ver todas as '+vrows.length+' atividades'}</button></div>`:''}</div>`;
   const tkTbl=`<div class="card overflow-x-auto"><div style="font-size:.72rem;font-weight:800;color:#0f172a;margin-bottom:.6rem;">Por chamado <span style="font-weight:500;color:#94a3b8;">(soma das atividades = horas do chamado)</span></div><table><thead><tr><th>Chamado</th><th>Cliente</th><th>Atividades</th><th>Técnicos</th><th>Horas do chamado</th></tr></thead><tbody>${tks.map(t=>`<tr><td style="color:#64748b;">#${esc(t.tid)} ${esc((t.assunto||'').slice(0,40))}</td><td>${t.cli!=='-'?cliDisp(t.cli):'<span style="color:#cbd5e1;">-</span>'}</td><td>${t.n}</td><td style="font-size:.62rem;color:#64748b;">${[...t.tecs].map(x=>esc(String(x).split(' ')[0])).join(', ')}</td><td style="font-weight:800;color:#166534;">${minToHM(t.min)}h</td></tr>`).join('')}</tbody><tfoot><tr style="font-weight:800;border-top:2px solid #cbd5e1;background:#f8fafc;"><td colspan="4" style="text-align:right;">TOTAL</td><td style="color:#166534;">${minToHM(totMin)}h</td></tr></tfoot></table></div>`;
-  return head+filterBar+kpis+tecTbl+atvTbl+tkTbl;
+  const rawKeys=(MD.ativsRaw&&MD.ativsRaw[0])?Object.keys(MD.ativsRaw[0]):[];
+  const rawSample=(MD.ativsRaw||[]).map(r=>esc(JSON.stringify(r).slice(0,260))).join('<br>');
+  const perDia={};(MD.ativs||[]).forEach(a=>{const d=mdActISO(a.start)||'(sem data)';perDia[d]=(perDia[d]||0)+1});
+  const perDiaTop=Object.entries(perDia).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([d,n])=>`${d}: ${n}`).join(' · ');
+  const diag=`<div class="card" style="font-size:.62rem;color:#475569;background:#fffbeb;border:1px solid #fde68a;"><b>🔧 Diagnóstico (dado bruto do Milldesk) — me manda um print disto</b>
+    <div style="margin-top:.3rem;">MD.ativs total puxado: <b>${(MD.ativs||[]).length}</b> (bruto da API: <b>${MD.ativsRawN||'?'}</b>) · no filtro atual (${perTxt}): <b>${vrows.length}</b> · backlog aberto: <b>${(MD.backlogFull||[]).length}</b></div>
+    <div style="margin-top:.2rem;">Atividades por DATA (campo <code>start</code>): ${esc(perDiaTop)||'-'}</div>
+    <div style="margin-top:.2rem;">Campos que a API retorna: <code>${esc(rawKeys.join(', '))||'(sincronize)'}</code></div>
+    ${rawSample?`<div style="margin-top:.2rem;font-family:monospace;font-size:.58rem;color:#64748b;word-break:break-all;">${rawSample}</div>`:''}</div>`;
+  return head+filterBar+kpis+tecTbl+atvTbl+tkTbl+diag;
 }
 window.mdConnect=function(){const k=(document.getElementById('mdBannerKey').value||'').trim(),zt=(document.getElementById('mdBannerZbx').value||'').trim();
   if(k)setMD({base:getMD().base,key:k})
