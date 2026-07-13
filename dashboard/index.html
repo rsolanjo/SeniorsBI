@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v17'
+const APP_VERSION='v18'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='exec',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos'
@@ -261,7 +261,7 @@ const ALERT_GRP={FTE:'profissional',Horas:'profissional',Grupo:'profissional',Fr
 const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Usuário',ic:'user',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
-  exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Alertas']],
+  exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['custohora','Custo-Hora'],['tecnico','Por Técnico'],['alertas','Alertas']],
   tech:[['fila','Fila de Chamados'],['equipe','Equipe'],['clientes','Clientes'],['historico','Histórico'],['incid','Inconsistências'],['alertas','Alertas'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
 }
@@ -499,6 +499,10 @@ function getClientContracts(nome){
 function contractReceita(c,chamados){if(!c||c.tipo_cobranca==='interno')return 0;if(c.tipo_cobranca==='chamado')return(c.valor_chamado||0)*(chamados||0);return c.valor_mensal||0}
 function cliValor(nome){const cli=(D.clientes||[]).find(x=>x.nome===nome);const ch=cli?cli.chamados:0;return getClientContracts(nome).reduce((s,c)=>s+contractReceita(c,ch),0)}
 function cliFranquia(nome){return getClientContracts(nome).reduce((s,c)=>s+(c.franquia_horas||0),0)}
+// Custo-hora técnica: padrão derivado de salário÷capacidade (dado real), editável em Config/inline.
+function custoHoraDefault(){const r=D.recursos||[];if(!r.length)return 0;const sal=r.reduce((s,x)=>s+getSalario(x.nome,x.nivel),0);const h=r.reduce((s,x)=>s+(x.cap_minutos||0),0)/60;return h>0?Math.round(sal/h):0}
+function getCustoHora(){const c=getAlertCfg().custo_hora;return(c&&c>0)?c:custoHoraDefault()}
+window.setCustoHora=function(v){const cfg=getAlertCfg();cfg.custo_hora=Math.max(0,Math.round(+v||0));lsSet('sbi_acfg',cfg);toast(cfg.custo_hora?('Custo-hora: '+fmtR(cfg.custo_hora)+'/h'):'Custo-hora: usando padrão derivado');renderContent()}
 function seedLocalData(){
   FUNCS=getFuncs();CONTRACTS=getContracts()
   const seeded=localStorage.getItem('sbi_seed_v')
@@ -611,7 +615,7 @@ function renderContent(){
   const standalone=SECTION==='admin'||(SECTION==='tech'&&['fila','checklists','incid'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
   if(SECTION==='exec'){
-    const sync={geral:rExecGeral,clientes:rExecClientes,tecnico:rExecTecnico,alertas:rExecAlertas}
+    const sync={geral:rExecGeral,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecAlertas}
     el.innerHTML=(sync[EXEC_SUB]||rExecGeral)();lucide.createIcons()
   }else if(SECTION==='tech'){
     const sync={clientes:rCli,equipe:rEquipe,incid:rIncidencias,checklists:rChecklists}
@@ -688,6 +692,50 @@ function rExecClientes(){
     <table><thead><tr><th>Empresa</th><th>Cliente</th><th>Contrato</th><th>Atend.</th><th>Tecnologias</th><th>H. Real</th><th>Franquia</th><th>Uso%</th><th>Ch.</th><th>Receita</th><th>Custo (est.)</th><th>Margem</th><th>SLA At./Re.</th><th>Ações</th></tr></thead><tbody>${cts.map(rowFor).join('')||`<tr><td colspan="14" style="color:#94a3b8;padding:1rem;text-align:center;">Nenhum contrato de ${emp}.</td></tr>`}</tbody></table></div>`
   }).join('')
   return cards+`<div style="font-size:.59rem;color:#94a3b8;">* Custo est. = proporcional às horas do período. Receita por chamado = valor/chamado × chamados.</div>`
+}
+
+function rExecCustoHora(){
+  const pm=D._src==='milldesk-12m'?12:1, periodoTxt=pm===12?'em 12 meses':'no mês';
+  const ch=getCustoHora(), chCfg=getAlertCfg().custo_hora, isDefault=!(chCfg&&chCfg>0);
+  const rows=fCli().map(c=>{
+    const horas=c.horas_minutos/60, valorBase=cliValor(c.nome), franqBase=cliFranquia(c.nome);
+    const valor=valorBase*pm, franq=franqBase*pm, custoH=horas*ch;
+    const uso=franq>0?Math.round(horas/franq*100):null;
+    const rhEf=(valor>0&&horas>0)?valor/horas:null;
+    const margem=valor>0?valor-custoH:null, margemP=valor>0?Math.round((valor-custoH)/valor*100):null;
+    const temContrato=valorBase>0||franqBase>0;
+    let sit='ok';
+    if(temContrato){ if((uso!=null&&uso>100)||(valor>0&&custoH>valor))sit='critico'; else if((uso!=null&&uso>=80)||(valor>0&&custoH>=valor*0.8))sit='atencao'; }
+    return{c,emp:getClientEmpresa(c.nome),horas,valor,franq,custoH,uso,rhEf,margem,margemP,temContrato,sit};
+  }).sort((a,b)=>{const rk={critico:0,atencao:1,ok:2};if(rk[a.sit]!==rk[b.sit])return rk[a.sit]-rk[b.sit];return(b.uso||0)-(a.uso||0)});
+  const totHoras=rows.reduce((s,r)=>s+r.horas,0), totCusto=rows.reduce((s,r)=>s+r.custoH,0), nEstouro=rows.filter(r=>r.sit==='critico').length;
+  const sitBadge=s=>{const m={critico:['ESTOURANDO','#991b1b','#fee2e2'],atencao:['ATENÇÃO','#854d0e','#fef9c3'],ok:['SAUDÁVEL','#166534','#dcfce7']}[s];return`<span class="badge" style="background:${m[2]};color:${m[1]};font-weight:800;">${m[0]}</span>`};
+  const body=rows.map(r=>{
+    const usoC=r.uso==null?'#64748b':r.uso>100?'#ef4444':r.uso>=80?'#f59e0b':'#22c55e';
+    const mC=r.margemP==null?'#94a3b8':r.margemP<0?'#ef4444':r.margemP<20?'#f59e0b':'#22c55e';
+    return`<tr><td>${empBadge(r.emp)}</td><td style="font-weight:600;">${cliDisp(r.c.nome)}</td><td style="font-weight:700;">${minToHM(r.c.horas_minutos)}h</td><td style="color:#64748b;">${r.franq>0?Math.round(r.franq)+'h':'-'}</td><td style="color:${usoC};font-weight:700;">${r.uso!=null?r.uso+'%':'-'}</td><td style="color:#854d0e;font-weight:700;">${r.custoH>0?fmtR(r.custoH):'-'}</td><td style="color:#166534;">${r.valor>0?fmtR(r.valor):'-'}</td><td style="color:#64748b;">${r.rhEf!=null?fmtR(r.rhEf)+'/h':'-'}</td><td style="color:${mC};font-weight:800;">${r.margem!=null?fmtR(r.margem)+(r.margemP!=null?' ('+r.margemP+'%)':''):'-'}</td><td>${r.temContrato?sitBadge(r.sit):'<span style="color:#94a3b8;font-size:.62rem;">sem contrato</span>'}</td></tr>`;
+  }).join('')||`<tr><td colspan="10" style="color:#94a3b8;padding:1.25rem;text-align:center;">Sincronize o Milldesk (Fila de Chamados) para ver as horas ao vivo.</td></tr>`;
+  return`<div class="card mb-4">
+    <div style="display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;margin-bottom:.28rem;">
+      <span style="font-size:.92rem;font-weight:800;color:#0f172a;">Custo-Hora × Contrato</span>
+      <span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">● AO VIVO</span>
+      <span style="font-size:.62rem;color:#94a3b8;">horas reais dos técnicos (Milldesk) ${periodoTxt} × valor e franquia do contrato</span>
+    </div>
+    <div style="font-size:.66rem;color:#64748b;line-height:1.5;margin-bottom:.85rem;">Valora as <b>horas realmente gastas pelos técnicos</b> pelo custo-hora e compara ao que o contrato paga — mostra onde o <b>esforço técnico está estourando o contrato</b>, independente do rateio de salário.</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      ${kpiCard(fmtR(ch)+'/h','Custo-hora aplicado','#2B4C9B','banknote',isDefault?'padrão (salário÷capacidade)':'definido manualmente')}
+      ${kpiCard(minToHM(Math.round(totHoras*60))+'h','Horas técnicas '+periodoTxt,'#0891b2','clock')}
+      ${kpiCard(fmtR(totCusto),'Custo das horas','#854d0e','coins')}
+      ${kpiCard(fmt(nEstouro),'Clientes estourando',nEstouro?'#ef4444':'#22c55e','trending-up',nEstouro?'horas/custo acima do contrato':'todos dentro do contrato')}
+    </div>
+    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem;font-size:.66rem;color:#475569;">
+      <span style="font-weight:700;">Custo-hora técnica (R$/h):</span>
+      <input type="number" min="0" step="10" value="${chCfg||''}" placeholder="${custoHoraDefault()}" onchange="setCustoHora(this.value)" style="width:110px;padding:.3rem .5rem;border:1px solid var(--border);border-radius:.4rem;font-size:.72rem;">
+      <span style="color:#94a3b8;">vazio = padrão derivado (${fmtR(custoHoraDefault())}/h)</span>
+    </div>
+    <div class="overflow-x-auto"><table><thead><tr><th>Empresa</th><th>Cliente</th><th>Horas (live)</th><th>Franquia</th><th>Uso</th><th>Custo das horas</th><th>Valor contrato</th><th>R$/h efetivo</th><th>Margem oper.</th><th>Situação</th></tr></thead><tbody>${body}</tbody></table></div>
+    <div style="font-size:.59rem;color:#94a3b8;margin-top:.6rem;"><b>Custo das horas</b> = horas gastas × custo-hora. <b>R$/h efetivo</b> = valor do contrato ÷ horas gastas (quanto cada hora rende). <b>Estourando</b> = horas acima da franquia, ou custo das horas acima do valor do contrato.</div>
+  </div>`;
 }
 
 function rExecTecnico(){
