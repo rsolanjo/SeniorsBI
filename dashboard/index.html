@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v35'
+const APP_VERSION='v36'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false
@@ -439,7 +439,7 @@ const setSkillsLS=v=>lsSet('sbi_skills',v)
 function effGatilhos(c){if(!c)return[];const o=getGatilhos()[c.id];if(o)return o;return(c.kb&&CONTRACT_KB[c.kb])?CONTRACT_KB[c.kb].gatilhos.slice():[]}
 const DEPTS=['TI / Técnico','Comercial','Administrativo','Financeiro','RH','Infraestrutura','Diretoria','Outros']
 // ─── Milldesk (chamados ao vivo) ───
-let MD={loaded:false,loading:false,periodo:'',ts:0,tickets:[],backlog:[],ativs:[],ativsTs:0,ativsLoading:false}
+let MD={loaded:false,loading:false,periodo:'',ts:0,tickets:[],backlog:[],backlogFull:[],ativs:[],ativsTs:0,ativsLoading:false}
 let MD_ATV_START='',MD_ATV_END='',ATV_TEC='',ATV_DAY='',ATV_EXPAND=false
 let CH_SUB='fila'
 window.setChSub=function(v){CH_SUB=v||'fila';if(SECTION==='tech'&&TECH_SUB==='chamados')renderContent()}
@@ -890,6 +890,15 @@ async function mdFetchTicketsRange(base,start,end){
   while(cur<=e){const y=cur.getFullYear(),m=cur.getMonth(),last=new Date(y,m+1,0).getDate();let a=`${y}-${pad(m+1)}-01`,b=`${y}-${pad(m+1)}-${pad(last)}`;if(a<start)a=start;if(b>end)b=end;try{out.push(...await one(a,b))}catch(_){}cur=new Date(y,m+1,1)}
   return out
 }
+// Backlog ABERTO completo (todas as status abertas) — base para atraso/SLA/reincidência independente do período
+async function mdFetchBacklog(base){
+  const STATUSES=['Aberto','Pendente','Em Execução','Em atendimento','Aguardando','Agendado','Em Espera','Reaberto']
+  const byId={}
+  for(const st of STATUSES){let arr=[];try{arr=await fetch(`${base}/showTicketsByStatus?status=${encodeURIComponent(st)}`).then(r=>r.json())}catch(e){arr=[]}
+    if(!Array.isArray(arr))continue
+    arr.forEach(r=>{if(!r||byId[r.id]||isExcludedTech(r.agent))return;byId[r.id]={id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:r.agent,st,start:r.start,ana:r.analysis,end:r.end,grupo:r.stage,cat:r.category,slaexp:r.slasexpirationdate}})}
+  return Object.values(byId)
+}
 window.mdSync=async function(){
   const cfg=getMD();if(!cfg.key){toast('Configure a chave da API Milldesk em Admin → Config Alertas.',false);setSection('admin');setSub('alertcfg');return}
   const[start,end]=mdPeriodRange(),base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key
@@ -904,6 +913,7 @@ window.mdSync=async function(){
     let ar={ativs:[]};try{ar=await fetchAtivs()}catch(e){ar={err:e.message}}
     if(ar.ativs&&ar.ativs.length){MD.ativs=ar.ativs;MD.ativsTs=Date.now();try{lsSet('sbi_md_ativs',{ts:MD.ativsTs,start,end,ativs:MD.ativs.slice(0,6000)})}catch(e){}mdApplyFromAtivs()}
     else{mdApplyToD(rawArr);if(ar.err&&ar.err!=='no-key')toast('Atividades indisponíveis ('+ar.err+') — usando horas por chamado.',false)}
+    try{MD.backlogFull=await mdFetchBacklog(base)}catch(e){MD.backlogFull=MD.backlogFull||[]}
     MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
     document.getElementById('lastUpdate').textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
     const _ld=document.getElementById('liveDot'),_ls=document.getElementById('liveStatus');if(_ld)_ld.style.background='#22c55e';if(_ls)_ls.textContent='Milldesk'
@@ -1013,12 +1023,14 @@ function mdMetrics(){
   const inCo=t=>{if(COMPANY==='all')return true;const ct=mdContractForCC(t.cc),nome=ct?ct.cliente:(t.loc||'');return getClientEmpresa(nome)===COMPANY}
   const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});const U=Object.values(uniq).filter(inCo)
   const byStatus={};U.forEach(t=>byStatus[t.st]=(byStatus[t.st]||0)+1)
-  const fechados=U.filter(t=>!mdIsOpen(t.st)).length,open=U.filter(t=>mdIsOpen(t.st))
+  const fechados=U.filter(t=>!mdIsOpen(t.st)).length
+  // Backlog ABERTO inteiro (showTicketsByStatus) — independe do período; se indisponível, usa os abertos do período.
+  const open=(MD.backlogFull&&MD.backlogFull.length)?MD.backlogFull.filter(inCo):U.filter(t=>mdIsOpen(t.st))
   // Sem atualização = hoje − DATA DA ÚLTIMA ATIVIDADE do chamado (não a data do ticket).
   const lastAtv={},firstAtv={};(MD.ativs||[]).forEach(a=>{const iso=mdActISO(a.start);if(!iso)return;if(!lastAtv[a.tid]||iso>lastAtv[a.tid])lastAtv[a.tid]=iso;if(!firstAtv[a.tid]||iso<firstAtv[a.tid])firstAtv[a.tid]=iso})
   const semAtual=open.map(t=>{const la=lastAtv[t.id],lad=la?new Date(la+'T12:00:00'):null;const d=lad||mdDate(t.ana)||mdDate(t.start);const dias=d?Math.floor((now-d)/864e5):null;return{...t,dias,ultAtiv:la||null}}).filter(t=>t.dias!=null&&t.dias>=diasInat).sort((a,b)=>b.dias-a.dias)
   const REINC_SKIP=/checklist|rotina di[aá]ria|relat[oó]rio di[aá]rio|monitoramento di[aá]rio|backup di[aá]rio/i
-  const grp={};U.forEach(t=>{if(REINC_SKIP.test(t.t||''))return;const nt=mdNorm(t.t);if(!nt)return;const k=(t.cc||t.loc)+'§'+nt;(grp[k]=grp[k]||{loc:t.loc,cc:t.cc,titulo:t.t,ids:[]}).ids.push(t.id)})
+  const grp={};open.forEach(t=>{if(REINC_SKIP.test(t.t||''))return;const nt=mdNorm(t.t);if(!nt)return;const k=(t.cc||t.loc)+'§'+nt;(grp[k]=grp[k]||{loc:t.loc,cc:t.cc,titulo:t.t,ids:[]}).ids.push(t.id)})
   const reinc=Object.values(grp).filter(g=>g.ids.length>=minRec).sort((a,b)=>b.ids.length-a.ids.length)
   const ativCli={};MD.tickets.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'-');ativCli[nome]=(ativCli[nome]||0)+1})
   const hCli={},hTec={},hCat={},tecCli={},ativN={},tecN={},useAtiv=!!(MD.ativs&&MD.ativs.length)
@@ -1038,10 +1050,10 @@ function mdMetrics(){
   if(!topCat.length){const cat={};U.forEach(t=>{const c=t.cat||'-';if(c==='-'||CAT_SKIP.test(c))return;cat[c]=(cat[c]||0)+1});topCat=Object.entries(cat).map(([k,v])=>({cat:k,n:v,min:hCat[k]||0})).sort((a,b)=>b.min-a.min).slice(0,12)}
   const recD=diasInat,recente=t=>{const d=mdDate(t.ana)||mdDate(t.end)||mdDate(t.start);return d?((now-d)/864e5)<=recD:false}
   const recentes=open.filter(recente).length,semRec=open.length-recentes
-  const foraSLA=open.map(t=>{const d=mdDate(t.start),dias=d?Math.floor((now-d)/864e5):0,ct=mdContractForCC(t.cc),lim=Math.max(1,Math.ceil((ct?(ct.sla_resol_h||24):48)/24));const pa=firstAtv[t.id];const resp=(pa&&d)?Math.max(0,Math.floor((new Date(pa+'T12:00:00')-d)/864e5)):null;return{...t,dias,lim,primAtiv:pa||null,respDias:resp}}).filter(t=>t.dias>t.lim).sort((a,b)=>b.dias-a.dias)
+  const foraSLA=open.map(t=>{const d=mdDate(t.start),dias=d?Math.floor((now-d)/864e5):0,ct=mdContractForCC(t.cc),lim=Math.max(1,Math.ceil((ct?(ct.sla_resol_h||24):48)/24));const pa=firstAtv[t.id];const resp=(pa&&d)?Math.max(0,Math.floor((new Date(pa+'T12:00:00')-d)/864e5)):null;const exp=mdDate(t.slaexp);return{...t,dias,lim,primAtiv:pa||null,respDias:resp,slaVenc:exp?exp<now:null}}).filter(t=>t.slaVenc===true||(t.slaVenc==null&&t.dias>t.lim)).sort((a,b)=>b.dias-a.dias)
   const pTec={};open.forEach(t=>{const ag=t.ag||'-';pTec[ag]=(pTec[ag]||0)+1});const pendTec=Object.entries(pTec).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v)
   const pCli={};open.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'-');pCli[nome]=(pCli[nome]||0)+1});const pendCli=Object.entries(pCli).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v)
-  const semReg=U.filter(t=>!t.ag||!t.loc||/n[aã]o cadastrad/i.test(t.loc||'')||!t.grupo)
+  const semReg=open.filter(t=>!t.ag||!t.loc||/n[aã]o cadastrad/i.test(t.loc||''))
   return{total:U.length,fechados,byStatus,backlogOpen:open.length,semAtual,reinc,porCliente,porTecnico,tecCliente:tecClienteArr,topCat,recentes,semRec,foraSLA,pendTec,pendCli,semReg}
 }
 const LEAK_KW=['fortigate','fortinet','forticare','watchguard','epdr','lotus','domino','veeam','m365','office 365','sd-wan','proxy revers','zabbix','grafana','pentest','azure','hyper-v','vmware','backup exec','unifi']
@@ -1072,6 +1084,9 @@ function mdInconsistencias(){
     else if(wh===0&&desc.length>90)out.push({key:a.tid+'|z0|'+iso,id:a.tid,data:a.start,tecnico:a.ag||'-',cliente:cli,cc,tipo:'Descrição',motivo:'0h lançadas mas há descrição de trabalho - falta registrar o tempo gasto',ctx:desc.slice(0,160)})
     if(loc&&!ct&&!internal)out.push({key:a.tid+'|lc|'+iso,id:a.tid,data:a.start,tecnico:a.ag||'-',cliente:loc.split('|')[0].trim(),cc,tipo:'Contrato',motivo:`Local "${loc.slice(0,45)}" sem contrato cadastrado - conferir contrato vigente`,ctx:desc})
   })
+  // Atividade com DATA NO FUTURO (ex.: lançada com 31/07 sendo hoje 13/07) - erro de data no Milldesk
+  const todayI=isoLocal(new Date())
+  ;(MD.ativs||[]).forEach(a=>{const iso=mdActISO(a.start);if(iso&&iso>todayI){const loc=a.loc||'';out.push({key:(a.tid||'')+'|fut|'+iso,id:a.tid||'-',data:a.start,tecnico:a.ag||'-',cliente:mdLocCliente(loc),cc:mdCC(loc),tipo:'Data',motivo:`Atividade com data no futuro (${brDate(iso)}) - alguém precisa corrigir a data no Milldesk`,ctx:(a.desc||'').slice(0,160)})}})
   const seen={};return out.filter(x=>seen[x.key]?false:(seen[x.key]=1))
 }
 // Chamados longos - total de horas alto p/ revisar se bate com o assunto inicial
@@ -1163,7 +1178,7 @@ async function rFila(){
 <div class="card overflow-x-auto">${ST('Top Categorias (por horas de atividade)')}<table><thead><tr><th>Categoria</th><th>Horas</th><th>Atividades</th></tr></thead><tbody>${catRows||'<tr><td colspan="3" style="color:#94a3b8;padding:1rem;text-align:center;">-</td></tr>'}</tbody></table></div>
 </div>
 <div class="card mb-4 mt-4 overflow-x-auto" style="border-left:3px solid #ef4444;">${ST('Fora do SLA - abertos além do prazo de resolução do contrato')}<div style="font-size:.6rem;color:#94a3b8;margin-bottom:.3rem;">"1ª resposta" = tempo da abertura até a 1ª atividade lançada no chamado.</div><table><thead><tr><th>ID</th><th>Assunto</th><th>Cliente</th><th>Técnico</th><th>1ª resposta</th><th>Aberto há</th><th>SLA</th></tr></thead><tbody>${slaRows||'<tr><td colspan="7" style="color:#22c55e;padding:1rem;text-align:center;">Nenhum chamado fora do SLA. 👍</td></tr>'}</tbody></table></div>
-<div class="card overflow-x-auto" style="border-left:3px solid #f59e0b;">${ST('Chamados sem registro - sem fila, cliente ou técnico ('+M.semReg.length+')')}<table><thead><tr><th>ID</th><th>Assunto</th><th>Técnico</th><th>Cliente/Local</th><th>Fila</th></tr></thead><tbody>${semRegRows||'<tr><td colspan="5" style="color:#22c55e;padding:1rem;text-align:center;">Todos os chamados têm fila, cliente e técnico. 👍</td></tr>'}</tbody></table></div>`
+<div class="card overflow-x-auto" style="border-left:3px solid #f59e0b;">${ST('Chamados sem registro - sem cliente ou sem técnico ('+M.semReg.length+')')}<div style="font-size:.6rem;color:#94a3b8;margin-bottom:.3rem;">Só chamados sem técnico ou sem cliente/local cadastrado (a etapa/stage não conta).</div><table><thead><tr><th>ID</th><th>Assunto</th><th>Técnico</th><th>Cliente/Local</th><th>Etapa</th></tr></thead><tbody>${semRegRows||'<tr><td colspan="5" style="color:#22c55e;padding:1rem;text-align:center;">Todos os chamados têm fila, cliente e técnico. 👍</td></tr>'}</tbody></table></div>`
 }
 
 function rIncidencias(){
