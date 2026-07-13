@@ -118,10 +118,10 @@ textarea.fi{resize:vertical;min-height:2.7rem}
     <div style="width:1px;height:1.05rem;background:#e2e8f0;flex-shrink:0;"></div>
     <div style="display:flex;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.4rem;padding:.07rem;">
       <button class="time-btn" onclick="setTime('diario')" id="t-diario">Diário</button>
-      <button class="time-btn" onclick="setTime('7d')" id="t-7d">7 dias</button>
-      <button class="time-btn active" onclick="setTime('30d')" id="t-30d">30 dias</button>
-      <button class="time-btn" onclick="setTime('12m')" id="t-12m">12 meses</button>
-      <button class="time-btn" onclick="setTime('picker')" id="t-picker">Mês/Ano</button>
+      <button class="time-btn" onclick="setTime('semana')" id="t-semana">Semana</button>
+      <button class="time-btn active" onclick="setTime('mensal')" id="t-mensal">Mensal</button>
+      <button class="time-btn" onclick="setTime('anual')" id="t-anual">Anual</button>
+      <button class="time-btn" onclick="setTime('periodo')" id="t-periodo">Período</button>
       <button class="time-btn" onclick="setTime('comparar')" id="t-comparar">Comparar</button>
     </div>
     <select id="selMes" class="hidden fi" style="width:auto;padding:.2rem .52rem;font-size:.72rem;"></select>
@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v22'
+const APP_VERSION='v23'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='exec',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos'
@@ -617,14 +617,13 @@ window.onDateRange=function(){if(getMD().key)mdSync();else renderContent()}
 function setTime(t){
   TIME=t
   document.querySelectorAll('.time-btn').forEach(b=>b.classList.remove('active'));document.getElementById('t-'+t)?.classList.add('active')
-  document.getElementById('selMes').classList.toggle('hidden',t!=='picker')
-  document.getElementById('dateRange').classList.toggle('hidden',t!=='diario')
+  document.getElementById('selMes').classList.add('hidden')
+  document.getElementById('dateRange').classList.toggle('hidden',t!=='periodo')
   document.getElementById('cmpBox').classList.toggle('hidden',t!=='comparar')
   if(t==='comparar'){ensureCmpDefaults();renderCompare();return}
-  if(t==='diario')ensureDateDefaults()
-  if(getMD().key){if(t==='12m'){mdSync12();return}if(t==='picker'&&MESES_LIST.length){MES=MESES_LIST[0].slug;document.getElementById('selMes').value=MES}mdSync();return}
-  if(t==='12m'){setSection('tech');TECH_SUB='historico';renderSubTabs();renderContent();return}
-  if(t!=='picker'&&MESES_LIST.length){MES=MESES_LIST[0].slug;document.getElementById('selMes').value=MES;loadMonth(MES)}
+  if(t==='periodo')ensureDateDefaults()
+  if(getMD().key){mdSync();return}
+  if(MESES_LIST.length){MES=MESES_LIST[0].slug;document.getElementById('selMes').value=MES;loadMonth(MES)}
 }
 
 function setSection(s){SECTION=s;['exec','tech','admin'].forEach(x=>document.getElementById('sb-'+x).classList.toggle('active',x===s));renderSubTabs();renderContent()}
@@ -672,6 +671,7 @@ const kpiCard=(val,lbl,col,icon,sub='')=>`<div class="card" style="border-left:3
 
 function rExecGeral(){
   const g=companyStats('all'),auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)
+  const nAtiv=(MD.ativs||[]).filter(a=>{const iso=mdActISO(a.start);return !(MD_ATV_START&&MD_ATV_END)||(iso>=MD_ATV_START&&iso<=MD_ATV_END)}).length
   const fteC=D.fte<60?'#ef4444':D.fte<80?'#f59e0b':'#22c55e',mgC=g.margem==null?'#94a3b8':g.margem<0?'#ef4444':g.margem<20?'#f59e0b':'#22c55e',alerC=auto.some(a=>a.lv==='critica')?'#ef4444':auto.length?'#f59e0b':'#22c55e'
   const empCards=['4Seniors','S4SYS','Porto Virtual'].map(emp=>{
     const d=companyStats(emp),ec=emp==='4Seniors'?'#2B4C9B':emp==='S4SYS'?'#7c3aed':'#166534',mC=d.margem==null?'#94a3b8':d.margem<0?'#ef4444':d.margem<20?'#f59e0b':'#22c55e'
@@ -685,7 +685,7 @@ function rExecGeral(){
   const receita=g.receita,folhaTec=FUNCS.filter(f=>!f._removed).reduce((s,f)=>s+getSalario(f.nome,f.nivel),0),custosGerais=custosDoMes(MES).reduce((s,c)=>s+(+c.valor||0),0),custoEmp=folhaTec+custosGerais
   const mgTec=receita>0?Math.round((receita-folhaTec)/receita*100):null,mgEmp=receita>0?Math.round((receita-custoEmp)/receita*100):null,mc=v=>v==null?'#94a3b8':v<0?'#ef4444':v<20?'#f59e0b':'#22c55e'
   const pnl=(titulo,sub,cst,cstLbl,lucro,mg,cor,icon)=>`<div class="card" style="border-top:3px solid ${cor};"><div style="display:flex;align-items:center;gap:.45rem;margin-bottom:.6rem;"><div style="background:${cor}18;color:${cor};border-radius:.42rem;padding:.3rem;display:flex;"><i data-lucide="${icon}" style="width:.85rem;height:.85rem;"></i></div><div><div style="font-size:.78rem;font-weight:800;">${titulo}</div><div style="font-size:.6rem;color:#94a3b8;">${sub}</div></div><span style="margin-left:auto;font-size:1.3rem;font-weight:900;color:${mc(mg)};">${mg!=null?mg+'%':'-'}</span></div><div class="grid grid-cols-3 gap-2"><div><div class="kpi-lbl">Receita</div><div style="font-size:.9rem;font-weight:800;color:#166534;">${fmtR(receita)}</div></div><div><div class="kpi-lbl">${cstLbl}</div><div style="font-size:.9rem;font-weight:800;color:#854d0e;">${fmtR(cst)}</div></div><div><div class="kpi-lbl">Lucro</div><div style="font-size:.9rem;font-weight:800;color:${lucro>=0?'#166534':'#ef4444'};">${fmtR(lucro)}</div></div></div></div>`
-  return`<div id="demo-kpis" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">${kpiCard(g.receita?fmtR(g.receita):'(a def.)','Receita Total','#166534','dollar-sign','Todos contratos')}${kpiCard(fmtR(totalCusto),'Custo Equipe (est.)','#854d0e','users','Salários CLT')}${kpiCard(g.margem!=null?g.margem+'%':'-','Margem Global',mgC,'trending-up')}${kpiCard(D.fte+'%','FTE Global',fteC,'activity',minToHM(D.totalHoras)+'h')}${kpiCard(fmt(D.totalChamados)+' ch.','Total Chamados','#E04622','ticket')}${kpiCard(auto.length,'Alertas Ativos',alerC,'triangle-alert',auto.filter(a=>a.lv==='critica').length+' críticos')}</div>
+  return`<div id="demo-kpis" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-4">${kpiCard(g.receita?fmtR(g.receita):'(a def.)','Receita Total','#166534','dollar-sign','Todos contratos')}${kpiCard(fmtR(totalCusto),'Custo Equipe (est.)','#854d0e','users','Salários CLT')}${kpiCard(g.margem!=null?g.margem+'%':'-','Margem Global',mgC,'trending-up')}${kpiCard(D.fte+'%','FTE Global',fteC,'activity',minToHM(D.totalHoras)+'h')}${kpiCard(fmt(nAtiv),'Atividades','#0891b2','list-checks','no período')}${kpiCard(fmt(D.totalChamados)+' ch.','Total Chamados','#E04622','ticket')}${kpiCard(auto.length,'Alertas Ativos',alerC,'triangle-alert',auto.filter(a=>a.lv==='critica').length+' críticos')}</div>
 <div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Resultado - Área Técnica × Empresa</div>
 <div id="demo-pnl" class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">${pnl('Área Técnica','área que gera a receita',folhaTec,'Custo (salários)',receita-folhaTec,mgTec,'#2B4C9B','wrench')}${pnl('Empresa (todas as áreas)','técnico + custos gerais',custoEmp,'Custo total',receita-custoEmp,mgEmp,'#7c3aed','building-2')}</div>
 <div style="font-size:.6rem;color:#94a3b8;margin:-.5rem 0 1rem;">Margem técnica alta e margem empresa baixa = peso nas outras áreas. As duas baixas = área técnica pesada. Custos gerais em Admin → Custos.</div>
@@ -716,7 +716,8 @@ function rExecClientes(){
 }
 
 function rExecCustoHora(){
-  const pm=D._src==='milldesk-12m'?12:1, periodoTxt=pm===12?'em 12 meses':'no mês';
+  const _pdays=(MD_ATV_START&&MD_ATV_END)?((new Date(MD_ATV_END+'T12:00:00')-new Date(MD_ATV_START+'T12:00:00'))/864e5+1):30.44
+  const pm=Math.max(0.03,_pdays/30.44), periodoTxt=(MD_ATV_START&&MD_ATV_END)?(MD_ATV_START===MD_ATV_END?brDate(MD_ATV_START):brDate(MD_ATV_START)+' a '+brDate(MD_ATV_END)):'no período';
   const ch=getCustoHora(), chCfg=getAlertCfg().custo_hora, isDefault=!(chCfg&&chCfg>0);
   const rows=fCli().map(c=>{
     const horas=c.horas_minutos/60, valorBase=cliValor(c.nome), franqBase=cliFranquia(c.nome);
@@ -843,20 +844,28 @@ window.zbxSync=async function(){const z=getZbx();if(!z.url){toast('Configure a U
 function rProd(){const rows=fRec().map(r=>{const fte=pct(r.trab_minutos,r.cap_minutos),c=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e';return`<tr><td style="font-weight:600;">${techDisp(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td style="color:#64748b;">${esc(r.equipe||'-')}</td><td>${minToHM(r.trab_minutos)}h</td><td style="color:#94a3b8;">${minToHM(r.avulsa_minutos)}h</td><td><div style="display:flex;align-items:center;gap:.43rem;"><div style="flex:1;height:.28rem;background:#f1f5f9;border-radius:9999px;min-width:3.5rem;overflow:hidden;"><div style="height:100%;width:${Math.min(fte,100)}%;background:${c};"></div></div><span style="font-size:.72rem;font-weight:800;color:${c};min-width:2.1rem;">${fte}%</span></div></td></tr>`}).join('');return`<div class="card overflow-x-auto">${ST('Produtividade por Técnico')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Equipe</th><th>H. Trabalhadas</th><th>H. Avulsas</th><th>FTE %</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.5rem;text-align:center;">Sem dados.</td></tr>'}</tbody></table></div>`}
 
 function mdPeriodRange(){
-  const d=new Date(),ymd=x=>x.toISOString().slice(0,10)
-  if(TIME==='diario'){const a=document.getElementById('dtInicio')?.value,b=document.getElementById('dtFim')?.value;if(a&&b)return a<=b?[a,b]:[b,a];const t=ymd(d);return[t,t]}
-  if(TIME==='7d'||TIME==='30d'){const n=TIME==='7d'?7:30;return[ymd(new Date(d.getTime()-n*864e5)),ymd(d)]}
-  if(MES&&/^\d{4}-\d{2}$/.test(MES)){const[y,m]=MES.split('-').map(Number),last=new Date(y,m,0).getDate();return[`${MES}-01`,`${MES}-${String(last).padStart(2,'0')}`]}
-  return[ymd(new Date(d.getFullYear(),d.getMonth(),1)),ymd(d)]
+  const d=new Date(),ymd=x=>{const z=new Date(x.getTime()-x.getTimezoneOffset()*60000);return z.toISOString().slice(0,10)}
+  if(TIME==='periodo'){const a=document.getElementById('dtInicio')?.value,b=document.getElementById('dtFim')?.value;if(a&&b)return a<=b?[a,b]:[b,a];const t=ymd(d);return[t,t]}
+  if(TIME==='diario'){const t=ymd(d);return[t,t]}
+  if(TIME==='semana')return[ymd(new Date(d.getTime()-6*864e5)),ymd(d)]
+  if(TIME==='anual')return[ymd(new Date(d.getFullYear(),0,1)),ymd(d)]
+  return[ymd(new Date(d.getFullYear(),d.getMonth(),1)),ymd(d)] // mensal (padrão)
+}
+// Busca chamados no período; para ranges longos (ex.: anual) quebra por mês p/ não baixar tudo de uma vez.
+async function mdFetchTicketsRange(base,start,end){
+  const one=async(a,b)=>{const per=await fetch(`${base}/showTicketsPerPeriod?start=${a}&end=${b}`).then(r=>r.json());if(per&&per.error)throw new Error(per.error);return Array.isArray(per)?per:[]}
+  const s=new Date(start+'T12:00:00'),e=new Date(end+'T12:00:00'),days=(e-s)/864e5
+  if(days<=62)return one(start,end)
+  const out=[],pad=n=>String(n).padStart(2,'0');let cur=new Date(s.getFullYear(),s.getMonth(),1)
+  while(cur<=e){const y=cur.getFullYear(),m=cur.getMonth(),last=new Date(y,m+1,0).getDate();let a=`${y}-${pad(m+1)}-01`,b=`${y}-${pad(m+1)}-${pad(last)}`;if(a<start)a=start;if(b>end)b=end;try{out.push(...await one(a,b))}catch(_){}cur=new Date(y,m+1,1)}
+  return out
 }
 window.mdSync=async function(){
   const cfg=getMD();if(!cfg.key){toast('Configure a chave da API Milldesk em Admin → Config Alertas.',false);setSection('admin');setSub('alertcfg');return}
   const[start,end]=mdPeriodRange(),base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key
   MD.loading=true;renderContent()
   try{
-    const per=await fetch(`${base}/showTicketsPerPeriod?start=${start}&end=${end}`).then(r=>r.json())
-    if(per&&per.error)throw new Error(per.error)
-    const rawArr=Array.isArray(per)?per:[]
+    const rawArr=await mdFetchTicketsRange(base,start,end)
     MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag))
     const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});MD.backlog=Object.values(uniq).filter(t=>mdIsOpen(t.st))
     if(!MES||TIME!=='picker')MES=start.slice(0,7)
@@ -883,7 +892,7 @@ async function fetchAtivs(){
   const cfg=getMD();if(!cfg.key)return{err:'no-key'};
   atvDefaults();
   const base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key,start=MD_ATV_START,end=MD_ATV_END;
-  const parse=arr=>arr.map(r=>({id:r.id,tid:r.id_ticket,atv:r.activity,tipo:r.typeofactivity,assunto:(r.ticket||r.ticet||''),ag:r.agent,start:r.start,end:r.end,wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour)})).filter(a=>a.ag&&!isExcludedTech(a.ag));
+  const parse=arr=>arr.map(r=>({id:r.id,tid:r.id_ticket,atv:r.activity,tipo:r.typeofactivity,assunto:(r.ticket||r.ticet||''),ag:r.agent,start:r.start,end:r.end,wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour)})).filter(a=>a.ag);
   try{
     let arr=await fetch(`${base}/listTicketsActivities?start=${start}&end=${end}`).then(r=>r.json());
     if(arr&&arr.error)arr=await fetch(`${base}/listTicketsActivities`).then(r=>r.json());
@@ -1155,7 +1164,7 @@ window.addSkillTec=function(){const roster=FUNCS.filter(f=>!f._removed).map(f=>f
 let HIST={key:'',ts:0,html:''}
 async function rTrend(){
   if(getMD().key){
-    const nMonths=TIME==='12m'?12:6,now=new Date(),months=[];for(let i=nMonths-1;i>=0;i--)months.push(new Date(now.getFullYear(),now.getMonth()-i,1).toISOString().slice(0,7))
+    const nMonths=TIME==='anual'?12:6,now=new Date(),months=[];for(let i=nMonths-1;i>=0;i--)months.push(new Date(now.getFullYear(),now.getMonth()-i,1).toISOString().slice(0,7))
     const key=months.join(',')
     if(HIST.key===key&&Date.now()-HIST.ts<6e5)return HIST.html
     const el=document.getElementById('main');if(el)el.innerHTML='<div style="padding:2rem;text-align:center;color:#94a3b8;">Carregando histórico dos últimos '+nMonths+' meses…</div>'
