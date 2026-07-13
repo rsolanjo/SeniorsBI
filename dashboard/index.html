@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v36'
+const APP_VERSION='v37'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false
@@ -262,7 +262,7 @@ const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Usuário',ic:'user',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
   exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['custohora','Custo-Hora'],['tecnico','Por Técnico'],['alertas','Alertas']],
-  tech:[['chamados','Chamados & Atividades'],['equipe','Equipe & Entrega'],['incid','Inconsistências'],['alertas','Alertas'],['checklists','Checklists']],
+  tech:[['chamados','Chamados & Atividades'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['matriz','Matriz'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
 }
 
@@ -454,6 +454,16 @@ async function rChamadosAtiv(){
   else{try{body=await rFila()}catch(e){body='<div class="card" style="color:#ef4444;padding:1rem;">Erro ao carregar a fila.</div>'}}
   return bar+body
 }
+let AL_SUB='alertas'
+window.setAlSub=function(v){AL_SUB=v||'alertas';if(SECTION==='tech'&&TECH_SUB==='alertas')renderContent()}
+async function rAlertasInc(){
+  const tabs=[['alertas','Alertas'],['incid','Inconsistências']].map(([k,l])=>`<button onclick="setAlSub('${k}')" style="padding:.36rem .85rem;border:1px solid ${AL_SUB===k?'#2B4C9B':'#e2e8f0'};border-radius:.45rem;font-size:.73rem;font-weight:800;cursor:pointer;background:${AL_SUB===k?'#2B4C9B':'#fff'};color:${AL_SUB===k?'#fff':'#475569'};">${l}</button>`).join('')
+  const bar=`<div style="display:flex;gap:.45rem;margin-bottom:.85rem;">${tabs}</div>`
+  let body=''
+  if(AL_SUB==='incid')body=rIncidencias()
+  else{try{body=await rAlertasTec()}catch(e){body='<div class="card" style="color:#ef4444;padding:1rem;">Erro ao carregar alertas.</div>'}}
+  return bar+body
+}
 let CMP={a:'',b:'',SA:null,SB:null,loading:false}
 const getMD=()=>{const s=lsGet('sbi_md')||{};return{base:s.base||'https://v1.milldesk.com/api',key:s.key||''}}
 const setMD=v=>lsSet('sbi_md',v)
@@ -490,7 +500,7 @@ function mdApplyToD(raw){
 }
 // Atividades = fonte das horas: cada apontamento tem seu técnico/horas; cliente/categoria vêm do chamado (id_ticket).
 function mdEnrichedAtivs(){
-  const s=MD_ATV_START,e=MD_ATV_END,tk={};(MD.tickets||[]).forEach(t=>{tk[t.id]=t})
+  const s=MD_ATV_START,e=MD_ATV_END,tk={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t&&!tk[t.id])tk[t.id]=t})
   return (MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)).map(a=>{const t=tk[a.tid],loc=a.loc||(t&&t.loc)||'';return{ag:a.ag,tid:a.tid,wh:a.wh||0,ch:a.ch||0,iso:mdActISO(a.start),cliente:mdLocCliente(loc),cat:(t&&t.cat)||'-',lv:(t&&t.lv)||''}}).filter(a=>!(s&&e)||(a.iso>=s&&a.iso<=e))
 }
 function mdApplyFromAtivs(){
@@ -662,16 +672,16 @@ function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TE
 function renderContent(){
   const el=document.getElementById('main')
   if(TIME==='comparar'){renderCompare();return}
-  const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','checklists','incid'].includes(TECH_SUB))
+  const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','checklists'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
   if(SECTION==='exec'){
     const sync={geral:rExecGeral,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecAlertas}
     el.innerHTML=(sync[EXEC_SUB]||rExecGeral)();lucide.createIcons()
   }else if(SECTION==='tech'){
-    const sync={incid:rIncidencias,checklists:rChecklists}
+    const sync={checklists:rChecklists}
     if(TECH_SUB==='equipe')rEquipeEntrega().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else if(TECH_SUB==='chamados')rChamadosAtiv().then(h=>{el.innerHTML=h;lucide.createIcons()})
-    else if(TECH_SUB==='alertas')rAlertasTec().then(h=>{el.innerHTML=h;lucide.createIcons()})
+    else if(TECH_SUB==='alertas')rAlertasInc().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else{el.innerHTML=(sync[TECH_SUB]||rProd)();lucide.createIcons()}
   }else{
     const sync={contratos:rContratos,funcionarios:rFuncionarios,matriz:rMatriz,custos:rCustos,'sla-edit':rSLAAdmin,alertcfg:rAlertCfg}
@@ -816,7 +826,7 @@ function rExecAlertas(){
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(fmt(criticos.length),'Alertas críticos',criticos.length?'#ef4444':'#22c55e','triangle-alert',altos.length+' altos')}${kpiCard(fmt(incPend),'Inconsistências abertas',incPend?'#E04622':'#22c55e','search-x')}${kpiCard(fmt(franqExtrap),'Clientes fora da franquia',franqExtrap?'#f59e0b':'#22c55e','gauge')}${kpiCard(g.margem!=null?g.margem+'%':'-','Margem global',mgC,'trending-up')}</div>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 <div class="card">${ST('Pontos críticos de atenção')}<div style="display:flex;flex-direction:column;gap:.28rem;">${critList}</div>${criticos.length>10?`<div style="font-size:.66rem;color:#94a3b8;margin-top:.4rem;">+${criticos.length-10} outros críticos</div>`:''}<div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid #f1f5f9;"><button onclick="setSection('tech');setSub('alertas')" style="font-size:.7rem;color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Ver todos os alertas técnicos →</button></div></div>
-<div class="card">${ST('Resultado financeiro por empresa')}${empRows}<div style="display:flex;align-items:center;gap:.6rem;padding:.5rem 0 0;margin-top:.3rem;border-top:2px solid #f1f5f9;"><span style="font-size:.74rem;font-weight:800;min-width:6rem;">Global</span><span style="font-size:.7rem;color:#166534;font-weight:700;">${fmtR(g.receita)}</span><span style="margin-left:auto;font-size:.85rem;font-weight:900;color:${mgC};">${g.margem!=null?g.margem+'%':'-'}</span></div>${incPend?`<div style="margin-top:.7rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:.4rem;padding:.5rem .7rem;font-size:.68rem;color:#9a3412;">${incPend} inconsistência(s) de horas/contrato em aberto - <button onclick="setSection('tech');setSub('incid')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">tratar na Técnica</button></div>`:''}</div>
+<div class="card">${ST('Resultado financeiro por empresa')}${empRows}<div style="display:flex;align-items:center;gap:.6rem;padding:.5rem 0 0;margin-top:.3rem;border-top:2px solid #f1f5f9;"><span style="font-size:.74rem;font-weight:800;min-width:6rem;">Global</span><span style="font-size:.7rem;color:#166534;font-weight:700;">${fmtR(g.receita)}</span><span style="margin-left:auto;font-size:.85rem;font-weight:900;color:${mgC};">${g.margem!=null?g.margem+'%':'-'}</span></div>${incPend?`<div style="margin-top:.7rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:.4rem;padding:.5rem .7rem;font-size:.68rem;color:#9a3412;">${incPend} inconsistência(s) de horas/contrato em aberto - <button onclick="setSection('tech');setSub('alertas');setAlSub('incid')" style="color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">tratar na Técnica</button></div>`:''}</div>
 </div>`
 }
 async function rAlertasTec(){
@@ -834,7 +844,7 @@ async function rAlertasTec(){
   const gc=k=>AG[k].length,gcrit=k=>AG[k].filter(x=>x.lv==='critica').length
   return`<div style="display:flex;align-items:baseline;gap:.6rem;margin-bottom:.7rem;"><span style="font-size:1rem;font-weight:900;">Alertas ativos</span><span style="font-size:.85rem;font-weight:800;color:${auto.some(a=>a.lv==='critica')?'#ef4444':auto.length?'#f59e0b':'#22c55e'};">${auto.length}</span><span style="font-size:.68rem;color:#94a3b8;">${auto.filter(a=>a.lv==='critica').length} críticos · ${MD.loaded?'Milldesk ao vivo':'dados locais'}</span></div>
 <div class="grid grid-cols-3 gap-3 mb-4">${['profissional','cliente','usuario'].map(k=>{const m=GRP_META[k];return kpiCard(gc(k),m.lbl,m.cor,m.ic,gcrit(k)?gcrit(k)+' críticos':'sem críticos')}).join('')}</div>
-<div class="card mb-4" style="border-left:3px solid ${incPend?'#E04622':'#22c55e'};display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;"><i data-lucide="search-x" style="width:1.1rem;height:1.1rem;color:${incPend?'#E04622':'#22c55e'};"></i><div style="flex:1;min-width:12rem;"><div style="font-size:.85rem;font-weight:800;">${incPend} inconsistência(s) em aberto${incTrat?` · ${incTrat} em tratamento`:''}</div><div style="font-size:.68rem;color:#64748b;">Tempo de atividade ou lançamento de contrato fora do padrão, detectados no período.</div></div><button onclick="setSection('tech');setSub('incid')" style="padding:.4rem .9rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.72rem;font-weight:700;cursor:pointer;">Tratar na Técnica →</button></div>
+<div class="card mb-4" style="border-left:3px solid ${incPend?'#E04622':'#22c55e'};display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;"><i data-lucide="search-x" style="width:1.1rem;height:1.1rem;color:${incPend?'#E04622':'#22c55e'};"></i><div style="flex:1;min-width:12rem;"><div style="font-size:.85rem;font-weight:800;">${incPend} inconsistência(s) em aberto${incTrat?` · ${incTrat} em tratamento`:''}</div><div style="font-size:.68rem;color:#64748b;">Tempo de atividade ou lançamento de contrato fora do padrão, detectados no período.</div></div><button onclick="setSection('tech');setSub('alertas');setAlSub('incid')" style="padding:.4rem .9rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.72rem;font-weight:700;cursor:pointer;">Tratar na Técnica →</button></div>
 <div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Alertas ativos por categoria</div>
 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">${['profissional','cliente','usuario'].map(grpCard).join('')}</div>
 ${otCard}
@@ -1163,7 +1173,7 @@ async function rFila(){
   const semTag='<span style="color:#ef4444;font-weight:700;">'
   const semRegRows=M.semReg.slice(0,25).map(t=>`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:18rem;">${esc((t.t||'').slice(0,55))}</td><td style="font-size:.68rem;">${t.ag?esc(t.ag):semTag+'sem técnico</span>'}</td><td style="font-size:.68rem;">${t.loc&&!/n[aã]o cadastrad/i.test(t.loc)?esc(t.loc):semTag+'sem cliente</span>'}</td><td style="font-size:.68rem;">${t.grupo?esc(t.grupo):semTag+'sem fila</span>'}</td></tr>`).join('')
   const saRows=M.semAtual.slice(0,25).map(t=>{const c=mdContractForCC(t.cc);return`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:16rem;">${esc((t.t||'').slice(0,60))}</td><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:t.loc)}</td><td style="font-size:.68rem;">${esc(t.ag||'-')}</td><td><span class="badge" style="background:${stColors[t.st]||'#64748b'}22;color:${stColors[t.st]||'#64748b'};">${esc(t.st)}</span></td><td style="font-size:.66rem;color:#64748b;">${t.ultAtiv?brDate(t.ultAtiv):'<span style="color:#f59e0b;">sem atividade</span>'}</td><td style="color:#ef4444;font-weight:800;">${t.dias}d</td></tr>`}).join('')
-  const reRows=M.reinc.slice(0,25).map(g=>{const c=mdContractForCC(g.cc);return`<tr><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:g.loc)}</td><td style="font-size:.7rem;max-width:20rem;">${esc((g.titulo||'').slice(0,70))}</td><td style="color:#f59e0b;font-weight:800;text-align:center;">${g.ids.length}×</td></tr>`}).join('')
+  const reRows=M.reinc.slice(0,25).map(g=>{const c=mdContractForCC(g.cc);return`<tr><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:g.loc)}</td><td style="font-size:.7rem;max-width:18rem;">${esc((g.titulo||'').slice(0,60))}</td><td style="color:#f59e0b;font-weight:800;text-align:center;">${g.ids.length}×</td><td style="font-size:.64rem;color:#64748b;font-family:monospace;">${g.ids.slice(0,12).map(id=>'#'+esc(id)).join(' ')}${g.ids.length>12?' …':''}</td></tr>`}).join('')
   const catRows=M.topCat.map(c=>`<tr><td style="font-weight:600;">${NM(c.cat)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(c.min)}h</td><td style="color:#64748b;">${fmt(c.n)}</td></tr>`).join('')
   return`${bar}${kpis}
 <div class="card mb-4">${ST('Chamados por Status')}<div style="display:flex;flex-wrap:wrap;">${statusBadges||'-'}</div></div>
@@ -1174,7 +1184,7 @@ async function rFila(){
 <div class="card mb-4 overflow-x-auto">${ST('Horas por Técnico em cada Cliente')}<table><thead><tr><th>Técnico</th><th>Cliente</th><th>Horas Gastas</th><th>Nº Chamados</th></tr></thead><tbody>${tecCliRows||'<tr><td colspan="4" style="color:#94a3b8;padding:1rem;text-align:center;">-</td></tr>'}</tbody></table></div>
 <div class="card mb-4 overflow-x-auto" style="border-left:3px solid #ef4444;">${ST('Sem Atualização - sem atividade nova há mais de '+(cfg.dias_inat||3)+' dias')}<div style="font-size:.6rem;color:#94a3b8;margin-bottom:.3rem;">"Parado" = dias desde a última atividade lançada no chamado (não a data de abertura).</div><table><thead><tr><th>ID</th><th>Assunto</th><th>Cliente</th><th>Técnico</th><th>Status</th><th>Última ativ.</th><th>Parado</th></tr></thead><tbody>${saRows||'<tr><td colspan="7" style="color:#22c55e;padding:1rem;text-align:center;">Nenhum chamado parado além do limite. 👍</td></tr>'}</tbody></table></div>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-<div class="card overflow-x-auto" style="border-left:3px solid #f59e0b;">${ST('Reincidentes - mesmo assunto/cliente (≥'+Math.max(2,cfg.tickets_rec||3)+'×)')}<table><thead><tr><th>Cliente</th><th>Assunto</th><th>Qtd</th></tr></thead><tbody>${reRows||'<tr><td colspan="3" style="color:#22c55e;padding:1rem;text-align:center;">Sem reincidência relevante.</td></tr>'}</tbody></table></div>
+<div class="card overflow-x-auto" style="border-left:3px solid #f59e0b;">${ST('Reincidentes - mesmo assunto/cliente (≥'+Math.max(2,cfg.tickets_rec||3)+'×)')}<table><thead><tr><th>Cliente</th><th>Assunto</th><th>Qtd</th><th>Chamados</th></tr></thead><tbody>${reRows||'<tr><td colspan="4" style="color:#22c55e;padding:1rem;text-align:center;">Sem reincidência relevante.</td></tr>'}</tbody></table></div>
 <div class="card overflow-x-auto">${ST('Top Categorias (por horas de atividade)')}<table><thead><tr><th>Categoria</th><th>Horas</th><th>Atividades</th></tr></thead><tbody>${catRows||'<tr><td colspan="3" style="color:#94a3b8;padding:1rem;text-align:center;">-</td></tr>'}</tbody></table></div>
 </div>
 <div class="card mb-4 mt-4 overflow-x-auto" style="border-left:3px solid #ef4444;">${ST('Fora do SLA - abertos além do prazo de resolução do contrato')}<div style="font-size:.6rem;color:#94a3b8;margin-bottom:.3rem;">"1ª resposta" = tempo da abertura até a 1ª atividade lançada no chamado.</div><table><thead><tr><th>ID</th><th>Assunto</th><th>Cliente</th><th>Técnico</th><th>1ª resposta</th><th>Aberto há</th><th>SLA</th></tr></thead><tbody>${slaRows||'<tr><td colspan="7" style="color:#22c55e;padding:1rem;text-align:center;">Nenhum chamado fora do SLA. 👍</td></tr>'}</tbody></table></div>
@@ -1251,10 +1261,10 @@ async function rTrend(){
     const monLbl=sums.map(s=>{const[y,m]=s.ym.split('-');return m+'/'+y})
     const allTec=[...new Set(sums.flatMap(s=>s.tecnicos.filter(t=>t.v>0).map(t=>t.k)))].filter(n=>!isExcludedTech(n))
     const tecMx=allTec.map(name=>{const cells=sums.map(s=>{const t=s.tecnicos.find(x=>x.k===name);return t?t.v:0});return{name,cells,tot:cells.reduce((a,b)=>a+b,0)}}).sort((a,b)=>b.tot-a.tot)
-    const tecRows=tecMx.map(r=>`<tr><td style="font-weight:600;font-size:.72rem;white-space:nowrap;position:sticky;left:0;background:white;">${esc(r.name)}</td>${r.cells.map(v=>`<td style="font-size:.7rem;">${v?minToHM(v)+'h':'<span style="color:#cbd5e1">-</span>'}</td>`).join('')}<td style="font-weight:700;color:#2B4C9B;">${minToHM(r.tot)}h</td></tr>`).join('')
+    const tecRows=tecMx.map(r=>`<tr><td style="font-weight:600;font-size:.72rem;white-space:nowrap;position:sticky;left:0;background:white;">${esc(r.name)}</td>${r.cells.map(v=>`<td style="font-size:.7rem;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;">${v?minToHM(v)+'h':'<span style="color:#cbd5e1">-</span>'}</td>`).join('')}<td style="font-weight:700;color:#2B4C9B;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;">${minToHM(r.tot)}h</td></tr>`).join('')
     const allCli=[...new Set(sums.flatMap(s=>s.clientes.filter(c=>c.v>0).map(c=>c.k)))]
     const cliMx=allCli.map(name=>{const cells=sums.map(s=>{const c=s.clientes.find(x=>x.k===name);return c?c.v:0});return{name,cells,tot:cells.reduce((a,b)=>a+b,0)}}).sort((a,b)=>b.tot-a.tot).slice(0,30)
-    const cliRows=cliMx.map(r=>`<tr><td style="font-weight:600;font-size:.72rem;white-space:nowrap;position:sticky;left:0;background:white;">${esc(r.name)}</td>${r.cells.map(v=>`<td style="font-size:.7rem;">${v?minToHM(v)+'h':'<span style="color:#cbd5e1">-</span>'}</td>`).join('')}<td style="font-weight:700;color:#2B4C9B;">${minToHM(r.tot)}h</td></tr>`).join('')
+    const cliRows=cliMx.map(r=>`<tr><td style="font-weight:600;font-size:.72rem;white-space:nowrap;position:sticky;left:0;background:white;">${esc(r.name)}</td>${r.cells.map(v=>`<td style="font-size:.7rem;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;">${v?minToHM(v)+'h':'<span style="color:#cbd5e1">-</span>'}</td>`).join('')}<td style="font-weight:700;color:#2B4C9B;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;">${minToHM(r.tot)}h</td></tr>`).join('')
     const thMon=monLbl.map(m=>`<th style="text-align:right;">${m}</th>`).join('')
     HIST={key,ts:Date.now(),html:`<div class="card overflow-x-auto mb-4">${ST('Histórico geral - últimos '+nMonths+' meses (Milldesk ao vivo)')}<table><thead><tr><th>Mês</th><th>Chamados</th><th>Horas trabalhadas</th><th>FTE %</th><th>Clientes ativos</th><th>Técnicos ativos</th></tr></thead><tbody>${rows}</tbody></table><div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;">Clientes/técnicos ativos = com horas lançadas no mês. Cache de 10 min.</div></div>
 <div class="card overflow-x-auto mb-4">${ST('Histórico por Técnico - horas/mês')}<table style="min-width:40rem;"><thead><tr><th style="position:sticky;left:0;background:#f8fafc;">Técnico</th>${thMon}<th style="text-align:right;">Total</th></tr></thead><tbody>${tecRows||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:1rem;">-</td></tr>'}</tbody></table></div>
