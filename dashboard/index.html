@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v33'
+const APP_VERSION='v34'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos',SEC_AUTH=false
@@ -643,6 +643,10 @@ function setSection(s,skipAuth){
   SECTION=s;['exec','tech','admin'].forEach(x=>document.getElementById('sb-'+x).classList.toggle('active',x===s));renderSubTabs();renderContent()
 }
 window.setSection=setSection
+// Ordenação universal: clicar no cabeçalho de qualquer tabela ordena (A-Z/Z-A, maior/menor, empresa)
+function _cellKey(td){if(!td)return{s:''};const t=(td.innerText||'').trim();const hm=t.match(/^(\d+):(\d{2})h?$/);if(hm)return{n:(+hm[1])*60+(+hm[2])};if(/\d/.test(t)&&/^[+\-]?[\dR$.,%\s]+h?$/.test(t)){const num=parseFloat(t.replace(/[R$\s%h]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.'));if(!isNaN(num))return{n:num}}return{s:t.toLowerCase()}}
+function enableTableSort(){document.querySelectorAll('#main table').forEach(tb=>{const ths=tb.querySelectorAll('thead th');ths.forEach((th,i)=>{if(th._srt)return;th._srt=1;th.style.cursor='pointer';if(!/↕/.test(th.textContent))th.insertAdjacentHTML('beforeend',' <span style="opacity:.35;font-size:.7em;">↕</span>');th.addEventListener('click',()=>{const body=tb.querySelector('tbody');if(!body)return;const rows=[...body.children].filter(r=>r.children.length>i&&!r.querySelector('[colspan]'));const dir=th._d=(th._d===1?-1:1);ths.forEach(o=>{if(o!==th)o._d=0});rows.sort((a,b)=>{const ka=_cellKey(a.children[i]),kb=_cellKey(b.children[i]);if('n'in ka&&'n'in kb)return(ka.n-kb.n)*dir;return String('s'in ka?ka.s:ka.n).localeCompare(String('s'in kb?kb.s:kb.n),'pt')*dir});rows.forEach(r=>body.appendChild(r))})})})}
+try{const _srtMO=new MutationObserver(()=>{clearTimeout(window._srtT);window._srtT=setTimeout(enableTableSort,80)});const _m=document.getElementById('main');if(_m)_srtMO.observe(_m,{childList:true,subtree:true})}catch(e){}
 window.setSub=function(s){if(SECTION==='exec')EXEC_SUB=s;else if(SECTION==='tech')TECH_SUB=s;else ADMIN_SUB=s;renderSubTabs();renderContent()}
 function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:ADMIN_SUB;document.getElementById('subTabs').innerHTML=SECTION_SUBS[SECTION].map(([k,l])=>`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}</button>`).join('')}
 function renderContent(){
