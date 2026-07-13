@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v20'
+const APP_VERSION='v21'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='exec',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos'
@@ -470,7 +470,25 @@ function mdApplyToD(raw){
   D.clientes=Object.values(clis).map(c=>({nome:c.nome,horas_minutos:c.horas_minutos,cobrar_minutos:c.cobrar_minutos,chamados:c.ids.size})).sort((a,b)=>b.horas_minutos-a.horas_minutos)
   D.totalHoras=D.recursos.reduce((s,r)=>s+r.trab_minutos,0);D.totalCap=D.recursos.reduce((s,r)=>s+r.cap_minutos,0)
   D.totalChamados=D.clientes.reduce((s,c)=>s+c.chamados,0);D.fte=pct(D.totalHoras,D.totalCap)
-  D.skills=D.skills||[];D.alertas=D.alertas||[];if(!('sla'in D))D.sla=null;if(!('sat'in D))D.sat=null;D._src='milldesk'
+  D.skills=D.skills||[];D.alertas=D.alertas||[];if(!('sla'in D))D.sla=null;if(!('sat'in D))D.sat=null;D._src='milldesk';D._hsrc='chamados'
+}
+// Atividades = fonte das horas: cada apontamento tem seu técnico/horas; cliente/categoria vêm do chamado (id_ticket).
+function mdEnrichedAtivs(){
+  const s=MD_ATV_START,e=MD_ATV_END,tk={};(MD.tickets||[]).forEach(t=>{tk[t.id]=t})
+  return (MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)).map(a=>{const t=tk[a.tid],ct=t?mdContractForCC(t.cc):null;return{ag:a.ag,tid:a.tid,wh:a.wh||0,ch:a.ch||0,iso:mdActISO(a.start),cliente:ct?ct.cliente:((t&&t.loc)||'-'),cat:(t&&t.cat)||'-',lv:(t&&t.lv)||''}}).filter(a=>!(s&&e)||(a.iso>=s&&a.iso<=e))
+}
+function mdApplyFromAtivs(){
+  const recs={},clis={}
+  mdEnrichedAtivs().forEach(a=>{
+    const ro=recs[a.ag]=recs[a.ag]||{nome:a.ag,trab_minutos:0,avulsa_minutos:0,ids:new Set(),lv:{}};ro.trab_minutos+=a.wh;ro.avulsa_minutos+=a.ch;ro.ids.add(a.tid);if(a.lv)ro.lv[a.lv]=(ro.lv[a.lv]||0)+1
+    const co=clis[a.cliente]=clis[a.cliente]||{nome:a.cliente,horas_minutos:0,cobrar_minutos:0,ids:new Set()};co.horas_minutos+=a.wh;co.cobrar_minutos+=a.ch;co.ids.add(a.tid)
+  })
+  D.recursos=Object.values(recs).map(ro=>{const f=matchFuncByAgent(ro.nome);return{nome:f?f.nome:ro.nome,nivel:f?f.nivel:(_topKey(ro.lv)||'-'),equipe:f?f.equipe:'',trab_minutos:ro.trab_minutos,avulsa_minutos:ro.avulsa_minutos,cap_minutos:(f?f.cap_horas:168)*60,chamados:ro.ids.size,mes_slug:MES}}).sort((a,b)=>b.trab_minutos-a.trab_minutos)
+  const tkCli={};(MD.tickets||[]).forEach(t=>{const ct=mdContractForCC(t.cc),nm=ct?ct.cliente:(t.loc||'-');(tkCli[nm]=tkCli[nm]||new Set()).add(t.id)})
+  D.clientes=Object.values(clis).map(c=>({nome:c.nome,horas_minutos:c.horas_minutos,cobrar_minutos:c.cobrar_minutos,chamados:(tkCli[c.nome]?tkCli[c.nome].size:c.ids.size)})).sort((a,b)=>b.horas_minutos-a.horas_minutos)
+  D.totalHoras=D.recursos.reduce((s,r)=>s+r.trab_minutos,0);D.totalCap=D.recursos.reduce((s,r)=>s+r.cap_minutos,0)
+  D.totalChamados=(MD.tickets&&MD.tickets.length)?new Set(MD.tickets.map(t=>t.id)).size:D.clientes.reduce((s,c)=>s+c.chamados,0);D.fte=pct(D.totalHoras,D.totalCap)
+  D.skills=D.skills||[];D.alertas=D.alertas||[];if(!('sla'in D))D.sla=null;if(!('sat'in D))D.sat=null;D._src='milldesk';D._hsrc='atividades'
 }
 const todayISO=()=>new Date().toISOString().slice(0,10)
 const RISK_KW=['erro','falha','offline','down','crítico','critico','pendente','vencido','risco','sem backup','backup falh','não','nao ','indisponível','indisponivel','alerta','degradad','lento','estourou','expirou','expirad']
@@ -842,11 +860,15 @@ window.mdSync=async function(){
     MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag))
     const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});MD.backlog=Object.values(uniq).filter(t=>mdIsOpen(t.st))
     if(!MES||TIME!=='picker')MES=start.slice(0,7)
-    mdApplyToD(rawArr)
+    // Atividades = fonte das horas (chamados só p/ status). Fallback p/ horas por chamado se indisponível.
+    MD_ATV_START=start;MD_ATV_END=end
+    let ar={ativs:[]};try{ar=await fetchAtivs()}catch(e){ar={err:e.message}}
+    if(ar.ativs&&ar.ativs.length){MD.ativs=ar.ativs;MD.ativsTs=Date.now();try{lsSet('sbi_md_ativs',{ts:MD.ativsTs,start,end,ativs:MD.ativs.slice(0,6000)})}catch(e){}mdApplyFromAtivs()}
+    else{mdApplyToD(rawArr);if(ar.err&&ar.err!=='no-key')toast('Atividades indisponíveis ('+ar.err+') — usando horas por chamado.',false)}
     MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
     document.getElementById('lastUpdate').textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
     const _ld=document.getElementById('liveDot'),_ls=document.getElementById('liveStatus');if(_ld)_ld.style.background='#22c55e';if(_ls)_ls.textContent='Milldesk'
-    toast(`Milldesk: ${MD.tickets.length} chamados, ${minToHM(D.totalHoras)}h, ${D.recursos.length} técnicos.`)
+    toast(`Milldesk: ${MD.tickets.length} chamados · ${D._hsrc==='atividades'?MD.ativs.length+' atividades':'horas por chamado'} · ${minToHM(D.totalHoras)}h.`)
   }catch(e){MD.loading=false;toast('Falha Milldesk: '+e.message,false)}
   renderContent()
 }
@@ -948,10 +970,11 @@ function mdMetrics(){
   const grp={};U.forEach(t=>{if(REINC_SKIP.test(t.t||''))return;const nt=mdNorm(t.t);if(!nt)return;const k=(t.cc||t.loc)+'§'+nt;(grp[k]=grp[k]||{loc:t.loc,cc:t.cc,titulo:t.t,ids:[]}).ids.push(t.id)})
   const reinc=Object.values(grp).filter(g=>g.ids.length>=minRec).sort((a,b)=>b.ids.length-a.ids.length)
   const ativCli={};MD.tickets.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'-');ativCli[nome]=(ativCli[nome]||0)+1})
-  const hCli={},hTec={},hCat={},tecCli={}
-  MD.tickets.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'-');hCli[nome]=(hCli[nome]||0)+t.wh;hCat[t.cat||'-']=(hCat[t.cat||'-']||0)+t.wh;if(t.ag){hTec[t.ag]=(hTec[t.ag]||0)+t.wh;const k=t.ag+'§'+nome;(tecCli[k]=tecCli[k]||{ag:t.ag,cli:nome,min:0,ids:new Set()});tecCli[k].min+=t.wh;tecCli[k].ids.add(t.id)}})
+  const hCli={},hTec={},hCat={},tecCli={},ativN={},useAtiv=!!(MD.ativs&&MD.ativs.length)
+  if(useAtiv){mdEnrichedAtivs().forEach(a=>{hCli[a.cliente]=(hCli[a.cliente]||0)+a.wh;hCat[a.cat]=(hCat[a.cat]||0)+a.wh;ativN[a.cliente]=(ativN[a.cliente]||0)+1;if(a.ag){hTec[a.ag]=(hTec[a.ag]||0)+a.wh;const k=a.ag+'§'+a.cliente;(tecCli[k]=tecCli[k]||{ag:a.ag,cli:a.cliente,min:0,ids:new Set()});tecCli[k].min+=a.wh;tecCli[k].ids.add(a.tid)}})}
+  else{MD.tickets.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'-');hCli[nome]=(hCli[nome]||0)+t.wh;hCat[t.cat||'-']=(hCat[t.cat||'-']||0)+t.wh;if(t.ag){hTec[t.ag]=(hTec[t.ag]||0)+t.wh;const k=t.ag+'§'+nome;(tecCli[k]=tecCli[k]||{ag:t.ag,cli:nome,min:0,ids:new Set()});tecCli[k].min+=t.wh;tecCli[k].ids.add(t.id)}})}
   const cli={};U.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'-'),emp=c?c.empresa:getClientEmpresa(t.loc);(cli[nome]=cli[nome]||{nome,emp,total:0,aberto:0}).total++;if(mdIsOpen(t.st))cli[nome].aberto++})
-  const porCliente=Object.values(cli).map(c=>({...c,atividades:ativCli[c.nome]||0,min:hCli[c.nome]||0})).sort((a,b)=>b.total-a.total)
+  const porCliente=Object.values(cli).map(c=>({...c,atividades:(useAtiv?ativN[c.nome]:ativCli[c.nome])||0,min:hCli[c.nome]||0})).sort((a,b)=>b.total-a.total)
   const tec={};U.forEach(t=>{if(!t.ag)return;(tec[t.ag]=tec[t.ag]||{ag:t.ag,lv:t.lv,total:0,fechados:0}).total++;if(!mdIsOpen(t.st))tec[t.ag].fechados++})
   const porTecnico=Object.values(tec).map(t=>({...t,min:hTec[t.ag]||0})).sort((a,b)=>b.total-a.total)
   const tecClienteArr=Object.values(tecCli).map(x=>({ag:x.ag,cli:x.cli,min:x.min,ids:x.ids.size})).sort((a,b)=>b.min-a.min).slice(0,30)
