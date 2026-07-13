@@ -87,9 +87,9 @@ textarea.fi{resize:vertical;min-height:2.7rem}
     </div>
     <div class="flex items-center gap-2.5">
       <div style="display:flex;gap:.16rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.52rem;padding:.16rem;">
-        <button class="sec-btn active" onclick="setSection('exec')" id="sb-exec">Executiva</button>
-        <button class="sec-btn" onclick="setSection('tech')" id="sb-tech">Técnica</button>
-        <button class="sec-btn" onclick="setSection('admin')" id="sb-admin">Admin</button>
+        <button class="sec-btn active" onclick="setSection('tech')" id="sb-tech">Técnica</button>
+        <button class="sec-btn" onclick="setSection('exec')" id="sb-exec">Executiva 🔒</button>
+        <button class="sec-btn" onclick="setSection('admin')" id="sb-admin">Admin 🔒</button>
       </div>
       <div style="width:1px;height:1.25rem;background:#e2e8f0;"></div>
       <div id="demo-live" class="flex items-center gap-1.5"><div class="pulse" id="liveDot"></div><span style="font-size:.68rem;color:#64748b;" id="liveStatus">…</span><span id="zbxStatus" style="font-size:.62rem;font-weight:700;"></span><span id="appVersion" style="font-size:.62rem;font-weight:800;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;padding:.05rem .32rem;border-radius:.3rem;"></span></div>
@@ -244,10 +244,10 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v25'
+const APP_VERSION='v26'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
-let SECTION='exec',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos'
+let SECTION='tech',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos',SEC_AUTH=false
 let ROT_PAUSED=false,rotTimer=null,rotSec=30,rotIdx=0
 let FUNCS=[],CONTRACTS=[]
 const ROT_SEQ=['all','4Seniors','S4SYS','Porto Virtual']
@@ -631,7 +631,15 @@ function setTime(t){
   if(MESES_LIST.length){MES=MESES_LIST[0].slug;document.getElementById('selMes').value=MES;loadMonth(MES)}
 }
 
-function setSection(s){SECTION=s;['exec','tech','admin'].forEach(x=>document.getElementById('sb-'+x).classList.toggle('active',x===s));renderSubTabs();renderContent()}
+function setSection(s,skipAuth){
+  if((s==='exec'||s==='admin')&&!SEC_AUTH&&!skipAuth){
+    const p=prompt('Área restrita ('+(s==='exec'?'Executiva':'Admin')+'). Digite a senha:');
+    if(p==null)return; if(p!=='123'){toast('Senha incorreta.',false);return}
+    SEC_AUTH=true
+  }
+  SECTION=s;['exec','tech','admin'].forEach(x=>document.getElementById('sb-'+x).classList.toggle('active',x===s));renderSubTabs();renderContent()
+}
+window.setSection=setSection
 window.setSub=function(s){if(SECTION==='exec')EXEC_SUB=s;else if(SECTION==='tech')TECH_SUB=s;else ADMIN_SUB=s;renderSubTabs();renderContent()}
 function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:ADMIN_SUB;document.getElementById('subTabs').innerHTML=SECTION_SUBS[SECTION].map(([k,l])=>`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}</button>`).join('')}
 function renderContent(){
@@ -992,7 +1000,10 @@ function mdMetrics(){
   const tec={};U.forEach(t=>{if(!t.ag)return;(tec[t.ag]=tec[t.ag]||{ag:t.ag,lv:t.lv,total:0,fechados:0}).total++;if(!mdIsOpen(t.st))tec[t.ag].fechados++})
   const porTecnico=Object.values(tec).map(t=>({...t,min:hTec[t.ag]||0})).sort((a,b)=>b.total-a.total)
   const tecClienteArr=Object.values(tecCli).map(x=>({ag:x.ag,cli:x.cli,min:x.min,ids:x.ids.size})).sort((a,b)=>b.min-a.min).slice(0,30)
-  const cat={};U.forEach(t=>{const c=t.cat||'-';cat[c]=(cat[c]||0)+1});const topCat=Object.entries(cat).map(([k,v])=>({cat:k,n:v,min:hCat[k]||0})).sort((a,b)=>b.n-a.n).slice(0,10)
+  const CAT_SKIP=/checklist|rotina di[aá]ria|relat[oó]rio di[aá]rio|monitoramento di[aá]rio/i
+  const catH={},catN={};(useAtiv?mdEnrichedAtivs():[]).forEach(a=>{const c=a.cat||'-';if(c==='-'||CAT_SKIP.test(c))return;catH[c]=(catH[c]||0)+a.wh;catN[c]=(catN[c]||0)+1})
+  let topCat=Object.entries(catH).map(([k,v])=>({cat:k,n:catN[k]||0,min:v})).sort((a,b)=>b.min-a.min).slice(0,12)
+  if(!topCat.length){const cat={};U.forEach(t=>{const c=t.cat||'-';if(c==='-'||CAT_SKIP.test(c))return;cat[c]=(cat[c]||0)+1});topCat=Object.entries(cat).map(([k,v])=>({cat:k,n:v,min:hCat[k]||0})).sort((a,b)=>b.min-a.min).slice(0,12)}
   const recD=diasInat,recente=t=>{const d=mdDate(t.ana)||mdDate(t.end)||mdDate(t.start);return d?((now-d)/864e5)<=recD:false}
   const recentes=open.filter(recente).length,semRec=open.length-recentes
   const foraSLA=open.map(t=>{const d=mdDate(t.start),dias=d?Math.floor((now-d)/864e5):0,ct=mdContractForCC(t.cc),lim=Math.max(1,Math.ceil((ct?(ct.sla_resol_h||24):48)/24));return{...t,dias,lim}}).filter(t=>t.dias>t.lim).sort((a,b)=>b.dias-a.dias)
@@ -1099,7 +1110,7 @@ async function rFila(){
   const semRegRows=M.semReg.slice(0,25).map(t=>`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:18rem;">${esc((t.t||'').slice(0,55))}</td><td style="font-size:.68rem;">${t.ag?esc(t.ag):semTag+'sem técnico</span>'}</td><td style="font-size:.68rem;">${t.loc&&!/n[aã]o cadastrad/i.test(t.loc)?esc(t.loc):semTag+'sem cliente</span>'}</td><td style="font-size:.68rem;">${t.grupo?esc(t.grupo):semTag+'sem fila</span>'}</td></tr>`).join('')
   const saRows=M.semAtual.slice(0,25).map(t=>{const c=mdContractForCC(t.cc);return`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:16rem;">${esc((t.t||'').slice(0,60))}</td><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:t.loc)}</td><td style="font-size:.68rem;">${esc(t.ag||'-')}</td><td><span class="badge" style="background:${stColors[t.st]||'#64748b'}22;color:${stColors[t.st]||'#64748b'};">${esc(t.st)}</span></td><td style="color:#ef4444;font-weight:800;">${t.dias}d</td></tr>`}).join('')
   const reRows=M.reinc.slice(0,25).map(g=>{const c=mdContractForCC(g.cc);return`<tr><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:g.loc)}</td><td style="font-size:.7rem;max-width:20rem;">${esc((g.titulo||'').slice(0,70))}</td><td style="color:#f59e0b;font-weight:800;text-align:center;">${g.ids.length}×</td></tr>`}).join('')
-  const catRows=M.topCat.map(c=>`<tr><td style="font-weight:600;">${NM(c.cat)}</td><td style="font-weight:700;">${fmt(c.n)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(c.min)}h</td><td style="color:#64748b;">${pct(c.n,M.total)}%</td></tr>`).join('')
+  const catRows=M.topCat.map(c=>`<tr><td style="font-weight:600;">${NM(c.cat)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(c.min)}h</td><td style="color:#64748b;">${fmt(c.n)}</td></tr>`).join('')
   return`${bar}${kpis}
 <div class="card mb-4">${ST('Chamados por Status')}<div style="display:flex;flex-wrap:wrap;">${statusBadges||'-'}</div></div>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -1110,7 +1121,7 @@ async function rFila(){
 <div class="card mb-4 overflow-x-auto" style="border-left:3px solid #ef4444;">${ST('Sem Atualização - fila aberta há mais de '+(cfg.dias_inat||3)+' dias')}<table><thead><tr><th>ID</th><th>Assunto</th><th>Cliente</th><th>Técnico</th><th>Status</th><th>Parado</th></tr></thead><tbody>${saRows||'<tr><td colspan="6" style="color:#22c55e;padding:1rem;text-align:center;">Nenhum chamado parado além do limite. 👍</td></tr>'}</tbody></table></div>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 <div class="card overflow-x-auto" style="border-left:3px solid #f59e0b;">${ST('Reincidentes - mesmo assunto/cliente (≥'+Math.max(2,cfg.tickets_rec||3)+'×)')}<table><thead><tr><th>Cliente</th><th>Assunto</th><th>Qtd</th></tr></thead><tbody>${reRows||'<tr><td colspan="3" style="color:#22c55e;padding:1rem;text-align:center;">Sem reincidência relevante.</td></tr>'}</tbody></table></div>
-<div class="card overflow-x-auto">${ST('Top Categorias')}<table><thead><tr><th>Categoria</th><th>Chamados</th><th>Horas</th><th>%</th></tr></thead><tbody>${catRows||'<tr><td colspan="4" style="color:#94a3b8;padding:1rem;text-align:center;">-</td></tr>'}</tbody></table></div>
+<div class="card overflow-x-auto">${ST('Top Categorias (por horas de atividade)')}<table><thead><tr><th>Categoria</th><th>Horas</th><th>Atividades</th></tr></thead><tbody>${catRows||'<tr><td colspan="3" style="color:#94a3b8;padding:1rem;text-align:center;">-</td></tr>'}</tbody></table></div>
 </div>
 <div class="card mb-4 mt-4 overflow-x-auto" style="border-left:3px solid #ef4444;">${ST('Fora do SLA - abertos além do prazo de resolução do contrato')}<table><thead><tr><th>ID</th><th>Assunto</th><th>Cliente</th><th>Técnico</th><th>Aberto há</th><th>SLA</th></tr></thead><tbody>${slaRows||'<tr><td colspan="6" style="color:#22c55e;padding:1rem;text-align:center;">Nenhum chamado fora do SLA. 👍</td></tr>'}</tbody></table></div>
 <div class="card overflow-x-auto" style="border-left:3px solid #f59e0b;">${ST('Chamados sem registro - sem fila, cliente ou técnico ('+M.semReg.length+')')}<table><thead><tr><th>ID</th><th>Assunto</th><th>Técnico</th><th>Cliente/Local</th><th>Fila</th></tr></thead><tbody>${semRegRows||'<tr><td colspan="5" style="color:#22c55e;padding:1rem;text-align:center;">Todos os chamados têm fila, cliente e técnico. 👍</td></tr>'}</tbody></table></div>`
