@@ -244,7 +244,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v28'
+const APP_VERSION='v29'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='fila',ADMIN_SUB='contratos',SEC_AUTH=false
@@ -985,7 +985,8 @@ async function mdSync12(){
 }
 function mdMetrics(){
   const cfg=getAlertCfg(),diasInat=cfg.dias_inat||3,minRec=Math.max(2,cfg.tickets_rec||3),now=new Date()
-  const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});const U=Object.values(uniq)
+  const inCo=t=>{if(COMPANY==='all')return true;const ct=mdContractForCC(t.cc),nome=ct?ct.cliente:(t.loc||'');return getClientEmpresa(nome)===COMPANY}
+  const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});const U=Object.values(uniq).filter(inCo)
   const byStatus={};U.forEach(t=>byStatus[t.st]=(byStatus[t.st]||0)+1)
   const fechados=U.filter(t=>!mdIsOpen(t.st)).length,open=U.filter(t=>mdIsOpen(t.st))
   const semAtual=open.map(t=>{const d=mdDate(t.ana)||mdDate(t.start);const dias=d?Math.floor((now-d)/864e5):null;return{...t,dias}}).filter(t=>t.dias!=null&&t.dias>=diasInat).sort((a,b)=>b.dias-a.dias)
@@ -994,13 +995,13 @@ function mdMetrics(){
   const reinc=Object.values(grp).filter(g=>g.ids.length>=minRec).sort((a,b)=>b.ids.length-a.ids.length)
   const ativCli={};MD.tickets.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'-');ativCli[nome]=(ativCli[nome]||0)+1})
   const hCli={},hTec={},hCat={},tecCli={},ativN={},tecN={},useAtiv=!!(MD.ativs&&MD.ativs.length)
-  if(useAtiv){mdEnrichedAtivs().forEach(a=>{hCli[a.cliente]=(hCli[a.cliente]||0)+a.wh;hCat[a.cat]=(hCat[a.cat]||0)+a.wh;ativN[a.cliente]=(ativN[a.cliente]||0)+1;if(a.ag){hTec[a.ag]=(hTec[a.ag]||0)+a.wh;tecN[a.ag]=(tecN[a.ag]||0)+1;const k=a.ag+'§'+a.cliente;(tecCli[k]=tecCli[k]||{ag:a.ag,cli:a.cliente,min:0,ids:new Set()});tecCli[k].min+=a.wh;tecCli[k].ids.add(a.tid)}})}
+  if(useAtiv){mdEnrichedAtivs().forEach(a=>{if(COMPANY!=='all'&&getClientEmpresa(a.cliente)!==COMPANY)return;hCli[a.cliente]=(hCli[a.cliente]||0)+a.wh;hCat[a.cat]=(hCat[a.cat]||0)+a.wh;ativN[a.cliente]=(ativN[a.cliente]||0)+1;if(a.ag){hTec[a.ag]=(hTec[a.ag]||0)+a.wh;tecN[a.ag]=(tecN[a.ag]||0)+1;const k=a.ag+'§'+a.cliente;(tecCli[k]=tecCli[k]||{ag:a.ag,cli:a.cliente,min:0,ids:new Set()});tecCli[k].min+=a.wh;tecCli[k].ids.add(a.tid)}})}
   else{MD.tickets.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'-');hCli[nome]=(hCli[nome]||0)+t.wh;hCat[t.cat||'-']=(hCat[t.cat||'-']||0)+t.wh;if(t.ag){hTec[t.ag]=(hTec[t.ag]||0)+t.wh;const k=t.ag+'§'+nome;(tecCli[k]=tecCli[k]||{ag:t.ag,cli:nome,min:0,ids:new Set()});tecCli[k].min+=t.wh;tecCli[k].ids.add(t.id)}})}
   const cli={};U.forEach(t=>{const c=mdContractForCC(t.cc),nome=c?c.cliente:(t.loc||'-'),emp=c?c.empresa:getClientEmpresa(t.loc);(cli[nome]=cli[nome]||{nome,emp,total:0,aberto:0}).total++;if(mdIsOpen(t.st))cli[nome].aberto++})
   const porCliente=Object.values(cli).map(c=>({...c,atividades:(useAtiv?ativN[c.nome]:ativCli[c.nome])||0,min:hCli[c.nome]||0})).sort((a,b)=>b.total-a.total)
   // Por técnico = QUEM LANÇOU a atividade (não o responsável do chamado). Só aparece quem trabalhou.
   let porTecnico
-  if(useAtiv){const tt={};mdEnrichedAtivs().forEach(a=>{if(!a.ag)return;const x=tt[a.ag]=tt[a.ag]||{ag:a.ag,tk:new Set(),ativ:0,min:0};x.tk.add(a.tid);x.ativ++;x.min+=a.wh})
+  if(useAtiv){const tt={};mdEnrichedAtivs().forEach(a=>{if(!a.ag)return;if(COMPANY!=='all'&&getClientEmpresa(a.cliente)!==COMPANY)return;const x=tt[a.ag]=tt[a.ag]||{ag:a.ag,tk:new Set(),ativ:0,min:0};x.tk.add(a.tid);x.ativ++;x.min+=a.wh})
     porTecnico=Object.values(tt).map(x=>{const f=matchFuncByAgent(x.ag);return{ag:x.ag,lv:f?f.nivel:'-',chamados:x.tk.size,ativ:x.ativ,min:x.min}}).sort((a,b)=>b.min-a.min)}
   else{const tec={};U.forEach(t=>{if(!t.ag)return;(tec[t.ag]=tec[t.ag]||{ag:t.ag,lv:t.lv,chamados:0,ativ:0,min:0}).chamados++});Object.values(tec).forEach(t=>t.min=hTec[t.ag]||0);porTecnico=Object.values(tec).sort((a,b)=>b.min-a.min)}
   const tecClienteArr=Object.values(tecCli).map(x=>({ag:x.ag,cli:x.cli,min:x.min,ids:x.ids.size})).sort((a,b)=>b.min-a.min).slice(0,30)
@@ -1106,7 +1107,7 @@ async function rFila(){
   const qTile=(val,lbl,cor,icon,sub='')=>`<div class="card" style="background:${cor}0d;border:1px solid ${cor}33;border-left:3px solid ${cor};padding:.9rem 1rem;"><div style="display:flex;align-items:flex-start;justify-content:space-between;"><div><div style="font-size:1.75rem;font-weight:900;color:${cor};line-height:1;letter-spacing:-.02em;">${val}</div><div style="font-size:.62rem;color:#475569;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-top:.35rem;">${lbl}</div>${sub?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.1rem;">${sub}</div>`:''}</div><div style="background:${cor}1a;border-radius:.5rem;padding:.4rem;color:${cor};flex-shrink:0;"><i data-lucide="${icon}" style="width:1rem;height:1rem;"></i></div></div></div>`
   const kpis=`<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Situação da fila - ${MD.periodo}</div><div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${qTile(fmt(M.total),'Chamados no período','#2B4C9B','ticket')}${qTile(fmt(M.backlogOpen),'Abertos / na fila','#3b82f6','inbox')}${qTile(fmt(M.fechados),'Fechados','#22c55e','check-circle')}${qTile(fmt(M.foraSLA.length),'Fora do SLA',M.foraSLA.length?'#ef4444':'#22c55e','shield-alert')}${qTile(fmt(M.recentes),'Com atividade recente','#16a34a','activity','≤ '+(cfg.dias_inat||3)+'d')}${qTile(fmt(M.semRec),'Sem atividade recente',M.semRec?'#f59e0b':'#22c55e','pause-circle')}${qTile(fmt(M.semAtual.length),'Sem atualização',M.semAtual.length?'#ef4444':'#22c55e','history','> '+(cfg.dias_inat||3)+'d')}${qTile(fmt(M.reinc.length),'Reincidentes',M.reinc.length?'#f97316':'#22c55e','repeat')}</div>`
   const statusBadges=Object.entries(M.byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge" style="background:${(stColors[k]||'#64748b')}22;color:${stColors[k]||'#64748b'};margin:.1rem;">${esc(k)}: ${fmt(v)}</span>`).join('')
-  const cliRows=M.porCliente.slice(0,25).map(c=>`<tr><td>${empBadge(c.emp)}</td><td style="font-weight:600;">${cliDisp(c.nome)}</td><td style="font-weight:700;">${fmt(c.total)}</td><td style="color:#7c3aed;font-weight:700;">${fmt(c.atividades)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(c.min)}h</td><td style="color:${c.aberto?'#3b82f6':'#94a3b8'};font-weight:${c.aberto?700:400};">${fmt(c.aberto)}</td></tr>`).join('')
+  const cliRows=M.porCliente.filter(c=>COMPANY==='all'||c.emp===COMPANY).slice(0,25).map(c=>`<tr><td>${empBadge(c.emp)}</td><td style="font-weight:600;">${cliDisp(c.nome)}</td><td style="font-weight:700;">${fmt(c.total)}</td><td style="color:#7c3aed;font-weight:700;">${fmt(c.atividades)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(c.min)}h</td><td style="color:${c.aberto?'#3b82f6':'#94a3b8'};font-weight:${c.aberto?700:400};">${fmt(c.aberto)}</td></tr>`).join('')
   const tecRows=M.porTecnico.map(t=>`<tr><td style="font-weight:600;">${techDisp(t.ag)}</td><td><span class="tag">${esc(t.lv||'-')}</span></td><td>${fmt(t.chamados)}</td><td style="color:#854d0e;">${fmt(t.ativ)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(t.min)}h</td></tr>`).join('')
   const tecCliRows=M.tecCliente.map(x=>`<tr><td style="font-weight:600;">${techDisp(x.ag)}</td><td>${cliDisp(x.cli)}</td><td style="font-weight:800;color:#2B4C9B;">${minToHM(x.min)}h</td><td>${fmt(x.ids)}</td></tr>`).join('')
   const slaRows=M.foraSLA.slice(0,25).map(t=>{const c=mdContractForCC(t.cc);return`<tr><td style="font-family:monospace;font-size:.66rem;color:#64748b;">${esc(t.id)}</td><td style="font-size:.7rem;max-width:16rem;">${esc((t.t||'').slice(0,55))}</td><td style="font-size:.68rem;color:#64748b;">${esc(c?c.cliente:t.loc)}</td><td style="font-size:.68rem;">${esc(t.ag||'-')}</td><td style="color:#ef4444;font-weight:800;">${t.dias}d</td><td style="font-size:.66rem;color:#64748b;">limite ${t.lim}d</td></tr>`}).join('')
