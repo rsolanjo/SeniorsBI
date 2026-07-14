@@ -245,29 +245,30 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v46'
+const APP_VERSION='v47'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited'
 // Versão limitada: 3 contratos, só H.H (sem valores). Pilares = escopo dos contratos (para controlar trabalho fora de escopo).
-const CONTRATOS_LIM=[
-  {id:'mileto-sg',cc:'2807',nome:'Mileto — Serviço Gerenciado',tipo:'Sustentação',franquia:168,cor:'#2B4C9B',
-   pilares:[
-     {nome:'Continuidade dos serviços',kw:/servidor|rede|link|switch|conectiv|disponib|uptime|monitora|noc|infra|vm |virtual|host|storage/i},
-     {nome:'Segurança e proteção',kw:/backup|firewall|antiv|seguran|vpn|m365|microsoft ?365|epdr|patch|pentest|active directory|\bad\b|dns|dhcp|acronis|allowlist|certificad/i},
-     {nome:'Governança e transparência',kw:/relat[oó]rio|governan|checklist|documenta|reuni|indicador|mudan|invent[aá]rio|pop\b|procedimento/i},
-     {nome:'Evolução planejada',kw:/projeto|evolu|migra|implanta|upgrade|assessment|reestrutur/i}
-   ]},
-  {id:'mileto-proj',cc:'2809',nome:'Mileto — Projetos / Evolução',tipo:'Projeto (pacote)',franquia:80,cor:'#7c3aed',
-   pilares:[{nome:'Projetos e Evolução (rede, segurança, M365, servidores, AWS)',kw:/projeto|evolu|migra|implanta|reestrutur|aws|nuvem|upgrade|assessment|pentest|rollout|novo/i}]},
-  {id:'compagas-sg',cc:'71',nome:'Compagás — Serviço Gerenciado',tipo:'Sustentação',franquia:168,cor:'#166534',
-   pilares:[
-     {nome:'Continuidade dos serviços',kw:/servidor|rede|link|switch|conectiv|disponib|monitora|noc|infra|vm |virtual|zabbix|host/i},
-     {nome:'Segurança e proteção',kw:/backup|firewall|antiv|seguran|vpn|m365|microsoft ?365|epdr|patch|acronis|certificad/i},
-     {nome:'Governança e transparência',kw:/relat[oó]rio|governan|checklist|documenta|reuni|indicador|invent[aá]rio|dashboard|template|sensor/i},
-     {nome:'Evolução planejada',kw:/projeto|evolu|migra|implanta|upgrade|rollout|novo/i}
-   ]}
+const LITE_PILARES={
+  susten:[
+    {nome:'Continuidade dos serviços',kw:/servidor|rede|link|switch|conectiv|disponib|uptime|monitora|noc|infra|vm |virtual|host|storage|zabbix/i},
+    {nome:'Segurança e proteção',kw:/backup|firewall|antiv|seguran|vpn|m365|microsoft ?365|epdr|patch|pentest|active directory|\bad\b|dns|dhcp|acronis|certificad|allowlist/i},
+    {nome:'Governança e transparência',kw:/relat[oó]rio|governan|checklist|documenta|reuni|indicador|mudan|invent[aá]rio|pop\b|procedimento|dashboard|template|sensor/i},
+    {nome:'Evolução planejada',kw:/projeto|evolu|migra|implanta|upgrade|assessment|reestrutur|rollout|novo/i}
+  ],
+  projeto:[{nome:'Projetos e Evolução (rede, segurança, M365, servidores, AWS)',kw:/projeto|evolu|migra|implanta|reestrutur|aws|nuvem|upgrade|assessment|pentest|rollout|novo/i}]
+}
+const LITE_SEED=[
+  {id:'mileto-sg',cc:'2807',nome:'Mileto — Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:45000,cor:'#2B4C9B',pilar:'susten'},
+  {id:'mileto-proj',cc:'2809',nome:'Mileto — Projetos / Evolução',tipo:'Projeto',franquia:80,valor:20900,cor:'#7c3aed',pilar:'projeto'},
+  {id:'compagas-sg',cc:'71',nome:'Compagás — Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:47250,cor:'#166534',pilar:'susten'}
 ]
+const getLiteCt=()=>{const v=lsGet('sbi_lite_ct');return(v&&v.length)?v:LITE_SEED.map(c=>({...c}))}
+const setLiteCt=v=>lsSet('sbi_lite_ct',v)
+const litePilares=c=>(LITE_PILARES[c.pilar]||LITE_PILARES.susten)
+let LITE_VAL=(localStorage.getItem('sbi_lite_val')!=='false')
+const LITE_COR=['#2B4C9B','#7c3aed','#166534','#0891b2','#E04622','#854d0e','#be185d','#0f766e']
 window.setAppMode=function(m){
   if(m==='full'){if(!SEC_AUTH){const p=prompt('Versão completa (executiva + técnica + admin). Digite a senha:');if(p==null)return;if(p!=='123'){toast('Senha incorreta.',false);return}SEC_AUTH=true}APP_MODE='full'}
   else{APP_MODE='limited'}
@@ -1078,25 +1079,82 @@ function rAtividades(){
     ${rawSample?`<div style="margin-top:.2rem;font-family:monospace;font-size:.58rem;color:#64748b;word-break:break-all;">${rawSample}</div>`:''}</div>`;
   return head+filterBar+kpis+tecTbl+atvTbl+tkTbl+diag;
 }
-// Versão limitada: H.H por contrato + pilares (escopo) + fora de escopo. Mix executivo (uso vs contratado) + técnico (pilares).
+// ═══════ LITE (versão limitada): H.H por contrato + valores + saldo + FTE + pilares/escopo ═══════
+const hmSigned=m=>{const s=m<0?'-':'';m=Math.abs(Math.round(m));return s+Math.floor(m/60)+':'+String(m%60).padStart(2,'0')};
+const LITE_ALERT_PCT=80;
+function liteData(){
+  const tkById={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkById[t.id]=t});
+  const rows=(MD.ativs||[]).map(a=>{const iso=mdActISO(a.start),cc=mdCC(a.loc||''),t=tkById[a.tid];return{cc,wh:a.wh||0,iso,ag:a.ag,cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'',assunto:a.assunto||(t?t.t:'')||'',atv:a.atv||''}}).filter(a=>atvInRange(a.iso)&&a.ag&&!isExcludedTech(a.ag));
+  const pf=mdPeriodFactor(),capFTE=Math.max(1,mdBizDays(MD_ATV_START,MD_ATV_END))*8*60;
+  const contratos=getLiteCt().map(ct=>{
+    const pil=litePilares(ct),acts=rows.filter(a=>String(a.cc)===String(ct.cc)),used=acts.reduce((s,a)=>s+a.wh,0);
+    const franqP=(ct.franquia||0)*60*pf,saldo=franqP-used,uso=franqP?Math.round(used/franqP*100):0,fte=used/capFTE;
+    const rhora=ct.franquia?(ct.valor||0)/ct.franquia:0,excedH=saldo<0?-saldo/60:0,excedR=excedH*rhora;
+    const pilMin={},fora=[];acts.forEach(a=>{const txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();const p=pil.find(pl=>pl.kw.test(txt));if(p)pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;else fora.push(a)});
+    return {ct,pil,used,franqP,saldo,uso,fte,rhora,excedR,pilMin,fora,foraMin:fora.reduce((s,a)=>s+a.wh,0)};
+  });
+  const totUsed=contratos.reduce((s,x)=>s+x.used,0),totFranq=contratos.reduce((s,x)=>s+x.franqP,0),totFora=contratos.reduce((s,x)=>s+x.foraMin,0),totVal=contratos.reduce((s,x)=>s+(x.ct.valor||0),0);
+  return {rows,pf,capFTE,contratos,totUsed,totFranq,totFora,totVal,totFte:totUsed/capFTE};
+}
+window.liteToggleVal=function(){
+  if(LITE_VAL){LITE_VAL=false;lsSet('sbi_lite_val',false);renderContent();return}
+  const p=prompt('Mostrar valores (R$). Digite a senha:');if(p==null)return;if(p!=='123'){toast('Senha incorreta.',false);return}
+  LITE_VAL=true;lsSet('sbi_lite_val',true);renderContent();
+};
+window.liteAddCt=function(){
+  const nome=prompt('Nome do contrato:');if(!nome)return;
+  const cc=prompt('Centro de custo (número, ex.: 2807):');if(cc==null)return;
+  const fr=prompt('Franquia de horas/mês (ex.: 168):','168');if(fr==null)return;
+  const vl=prompt('Valor mensal R$ (0 se não usar):','0');if(vl==null)return;
+  const tp=(prompt('Tipo (Sustentação / Projeto):','Sustentação')||'Sustentação').trim();
+  const list=getLiteCt();list.push({id:'ct_'+String(cc).trim()+'_'+list.length,cc:String(cc).trim(),nome:nome.trim(),tipo:tp,franquia:+fr||0,valor:+vl||0,cor:LITE_COR[list.length%LITE_COR.length],pilar:/projeto/i.test(tp)?'projeto':'susten'});
+  setLiteCt(list);toast('Contrato adicionado.');renderContent();
+};
+window.liteEditCt=function(id){
+  const list=getLiteCt(),c=list.find(x=>x.id===id);if(!c)return;
+  const nome=prompt('Nome do contrato:',c.nome);if(nome==null)return;
+  const cc=prompt('Centro de custo:',c.cc);if(cc==null)return;
+  const fr=prompt('Franquia de horas/mês:',c.franquia);if(fr==null)return;
+  const vl=prompt('Valor mensal R$:',c.valor||0);if(vl==null)return;
+  c.nome=nome.trim()||c.nome;c.cc=String(cc).trim();c.franquia=+fr||0;c.valor=+vl||0;
+  setLiteCt(list);toast('Contrato atualizado.');renderContent();
+};
+window.liteDelCt=function(id){if(!confirm('Remover este contrato da Lite?'))return;setLiteCt(getLiteCt().filter(x=>x.id!==id));toast('Contrato removido.');renderContent();};
+window.liteReset=function(){if(!confirm('Restaurar os 3 contratos padrão? (perde os cadastrados)'))return;localStorage.removeItem('sbi_lite_ct');toast('Contratos restaurados.');renderContent();};
+window.liteExport=function(){
+  if(!MD.loaded){toast('Sincronize o Milldesk antes de exportar.',false);return}
+  const d=liteData(),sep=';',head=['Contrato','Centro de Custo','Tipo','Franquia (h/mes)','Consumido (h)','Saldo (h)','Uso %','FTE','Fora de escopo (h)'];
+  if(LITE_VAL)head.push('Valor mensal (R$)','R$/hora','Excedente (R$)');
+  const q=v=>`"${String(v).replace(/"/g,'""')}"`,lines=[head.map(q).join(sep)];
+  d.contratos.forEach(x=>{const r=[x.ct.nome,x.ct.cc,x.ct.tipo,x.ct.franquia,hmSigned(x.used),hmSigned(x.saldo),x.uso,x.fte.toFixed(2).replace('.',','),hmSigned(x.foraMin)];if(LITE_VAL)r.push(x.ct.valor||0,Math.round(x.rhora),Math.round(x.excedR));lines.push(r.map(q).join(sep))});
+  const csv='﻿'+lines.join('\r\n'),blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='Lite_contratos_'+(MD_ATV_START||'inicio')+'_a_'+(MD_ATV_END||'fim')+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);toast('Excel (CSV) exportado.');
+};
 async function rLimitado(){
-  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;"><span style="font-size:1.02rem;font-weight:900;color:#0f172a;">Farol</span><span style="font-size:.7rem;color:#64748b;font-weight:600;">— H.H por contrato</span><span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">SEM VALORES</span><span style="font-size:.66rem;color:#94a3b8;">3 contratos · filtro de período no topo</span></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Quanto de <b>homem-hora</b> cada contrato consumiu vs. as horas contratadas, e a distribuição pelos <b>pilares (escopo)</b>. Atividades que não batem com nenhum pilar são <b style="color:#dc2626;">fora de escopo</b>.</div></div>`;
+  const valBtn=`<button onclick="liteToggleVal()" class="badge" style="cursor:pointer;background:${LITE_VAL?'#fef9c3':'#e0e7ff'};color:${LITE_VAL?'#854d0e':'#3730a3'};border:none;font-weight:700;">${LITE_VAL?'🙈 Ocultar valores':'👁 Mostrar valores'}</button>`;
+  const xlsBtn=`<button onclick="liteExport()" class="badge" style="cursor:pointer;background:#dcfce7;color:#166534;border:none;font-weight:700;">⬇ Excel</button>`;
+  const addBtn=`<button onclick="liteAddCt()" class="badge" style="cursor:pointer;background:#eff6ff;color:#1d4ed8;border:none;font-weight:700;">＋ Contrato</button>`;
+  const rstBtn=`<button onclick="liteReset()" class="badge" style="cursor:pointer;background:#f8fafc;color:#94a3b8;border:none;font-weight:600;">↺ padrão</button>`;
+  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:1.02rem;font-weight:900;color:#0f172a;">Lite</span><span style="font-size:.7rem;color:#64748b;font-weight:600;">— controle de H.H por contrato</span>${LITE_VAL?'':'<span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">SEM VALORES</span>'}<span style="flex:1;"></span>${valBtn}${xlsBtn}${addBtn}${rstBtn}</div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Quanto de <b>homem-hora</b> cada contrato consumiu vs. as horas contratadas — com <b>saldo</b>, <b>FTE</b> e distribuição por <b>pilares (escopo)</b>. Atividades fora dos pilares aparecem como <b style="color:#dc2626;">fora de escopo</b>. Alerta ao atingir <b>${LITE_ALERT_PCT}%</b> da franquia.</div></div>`;
   if(!getMD().key)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Conecte o Milldesk para ver o H.H por contrato.</div>`;
   if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk (barra de período no topo) para carregar as horas.</div>`;
-  const tkById={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkById[t.id]=t});
-  const rows=(MD.ativs||[]).map(a=>{const iso=mdActISO(a.start),loc=a.loc||'',cc=mdCC(loc),t=tkById[a.tid];return{cc,wh:a.wh||0,iso,ag:a.ag,tid:a.tid,cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'',assunto:a.assunto||(t?t.t:'')||'',atv:a.atv||''}}).filter(a=>atvInRange(a.iso)&&a.ag&&!isExcludedTech(a.ag));
-  const pf=mdPeriodFactor(),inLim=a=>CONTRATOS_LIM.some(c=>String(c.cc)===String(a.cc)),limRows=rows.filter(inLim);
-  const cards=CONTRATOS_LIM.map(ct=>{
-    const acts=rows.filter(a=>String(a.cc)===String(ct.cc)),used=acts.reduce((s,a)=>s+a.wh,0),franqP=ct.franquia*60*pf,uso=franqP?pct(used,franqP):0,usoC=uso>100?'#dc2626':uso>=85?'#f59e0b':'#22c55e';
-    const pilMin={},fora=[];acts.forEach(a=>{const txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();const p=ct.pilares.find(pl=>pl.kw.test(txt));if(p)pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;else fora.push(a)});
-    const foraMin=fora.reduce((s,a)=>s+a.wh,0);
-    const pilRows=ct.pilares.map(pl=>{const m=pilMin[pl.nome]||0,p=used?Math.round(m/used*100):0;return `<div style="margin-bottom:.4rem;"><div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:.15rem;"><span style="font-weight:600;color:#334155;">${esc(pl.nome)}</span><span style="font-weight:800;color:${ct.cor};">${minToHM(m)}h · ${p}%</span></div><div style="height:.3rem;background:#f1f5f9;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${p}%;background:${ct.cor};"></div></div></div>`}).join('');
-    const foraCard=fora.length?`<div style="margin-top:.6rem;background:#fef2f2;border:1px solid #fecaca;border-radius:.5rem;padding:.5rem .6rem;"><div style="font-size:.66rem;font-weight:800;color:#991b1b;margin-bottom:.3rem;">⚠ Fora de escopo: ${minToHM(foraMin)}h em ${fora.length} atividade(s)</div>${fora.slice(0,6).map(a=>`<div style="font-size:.62rem;color:#7f1d1d;padding:.1rem 0;border-bottom:1px solid #fee2e2;">${esc(a.iso.split('-').reverse().join('/'))} · ${esc((a.ag||'').split(' ')[0])} · ${minToHM(a.wh)}h · ${esc((a.assunto||a.atv||a.cat||'-').slice(0,42))}</div>`).join('')}${fora.length>6?`<div style="font-size:.6rem;color:#991b1b;margin-top:.2rem;">+${fora.length-6} atividade(s)</div>`:''}</div>`:`<div style="margin-top:.6rem;font-size:.66rem;color:#166534;">✓ Nada fora de escopo no período.</div>`;
-    return `<div class="card" style="border-top:3px solid ${ct.cor};"><div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.4rem;margin-bottom:.5rem;"><div><div style="font-size:.85rem;font-weight:900;color:#0f172a;">${esc(ct.nome)}</div><div style="font-size:.6rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;">${esc(ct.tipo)} · ${ct.franquia}h/mês</div></div><div style="text-align:right;"><div style="font-size:1.4rem;font-weight:900;color:${ct.cor};line-height:1;">${minToHM(used)}h</div><div style="font-size:.6rem;color:#94a3b8;">de ${minToHM(Math.round(franqP))}h no período</div></div></div><div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.7rem;"><div style="flex:1;height:.5rem;background:#f1f5f9;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${Math.min(uso,100)}%;background:${usoC};transition:width .5s;"></div></div><span style="font-size:.8rem;font-weight:900;color:${usoC};min-width:2.6rem;text-align:right;">${uso}%</span></div><div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Pilares (escopo)</div>${pilRows}${foraCard}</div>`;
-  }).join('');
-  const totUsed=limRows.reduce((s,a)=>s+a.wh,0),totFora=limRows.filter(a=>{const ct=CONTRATOS_LIM.find(c=>String(c.cc)===String(a.cc));const txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();return ct&&!ct.pilares.some(pl=>pl.kw.test(txt))}).reduce((s,a)=>s+a.wh,0);
-  const kpis=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(minToHM(totUsed)+'h','H.H total (3 contratos)','#2B4C9B','clock')}${kpiCard(fmt(limRows.length),'Atividades','#0891b2','list-checks')}${kpiCard(minToHM(totFora)+'h','Fora de escopo',totFora?'#dc2626':'#22c55e','triangle-alert')}${kpiCard(CONTRATOS_LIM.length,'Contratos','#166534','file-text')}</div>`;
-  return head+kpis+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`;
+  const d=liteData();
+  const alerta=d.contratos.filter(x=>x.uso>=LITE_ALERT_PCT);
+  const alertBar=alerta.length?`<div class="card mb-4" style="background:#fffbeb;border:1px solid #fde68a;"><div style="font-size:.72rem;font-weight:800;color:#92400e;display:flex;align-items:center;gap:.4rem;"><i data-lucide="triangle-alert" style="width:.9rem;height:.9rem;"></i> ${alerta.length} contrato(s) em ${LITE_ALERT_PCT}%+ da franquia</div><div style="font-size:.66rem;color:#b45309;margin-top:.25rem;">${alerta.map(x=>`${esc(x.ct.nome.split('—')[0].trim())} <b>${x.uso}%</b>`).join(' · ')}</div></div>`:'';
+  const cards=d.contratos.map(x=>{
+    const c=x.ct,uso=x.uso,usoC=uso>=100?'#dc2626':uso>=LITE_ALERT_PCT?'#f59e0b':'#22c55e';
+    const badge=uso>=100?`<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:800;">ESTOUROU ${uso}%</span>`:uso>=LITE_ALERT_PCT?`<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:800;">⚠ ${uso}%</span>`:'';
+    const valHdr=LITE_VAL?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.1rem;">${fmtR(c.valor)}/mês · ${fmtR(Math.round(x.rhora))}/h</div>`:'';
+    const excMetric=LITE_VAL?(x.saldo<0?`<div><div class="kpi-lbl">Excedente</div><div style="font-size:.9rem;font-weight:900;color:#dc2626;">${fmtR(Math.round(x.excedR))}</div></div>`:`<div><div class="kpi-lbl">Valor/h</div><div style="font-size:.9rem;font-weight:900;color:#334155;">${fmtR(Math.round(x.rhora))}</div></div>`):`<div><div class="kpi-lbl">Uso</div><div style="font-size:.9rem;font-weight:900;color:${usoC};">${uso}%</div></div>`;
+    const metrics=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin:.5rem 0 .7rem;padding:.45rem;background:#f8fafc;border-radius:.5rem;"><div><div class="kpi-lbl">Saldo</div><div style="font-size:.9rem;font-weight:900;color:${x.saldo<0?'#dc2626':'#166534'};">${hmSigned(x.saldo)}h</div></div><div><div class="kpi-lbl">FTE</div><div style="font-size:.9rem;font-weight:900;color:#0891b2;">${x.fte.toFixed(1)}</div></div>${excMetric}</div>`;
+    const pilRows=x.pil.map(pl=>{const m=x.pilMin[pl.nome]||0,p=x.used?Math.round(m/x.used*100):0;return `<div style="margin-bottom:.4rem;"><div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:.15rem;"><span style="font-weight:600;color:#334155;">${esc(pl.nome)}</span><span style="font-weight:800;color:${c.cor};">${minToHM(m)}h · ${p}%</span></div><div style="height:.3rem;background:#f1f5f9;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${p}%;background:${c.cor};"></div></div></div>`}).join('');
+    const foraCard=x.fora.length?`<div style="margin-top:.6rem;background:#fef2f2;border:1px solid #fecaca;border-radius:.5rem;padding:.5rem .6rem;"><div style="font-size:.66rem;font-weight:800;color:#991b1b;margin-bottom:.3rem;">⚠ Fora de escopo: ${minToHM(x.foraMin)}h em ${x.fora.length} atividade(s)</div>${x.fora.slice(0,6).map(a=>`<div style="font-size:.62rem;color:#7f1d1d;padding:.1rem 0;border-bottom:1px solid #fee2e2;">${esc(a.iso.split('-').reverse().join('/'))} · ${esc((a.ag||'').split(' ')[0])} · ${minToHM(a.wh)}h · ${esc((a.assunto||a.atv||a.cat||'-').slice(0,42))}</div>`).join('')}${x.fora.length>6?`<div style="font-size:.6rem;color:#991b1b;margin-top:.2rem;">+${x.fora.length-6} atividade(s)</div>`:''}</div>`:`<div style="margin-top:.6rem;font-size:.66rem;color:#166534;">✓ Nada fora de escopo no período.</div>`;
+    return `<div class="card" style="border-top:3px solid ${c.cor};"><div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.4rem;margin-bottom:.3rem;"><div style="min-width:0;"><div style="font-size:.85rem;font-weight:900;color:#0f172a;">${esc(c.nome)}</div><div style="font-size:.6rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">${esc(c.tipo)} · <b style="color:#64748b;">CC ${esc(c.cc)}</b> · ${c.franquia}h/mês</div>${valHdr}</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:1.4rem;font-weight:900;color:${c.cor};line-height:1;">${minToHM(x.used)}h</div><div style="font-size:.6rem;color:#94a3b8;">de ${minToHM(Math.round(x.franqP))}h no período</div></div></div><div style="display:flex;gap:.35rem;margin-bottom:.4rem;">${badge}<span style="flex:1;"></span><button onclick="liteEditCt('${c.id}')" title="Editar" style="cursor:pointer;background:none;border:none;color:#94a3b8;font-size:.72rem;">✏️</button><button onclick="liteDelCt('${c.id}')" title="Remover" style="cursor:pointer;background:none;border:none;color:#94a3b8;font-size:.72rem;">🗑️</button></div><div style="display:flex;align-items:center;gap:.5rem;"><div style="flex:1;height:.5rem;background:#f1f5f9;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${Math.min(uso,100)}%;background:${usoC};transition:width .5s;"></div></div><span style="font-size:.8rem;font-weight:900;color:${usoC};min-width:2.6rem;text-align:right;">${uso}%</span></div>${metrics}<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Pilares (escopo)</div>${pilRows}${foraCard}</div>`;
+  }).join('')||`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Nenhum contrato cadastrado. Use <b>＋ Contrato</b>.</div>`;
+  const kc=[kpiCard(minToHM(d.totUsed)+'h','H.H consumido','#2B4C9B','clock'),kpiCard(hmSigned(d.totFranq-d.totUsed)+'h','Saldo total',(d.totFranq-d.totUsed)<0?'#dc2626':'#166534','battery-charging'),kpiCard(d.totFte.toFixed(1),'FTE total','#0891b2','users'),kpiCard(minToHM(d.totFora)+'h','Fora de escopo',d.totFora?'#dc2626':'#22c55e','triangle-alert')];
+  if(LITE_VAL)kc.push(kpiCard(fmtR(d.totVal),'Contratos/mês','#854d0e','banknote'));
+  const kpis=`<div class="grid grid-cols-2 md:grid-cols-${LITE_VAL?5:4} gap-3 mb-4">${kc.join('')}</div>`;
+  return head+alertBar+kpis+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`;
 }
 window.mdConnect=function(){const k=(document.getElementById('mdBannerKey').value||'').trim(),zt=(document.getElementById('mdBannerZbx').value||'').trim();
   if(k)setMD({base:getMD().base,key:k})
