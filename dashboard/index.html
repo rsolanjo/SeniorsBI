@@ -86,11 +86,12 @@ textarea.fi{resize:vertical;min-height:2.7rem}
       <div style="border-left:2px solid #e2e8f0;padding-left:.68rem;"><div style="font-size:.92rem;font-weight:900;color:#1e293b;letter-spacing:-.03em;line-height:1.1">SeniorsBI</div><div style="font-size:.57rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.09em;">Painel de Operações</div></div>
     </div>
     <div class="flex items-center gap-2.5">
-      <div style="display:flex;gap:.16rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.52rem;padding:.16rem;">
+      <div id="secNav" style="display:none;gap:.16rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.52rem;padding:.16rem;">
         <button class="sec-btn active" onclick="setSection('tech')" id="sb-tech">Técnica</button>
         <button class="sec-btn" onclick="setSection('exec')" id="sb-exec">Executiva 🔒</button>
         <button class="sec-btn" onclick="setSection('admin')" id="sb-admin">Admin 🔒</button>
       </div>
+      <button id="modeBtn" onclick="setAppMode(APP_MODE==='limited'?'full':'limited')" style="padding:.28rem .62rem;border:1px solid #e2e8f0;border-radius:.45rem;background:#fff;font-size:.68rem;font-weight:800;color:#475569;cursor:pointer;white-space:nowrap;">🔓 Versão completa</button>
       <div style="width:1px;height:1.25rem;background:#e2e8f0;"></div>
       <div id="demo-live" class="flex items-center gap-1.5"><div class="pulse" id="liveDot"></div><span style="font-size:.68rem;color:#64748b;" id="liveStatus">…</span><span id="zbxStatus" style="font-size:.62rem;font-weight:700;"></span><span id="appVersion" style="font-size:.62rem;font-weight:800;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;padding:.05rem .32rem;border-radius:.3rem;"></span></div>
       <span style="font-size:.58rem;color:#94a3b8;" id="lastUpdate"></span>
@@ -244,10 +245,35 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v44'
+const APP_VERSION='v45'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
-let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false
+let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited'
+// Versão limitada: 3 contratos, só H.H (sem valores). Pilares = escopo dos contratos (para controlar trabalho fora de escopo).
+const CONTRATOS_LIM=[
+  {id:'mileto-sg',cc:'2807',nome:'Mileto — Serviço Gerenciado',tipo:'Sustentação',franquia:168,cor:'#2B4C9B',
+   pilares:[
+     {nome:'Continuidade dos serviços',kw:/servidor|rede|link|switch|conectiv|disponib|uptime|monitora|noc|infra|vm |virtual|host|storage/i},
+     {nome:'Segurança e proteção',kw:/backup|firewall|antiv|seguran|vpn|m365|microsoft ?365|epdr|patch|pentest|active directory|\bad\b|dns|dhcp|acronis|allowlist|certificad/i},
+     {nome:'Governança e transparência',kw:/relat[oó]rio|governan|checklist|documenta|reuni|indicador|mudan|invent[aá]rio|pop\b|procedimento/i},
+     {nome:'Evolução planejada',kw:/projeto|evolu|migra|implanta|upgrade|assessment|reestrutur/i}
+   ]},
+  {id:'mileto-proj',cc:'2809',nome:'Mileto — Projetos / Evolução',tipo:'Projeto (pacote)',franquia:80,cor:'#7c3aed',
+   pilares:[{nome:'Projetos e Evolução (rede, segurança, M365, servidores, AWS)',kw:/projeto|evolu|migra|implanta|reestrutur|aws|nuvem|upgrade|assessment|pentest|rollout|novo/i}]},
+  {id:'compagas-sg',cc:'71',nome:'Compagás — Serviço Gerenciado',tipo:'Sustentação',franquia:168,cor:'#166534',
+   pilares:[
+     {nome:'Continuidade dos serviços',kw:/servidor|rede|link|switch|conectiv|disponib|monitora|noc|infra|vm |virtual|zabbix|host/i},
+     {nome:'Segurança e proteção',kw:/backup|firewall|antiv|seguran|vpn|m365|microsoft ?365|epdr|patch|acronis|certificad/i},
+     {nome:'Governança e transparência',kw:/relat[oó]rio|governan|checklist|documenta|reuni|indicador|invent[aá]rio|dashboard|template|sensor/i},
+     {nome:'Evolução planejada',kw:/projeto|evolu|migra|implanta|upgrade|rollout|novo/i}
+   ]}
+]
+window.setAppMode=function(m){
+  if(m==='full'){if(!SEC_AUTH){const p=prompt('Versão completa (executiva + técnica + admin). Digite a senha:');if(p==null)return;if(p!=='123'){toast('Senha incorreta.',false);return}SEC_AUTH=true}APP_MODE='full'}
+  else{APP_MODE='limited'}
+  const b=document.getElementById('modeBtn');if(b)b.textContent=APP_MODE==='limited'?'🔓 Versão completa':'▸ Versão limitada'
+  renderContent()
+}
 let ROT_PAUSED=false,rotTimer=null,rotSec=30,rotIdx=0
 let FUNCS=[],CONTRACTS=[]
 const ROT_SEQ=['all','4Seniors','S4SYS','Porto Virtual']
@@ -693,6 +719,9 @@ window.setSub=function(s){if(SECTION==='exec')EXEC_SUB=s;else if(SECTION==='tech
 function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:ADMIN_SUB;document.getElementById('subTabs').innerHTML=SECTION_SUBS[SECTION].map(([k,l])=>`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}</button>`).join('')}
 function renderContent(){
   const el=document.getElementById('main')
+  const _nav=document.getElementById('secNav'),_st=document.getElementById('subTabs')
+  if(APP_MODE==='limited'){if(_nav)_nav.style.display='none';if(_st)_st.style.display='none';rLimitado().then(h=>{el.innerHTML=h;if(window.lucide)lucide.createIcons()});return}
+  if(_nav)_nav.style.display='flex';if(_st)_st.style.display=''
   if(TIME==='comparar'){renderCompare();return}
   const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','checklists'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
@@ -1048,6 +1077,26 @@ function rAtividades(){
     <div style="margin-top:.2rem;">Campos que a API retorna: <code>${esc(rawKeys.join(', '))||'(sincronize)'}</code></div>
     ${rawSample?`<div style="margin-top:.2rem;font-family:monospace;font-size:.58rem;color:#64748b;word-break:break-all;">${rawSample}</div>`:''}</div>`;
   return head+filterBar+kpis+tecTbl+atvTbl+tkTbl+diag;
+}
+// Versão limitada: H.H por contrato + pilares (escopo) + fora de escopo. Mix executivo (uso vs contratado) + técnico (pilares).
+async function rLimitado(){
+  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;"><span style="font-size:1.02rem;font-weight:900;color:#0f172a;">Cockpit de Contratos</span><span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">H.H · SEM VALORES</span><span style="font-size:.66rem;color:#94a3b8;">3 contratos · filtro de período no topo</span></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Quanto de <b>homem-hora</b> cada contrato consumiu vs. as horas contratadas, e a distribuição pelos <b>pilares (escopo)</b>. Atividades que não batem com nenhum pilar são <b style="color:#dc2626;">fora de escopo</b>.</div></div>`;
+  if(!getMD().key)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Conecte o Milldesk para ver o H.H por contrato.</div>`;
+  if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk (barra de período no topo) para carregar as horas.</div>`;
+  const tkById={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkById[t.id]=t});
+  const rows=(MD.ativs||[]).map(a=>{const iso=mdActISO(a.start),loc=a.loc||'',cc=mdCC(loc),t=tkById[a.tid];return{cc,wh:a.wh||0,iso,ag:a.ag,tid:a.tid,cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'',assunto:a.assunto||(t?t.t:'')||'',atv:a.atv||''}}).filter(a=>atvInRange(a.iso)&&a.ag&&!isExcludedTech(a.ag));
+  const pf=mdPeriodFactor(),inLim=a=>CONTRATOS_LIM.some(c=>String(c.cc)===String(a.cc)),limRows=rows.filter(inLim);
+  const cards=CONTRATOS_LIM.map(ct=>{
+    const acts=rows.filter(a=>String(a.cc)===String(ct.cc)),used=acts.reduce((s,a)=>s+a.wh,0),franqP=ct.franquia*60*pf,uso=franqP?pct(used,franqP):0,usoC=uso>100?'#dc2626':uso>=85?'#f59e0b':'#22c55e';
+    const pilMin={},fora=[];acts.forEach(a=>{const txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();const p=ct.pilares.find(pl=>pl.kw.test(txt));if(p)pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;else fora.push(a)});
+    const foraMin=fora.reduce((s,a)=>s+a.wh,0);
+    const pilRows=ct.pilares.map(pl=>{const m=pilMin[pl.nome]||0,p=used?Math.round(m/used*100):0;return `<div style="margin-bottom:.4rem;"><div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:.15rem;"><span style="font-weight:600;color:#334155;">${esc(pl.nome)}</span><span style="font-weight:800;color:${ct.cor};">${minToHM(m)}h · ${p}%</span></div><div style="height:.3rem;background:#f1f5f9;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${p}%;background:${ct.cor};"></div></div></div>`}).join('');
+    const foraCard=fora.length?`<div style="margin-top:.6rem;background:#fef2f2;border:1px solid #fecaca;border-radius:.5rem;padding:.5rem .6rem;"><div style="font-size:.66rem;font-weight:800;color:#991b1b;margin-bottom:.3rem;">⚠ Fora de escopo: ${minToHM(foraMin)}h em ${fora.length} atividade(s)</div>${fora.slice(0,6).map(a=>`<div style="font-size:.62rem;color:#7f1d1d;padding:.1rem 0;border-bottom:1px solid #fee2e2;">${esc(a.iso.split('-').reverse().join('/'))} · ${esc((a.ag||'').split(' ')[0])} · ${minToHM(a.wh)}h · ${esc((a.assunto||a.atv||a.cat||'-').slice(0,42))}</div>`).join('')}${fora.length>6?`<div style="font-size:.6rem;color:#991b1b;margin-top:.2rem;">+${fora.length-6} atividade(s)</div>`:''}</div>`:`<div style="margin-top:.6rem;font-size:.66rem;color:#166534;">✓ Nada fora de escopo no período.</div>`;
+    return `<div class="card" style="border-top:3px solid ${ct.cor};"><div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.4rem;margin-bottom:.5rem;"><div><div style="font-size:.85rem;font-weight:900;color:#0f172a;">${esc(ct.nome)}</div><div style="font-size:.6rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;">${esc(ct.tipo)} · ${ct.franquia}h/mês</div></div><div style="text-align:right;"><div style="font-size:1.4rem;font-weight:900;color:${ct.cor};line-height:1;">${minToHM(used)}h</div><div style="font-size:.6rem;color:#94a3b8;">de ${minToHM(Math.round(franqP))}h no período</div></div></div><div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.7rem;"><div style="flex:1;height:.5rem;background:#f1f5f9;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${Math.min(uso,100)}%;background:${usoC};transition:width .5s;"></div></div><span style="font-size:.8rem;font-weight:900;color:${usoC};min-width:2.6rem;text-align:right;">${uso}%</span></div><div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Pilares (escopo)</div>${pilRows}${foraCard}</div>`;
+  }).join('');
+  const totUsed=limRows.reduce((s,a)=>s+a.wh,0),totFora=limRows.filter(a=>{const ct=CONTRATOS_LIM.find(c=>String(c.cc)===String(a.cc));const txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();return ct&&!ct.pilares.some(pl=>pl.kw.test(txt))}).reduce((s,a)=>s+a.wh,0);
+  const kpis=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(minToHM(totUsed)+'h','H.H total (3 contratos)','#2B4C9B','clock')}${kpiCard(fmt(limRows.length),'Atividades','#0891b2','list-checks')}${kpiCard(minToHM(totFora)+'h','Fora de escopo',totFora?'#dc2626':'#22c55e','triangle-alert')}${kpiCard(CONTRATOS_LIM.length,'Contratos','#166534','file-text')}</div>`;
+  return head+kpis+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`;
 }
 window.mdConnect=function(){const k=(document.getElementById('mdBannerKey').value||'').trim(),zt=(document.getElementById('mdBannerZbx').value||'').trim();
   if(k)setMD({base:getMD().base,key:k})
