@@ -245,7 +245,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v45'
+const APP_VERSION='v46'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited'
@@ -1080,7 +1080,7 @@ function rAtividades(){
 }
 // Versão limitada: H.H por contrato + pilares (escopo) + fora de escopo. Mix executivo (uso vs contratado) + técnico (pilares).
 async function rLimitado(){
-  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;"><span style="font-size:1.02rem;font-weight:900;color:#0f172a;">Cockpit de Contratos</span><span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">H.H · SEM VALORES</span><span style="font-size:.66rem;color:#94a3b8;">3 contratos · filtro de período no topo</span></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Quanto de <b>homem-hora</b> cada contrato consumiu vs. as horas contratadas, e a distribuição pelos <b>pilares (escopo)</b>. Atividades que não batem com nenhum pilar são <b style="color:#dc2626;">fora de escopo</b>.</div></div>`;
+  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;"><span style="font-size:1.02rem;font-weight:900;color:#0f172a;">Farol</span><span style="font-size:.7rem;color:#64748b;font-weight:600;">— H.H por contrato</span><span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">SEM VALORES</span><span style="font-size:.66rem;color:#94a3b8;">3 contratos · filtro de período no topo</span></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Quanto de <b>homem-hora</b> cada contrato consumiu vs. as horas contratadas, e a distribuição pelos <b>pilares (escopo)</b>. Atividades que não batem com nenhum pilar são <b style="color:#dc2626;">fora de escopo</b>.</div></div>`;
   if(!getMD().key)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Conecte o Milldesk para ver o H.H por contrato.</div>`;
   if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk (barra de período no topo) para carregar as horas.</div>`;
   const tkById={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkById[t.id]=t});
