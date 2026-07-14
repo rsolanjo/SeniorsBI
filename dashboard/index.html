@@ -245,7 +245,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v50'
+const APP_VERSION='v51'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -490,7 +490,7 @@ const setSkillsLS=v=>lsSet('sbi_skills',v)
 function effGatilhos(c){if(!c)return[];const o=getGatilhos()[c.id];if(o)return o;return(c.kb&&CONTRACT_KB[c.kb])?CONTRACT_KB[c.kb].gatilhos.slice():[]}
 const DEPTS=['TI / Técnico','Comercial','Administrativo','Financeiro','RH','Infraestrutura','Diretoria','Outros']
 // ─── Milldesk (chamados ao vivo) ───
-let MD={loaded:false,loading:false,periodo:'',ts:0,tickets:[],backlog:[],backlogFull:[],ativs:[],ativsTs:0,ativsLoading:false,tkCat:{},chargeCli:{}}
+let MD={loaded:false,loading:false,periodo:'',ts:0,tickets:[],backlog:[],backlogFull:[],ativs:[],ativsTs:0,ativsLoading:false,tkCat:{},chargeCli:{},avulsas:[],avulsasKeys:[]}
 let MD_ATV_START='',MD_ATV_END='',ATV_TEC='',ATV_DAY='',ATV_EXPAND=false
 let CH_SUB='fila'
 window.setChSub=function(v){CH_SUB=v||'fila';if(SECTION==='tech'&&TECH_SUB==='chamados')renderContent()}
@@ -730,8 +730,9 @@ function renderContent(){
   const _nav=document.getElementById('secNav'),_st=document.getElementById('subTabs')
   if(APP_MODE==='limited'){
     if(_nav)_nav.style.display='none';if(_st)_st.style.display='none';
-    const subnav=`<div style="display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap;">${[['painel','Painel'],['cadastro','Cadastro'],['relatorios','Relatórios']].map(([k,l])=>`<button onclick="setLiteSub('${k}')" class="sub-tab ${LITE_SUB===k?'active':''}">${l}</button>`).join('')}</div>`;
+    const subnav=`<div style="display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap;">${[['painel','Painel'],['cadastro','Cadastro'],['avulsas','Avulsas'],['relatorios','Relatórios']].map(([k,l])=>`<button onclick="setLiteSub('${k}')" class="sub-tab ${LITE_SUB===k?'active':''}">${l}</button>`).join('')}</div>`;
     if(LITE_SUB==='cadastro'){el.innerHTML=subnav+rLiteContratos()+'<div style="height:1rem;"></div>'+rLiteFunc();if(window.lucide)lucide.createIcons();return}
+    if(LITE_SUB==='avulsas'){el.innerHTML=subnav+rLiteAvulsas();if(window.lucide)lucide.createIcons();return}
     if(LITE_SUB==='relatorios'){el.innerHTML=subnav+rLiteRelatorios();if(window.lucide)lucide.createIcons();return}
     rLimitado().then(h=>{el.innerHTML=subnav+h;if(window.lucide)lucide.createIcons()});return}
   if(_nav)_nav.style.display='flex';if(_st)_st.style.display=''
@@ -982,6 +983,26 @@ async function mdFetchCharge(base){
   const m={};arr.forEach(r=>{if(!r)return;const cli=mdLocCliente(r.location||'')||r.contract||'-',cm=mdWorkedMin(r.charge_hour);if(cm>0)m[cli]=(m[cli]||0)+cm})
   return m
 }
+// Aprovação de hora avulsa — tenta vários nomes de campo (Milldesk varia); retorna {ok:true|false|null, txt}
+function mdApprovalOf(r){
+  const cand=[r.approved,r.approval,r.approval_status,r.status,r.situation,r.billing_status,r.charge_status,r.aprovado,r.aprovacao,r.approved_charge];
+  for(const v of cand){if(v==null||v==='')continue;const s=String(v).toLowerCase();
+    if(/reprov|rejeit|negad|cancel/.test(s))return{ok:false,txt:'Reprovado'};
+    if(/pend|aguard|an[aá]lise|abert|n[aã]o.?aprov/.test(s))return{ok:false,txt:'Pendente'};
+    if(/aprov|approved|faturad|cobrad|billed|liberad|^sim$|^1$|^true$|^yes$/.test(s))return{ok:true,txt:'Aprovado'};
+    return{ok:null,txt:String(v)};}
+  if(r.approved_by||r.approval_date||r.approved_at||r.date_approval)return{ok:true,txt:'Aprovado'};
+  return{ok:null,txt:''};
+}
+// Horas avulsas (a cobrar) — listTicketsActivities traz charge_hour + agent + data + descrição por lançamento (NÃO entram na franquia)
+async function mdFetchAvulsas(base){
+  let arr=[];try{arr=await fetch(`${base}/listTicketsActivities`).then(r=>r.json())}catch(e){arr=[]}
+  if(!Array.isArray(arr)){MD.avulsas=[];MD.avulsasKeys=[];return}
+  MD.avulsasKeys=arr[0]?Object.keys(arr[0]):[];
+  const out=[];arr.forEach(r=>{if(!r)return;const ch=mdWorkedMin(r.charge_hour||r.charge||r.hours_to_charge||0);if(ch<=0)return;const ap=mdApprovalOf(r);
+    out.push({tid:String(r.id_ticket||r.ticket_id||r.ticket||''),ag:r.agent||r.technician||'',iso:mdActISO(r.start||r.date||''),hm:(r.start_time||r.hour||''),desc:stripHtml(r.activitiesdescription||r.description||r.activity||'').slice(0,220),ch,aprov:ap.ok,aprovTxt:ap.txt})});
+  MD.avulsas=out;
+}
 async function mdFetchTicketCats(base,tids){
   MD.tkCat=MD.tkCat||{}
   const need=[...new Set(tids)].filter(id=>id&&MD.tkCat[id]===undefined).slice(0,80)
@@ -1004,6 +1025,7 @@ window.mdSync=async function(){
     try{MD.backlogFull=await mdFetchBacklog(base)}catch(e){MD.backlogFull=MD.backlogFull||[]}
     try{const tkK={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkK[t.id]=1});const ptids=(MD.ativs||[]).filter(a=>{const iso=mdActISO(a.start);return iso>=start&&iso<=end}).map(a=>a.tid).filter(id=>id&&!tkK[id]);await mdFetchTicketCats(base,ptids)}catch(e){}
     try{MD.chargeCli=await mdFetchCharge(base);mdApplyFromAtivs()}catch(e){}
+    try{await mdFetchAvulsas(base)}catch(e){MD.avulsas=MD.avulsas||[]}
     MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
     document.getElementById('lastUpdate').textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
     const _ld=document.getElementById('liveDot'),_ls=document.getElementById('liveStatus');if(_ld)_ld.style.background='#22c55e';if(_ls)_ls.textContent='Milldesk'
@@ -1109,8 +1131,14 @@ function liteData(){
   const liteCC=new Set(getLiteCt().map(c=>String(c.cc))),limRows=rows.filter(a=>liteCC.has(String(a.cc)));
   const tmap={};limRows.forEach(a=>{(tmap[a.ag]=tmap[a.ag]||{nome:a.ag,min:0,n:0}).min+=a.wh;tmap[a.ag].n++});
   const tecnicos=Object.values(tmap).map(t=>{const rate=liteTechRate(t.nome);return{...t,rate,valor:(t.min/60)*rate}}).sort((a,b)=>b.min-a.min);
+  // Horas avulsas (a cobrar) — separadas da franquia; resolve CC pelo ticket
+  const locByTid={};(MD.ativs||[]).forEach(a=>{if(a.tid&&a.loc&&locByTid[a.tid]===undefined)locByTid[a.tid]=a.loc});
+  (MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t.id&&t.loc&&locByTid[t.id]===undefined)locByTid[t.id]=t.loc});
+  const ctByCC={};getLiteCt().forEach(c=>ctByCC[String(c.cc)]=c);
+  const avulsas=(MD.avulsas||[]).map(a=>{const loc=locByTid[a.tid]||'',cc=mdCC(loc),ct=ctByCC[String(cc)];return{...a,cc,cli:ct?ct.nome:(mdLocCliente(loc)||'-'),rhora:ct&&ct.franquia?(ct.valor||0)/ct.franquia:(ct?ct.valor||0:0)}}).filter(a=>liteCC.has(String(a.cc))&&(!a.iso||atvInRange(a.iso))).sort((a,b)=>(b.iso||'').localeCompare(a.iso||''));
+  const avulsasMin=avulsas.reduce((s,a)=>s+a.ch,0),avulsasAprovMin=avulsas.filter(a=>a.aprov===true).reduce((s,a)=>s+a.ch,0),avulsasPendMin=avulsasMin-avulsasAprovMin,avulsasVal=avulsas.reduce((s,a)=>s+(a.ch/60)*(a.rhora||0),0);
   const totUsed=contratos.reduce((s,x)=>s+x.used,0),totFranq=contratos.reduce((s,x)=>s+x.franqP,0),totFora=contratos.reduce((s,x)=>s+x.foraMin,0),totVal=contratos.reduce((s,x)=>s+(x.ct.valor||0),0),totTecVal=tecnicos.reduce((s,t)=>s+t.valor,0);
-  return {rows,limRows,pf,capFTE,contratos,tecnicos,totUsed,totFranq,totFora,totVal,totFte:totUsed/capFTE,totTecVal};
+  return {rows,limRows,pf,capFTE,contratos,tecnicos,avulsas,avulsasMin,avulsasAprovMin,avulsasPendMin,avulsasVal,totUsed,totFranq,totFora,totVal,totFte:totUsed/capFTE,totTecVal};
 }
 window.liteToggleVal=function(){
   if(LITE_VAL){LITE_VAL=false;renderContent();return}
@@ -1193,7 +1221,7 @@ window.liteForaDetalhe=function(cc){
   liteOpenModal(titulo,inner);
 };
 // ── Relatórios (Excel / PDF) ──
-const LITE_REPS={exec:'Resumo Executivo',tecnico:'Horas por Técnico',fora:'Fora de Escopo',completo:'Relatório Completo'};
+const LITE_REPS={exec:'Resumo Executivo',tecnico:'Horas por Técnico',fora:'Fora de Escopo',avulsas:'Horas Avulsas (a cobrar)',completo:'Relatório Completo'};
 function liteReportSecoes(tipo){
   const d=liteData(),money=LITE_VAL,secs=[];
   if(tipo==='exec'||tipo==='completo'){
@@ -1210,6 +1238,11 @@ function liteReportSecoes(tipo){
     const head=['Contrato','Data','Técnico','Chamado','Horas','Descrição'];
     const rows=d.contratos.flatMap(x=>x.fora.map(a=>[x.ct.nome,a.iso.split('-').reverse().join('/'),(a.ag||'').split(' ').slice(0,2).join(' '),a.tid||'-',minToHM(a.wh)+'h',(a.assunto||a.atv||a.cat||'-')]));
     secs.push({nome:'Atividades fora de escopo',head,rows});
+  }
+  if(tipo==='avulsas'||tipo==='completo'){
+    const head=['Contrato','Data','Hora','Técnico','Chamado','Horas','Aprovação','Descrição'];
+    const rows=d.avulsas.map(a=>[(a.cli||'-'),brDate(a.iso),a.hm||'',(a.ag||'').split(' ').slice(0,2).join(' '),a.tid||'-',minToHM(a.ch)+'h',a.aprov===true?'Aprovado':a.aprov===false?(a.aprovTxt||'Pendente'):'—',(a.desc||'')]);
+    secs.push({nome:'Horas avulsas (a cobrar) — fora da franquia',head,rows});
   }
   return {secoes:secs,d};
 }
@@ -1229,10 +1262,23 @@ window.liteReportPDF=function(tipo){
   const w=window.open('','_blank');if(!w){toast('Permita pop-ups para gerar o PDF.',false);return}
   w.document.write(doc);w.document.close();setTimeout(()=>{try{w.focus();w.print()}catch(e){}},400);
 };
+function rLiteAvulsas(){
+  const bh=(bg,col)=>`cursor:pointer;background:${bg};color:${col};border:none;border-radius:.4rem;padding:.33rem .7rem;font-size:.68rem;font-weight:700;`;
+  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:.95rem;font-weight:800;color:#0f172a;">Horas avulsas (a cobrar)</span><span class="badge" style="background:#f3e8ff;color:#6b21a8;font-weight:700;">FORA DA FRANQUIA</span><span style="flex:1;"></span><button onclick="liteReportXLS('avulsas')" style="${bh('#dcfce7','#166534')}">⬇ Excel</button><button onclick="liteReportPDF('avulsas')" style="${bh('#fee2e2','#991b1b')}">⬇ PDF</button></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Atividades marcadas como <b>a cobrar</b> no Milldesk — <b>não</b> consomem a franquia (168h/80h). Técnico, data/hora, descrição e status de aprovação.</div></div>`;
+  if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk para ver as horas avulsas.</div>`;
+  const d=liteData(),av=d.avulsas;
+  const kpis=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(minToHM(d.avulsasMin)+'h','Total avulsas no período','#7c3aed','receipt')}${kpiCard(minToHM(d.avulsasAprovMin)+'h','Aprovadas','#16a34a','circle-check')}${kpiCard(minToHM(d.avulsasPendMin)+'h','Pendentes/não aprov.',d.avulsasPendMin?'#f59e0b':'#22c55e','clock')}${LITE_VAL?kpiCard(fmtR(Math.round(d.avulsasVal)),'Valor estimado','#854d0e','banknote','ch × R$/h contrato'):kpiCard(fmt(av.length),'Lançamentos','#0891b2','list')}</div>`;
+  if(!av.length){const diag=(MD.avulsasKeys&&MD.avulsasKeys.length)?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.6rem;">Campos disponíveis na API: <code>${esc(MD.avulsasKeys.join(', '))}</code></div>`:'';return head+kpis+`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhuma hora a cobrar encontrada nos contratos Lite neste período.${diag}</div>`}
+  const apBadge=a=>a.aprov===true?'<span class="badge" style="background:#dcfce7;color:#166534;font-weight:700;">✓ Aprovado</span>':a.aprov===false?`<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700;">⏳ ${esc(a.aprovTxt||'Pendente')}</span>`:'<span class="badge" style="background:#f1f5f9;color:#94a3b8;">— sem info</span>';
+  const rows=av.map(a=>`<tr><td style="font-size:.66rem;color:#64748b;">${esc((a.cli||'').split('—')[0].trim())}</td><td style="white-space:nowrap;">${esc(brDate(a.iso))}${a.hm?' '+esc(a.hm):''}</td><td style="font-weight:600;white-space:nowrap;">${esc((a.ag||'').split(' ').slice(0,2).join(' '))}</td><td>${esc(a.tid||'-')}</td><td style="white-space:nowrap;font-weight:700;">${minToHM(a.ch)}h</td>${LITE_VAL?`<td style="color:#854d0e;">${a.rhora?fmtR(Math.round((a.ch/60)*a.rhora)):'-'}</td>`:''}<td>${apBadge(a)}</td><td style="font-size:.64rem;color:#334155;">${esc(a.desc||'-')}</td></tr>`).join('');
+  const semAprov=av.every(a=>a.aprov==null);
+  const diag=semAprov?`<div style="font-size:.6rem;color:#b45309;margin-top:.5rem;">⚠ Não identifiquei o campo de aprovação na API. Campos disponíveis: <code>${esc((MD.avulsasKeys||[]).join(', '))}</code> — me diga qual indica aprovação.</div>`:'';
+  return head+kpis+`<div class="card overflow-x-auto"><table><thead><tr><th>Contrato</th><th>Data/Hora</th><th>Técnico</th><th>Chamado</th><th>Horas</th>${LITE_VAL?'<th>Valor est.</th>':''}<th>Aprovação</th><th>Descrição</th></tr></thead><tbody>${rows}</tbody></table>${diag}</div>`;
+}
 function rLiteRelatorios(){
   const card=(tipo,desc,ic,cor)=>`<div class="card" style="border-top:3px solid ${cor};"><div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;"><i data-lucide="${ic}" style="width:1rem;height:1rem;color:${cor};"></i><div style="font-size:.85rem;font-weight:800;color:#0f172a;">${LITE_REPS[tipo]}</div></div><div style="font-size:.66rem;color:#64748b;margin-bottom:.7rem;min-height:2.2rem;">${desc}</div><div style="display:flex;gap:.4rem;"><button onclick="liteReportXLS('${tipo}')" style="flex:1;cursor:pointer;background:#dcfce7;color:#166534;border:none;border-radius:.4rem;padding:.42rem;font-size:.7rem;font-weight:700;">⬇ Excel</button><button onclick="liteReportPDF('${tipo}')" style="flex:1;cursor:pointer;background:#fee2e2;color:#991b1b;border:none;border-radius:.4rem;padding:.42rem;font-size:.7rem;font-weight:700;">⬇ PDF</button></div></div>`;
   return `<div class="card mb-4"><div style="font-size:.95rem;font-weight:800;color:#0f172a;">Relatórios</div><div style="font-size:.66rem;color:#64748b;margin-top:.25rem;">Relatórios personalizados da Lite no período selecionado (barra do topo). <b>Excel</b> baixa CSV; <b>PDF</b> abre para imprimir/salvar. Os valores em R$ só entram se estiverem revelados com a senha.</div></div>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${card('exec','Resumo por contrato: consumo vs. franquia, saldo, FTE e fora de escopo'+(LITE_VAL?', com valores.':' (sem valores).'),'file-bar-chart-2','#2B4C9B')}${card('tecnico','Horas trabalhadas por cada técnico'+(LITE_VAL?' e o valor (custo-hora × horas).':' no período.'),'users','#0891b2')}${card('fora','Todas as atividades fora do escopo contratado — técnico, chamado e descrição.','triangle-alert','#dc2626')}${card('completo','Tudo em um arquivo: contratos + técnicos + fora de escopo.','layers','#7c3aed')}</div>`;
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${card('exec','Resumo por contrato: consumo vs. franquia, saldo, FTE e fora de escopo'+(LITE_VAL?', com valores.':' (sem valores).'),'file-bar-chart-2','#2B4C9B')}${card('tecnico','Horas trabalhadas por cada técnico'+(LITE_VAL?' e o valor (custo-hora × horas).':' no período.'),'users','#0891b2')}${card('fora','Todas as atividades fora do escopo contratado — técnico, chamado e descrição.','triangle-alert','#dc2626')}${card('avulsas','Horas a cobrar (fora da franquia): técnico, data, descrição e aprovação.','receipt','#7c3aed')}${card('completo','Tudo em um arquivo: contratos + técnicos + fora de escopo + avulsas.','layers','#0f766e')}</div>`;
 }
 window.setLiteSub=function(s){LITE_SUB=s;renderContent()};
 // Aba Contratos da Lite — cadastro/edição com centro de custo (mesmo padrão da versão completa)
@@ -1272,9 +1318,10 @@ async function rLimitado(){
   const kc=[kpiCard(minToHM(d.totUsed)+'h','H.H consumido','#2B4C9B','clock'),kpiCard(hmSigned(d.totFranq-d.totUsed)+'h','Saldo total',(d.totFranq-d.totUsed)<0?'#dc2626':'#166534','battery-charging'),kpiCard(d.totFte.toFixed(1),'FTE total','#0891b2','users'),kpiCard(minToHM(d.totFora)+'h','Fora de escopo',d.totFora?'#dc2626':'#22c55e','triangle-alert')];
   if(LITE_VAL)kc.push(kpiCard(fmtR(d.totVal),'Contratos/mês','#854d0e','banknote'));
   const kpis=`<div class="grid grid-cols-2 md:grid-cols-${LITE_VAL?5:4} gap-3 mb-4">${kc.join('')}</div>`;
+  const avBanner=d.avulsasMin?`<div class="card mb-4" style="background:#faf5ff;border:1px solid #e9d5ff;"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="receipt" style="width:.95rem;height:.95rem;color:#7c3aed;"></i><span style="font-size:.72rem;font-weight:800;color:#6b21a8;">Horas avulsas (a cobrar): ${minToHM(d.avulsasMin)}h</span><span style="font-size:.66rem;color:#7c3aed;">— ${minToHM(d.avulsasAprovMin)}h aprovadas · ${minToHM(d.avulsasPendMin)}h pendentes · <b>não entram na franquia</b></span><span style="flex:1;"></span><button onclick="setLiteSub('avulsas')" style="cursor:pointer;background:#7c3aed;color:#fff;border:none;border-radius:.4rem;padding:.28rem .6rem;font-size:.64rem;font-weight:700;">Ver todas →</button></div></div>`:'';
   const tec=d.tecnicos;
   const techTbl=tec.length?`<div class="card overflow-x-auto" style="margin-top:1rem;"><div style="font-size:.85rem;font-weight:800;color:#0f172a;margin-bottom:.5rem;">Horas por técnico${LITE_VAL?' · valor':''} <span style="font-size:.62rem;color:#94a3b8;font-weight:500;">(quem lançou a atividade, nos contratos Lite)</span></div><table><thead><tr><th>Técnico</th><th>Atividades</th><th>Horas</th>${LITE_VAL?'<th>Custo-hora</th><th>Valor</th>':''}</tr></thead><tbody>${tec.map(t=>`<tr><td style="font-weight:600;">${esc((t.nome||'').split(' ').slice(0,2).join(' '))}</td><td>${t.n}</td><td style="font-weight:700;">${minToHM(t.min)}h</td>${LITE_VAL?`<td style="color:#854d0e;">${t.rate?fmtR(Math.round(t.rate))+'/h':'<span style="color:#cbd5e1;">sem salário</span>'}</td><td style="color:#166534;font-weight:700;">${t.rate?fmtR(Math.round(t.valor)):'-'}</td>`:''}</tr>`).join('')}</tbody>${LITE_VAL?`<tfoot><tr style="font-weight:800;background:#f8fafc;"><td>Total</td><td></td><td>${minToHM(d.totUsed)}h</td><td></td><td style="color:#166534;">${fmtR(Math.round(d.totTecVal))}</td></tr></tfoot>`:''}</table><div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Valor = custo-hora (salário ÷ ${LITE_CAP_H}h) × horas. Cadastre salários em <b>Cadastro → Funcionários</b>.</div></div>`:'';
-  return head+alertBar+kpis+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`+techTbl;
+  return head+alertBar+avBanner+kpis+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`+techTbl;
 }
 window.mdConnect=function(){const k=(document.getElementById('mdBannerKey').value||'').trim(),zt=(document.getElementById('mdBannerZbx').value||'').trim();
   if(k)setMD({base:getMD().base,key:k})
