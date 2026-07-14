@@ -245,7 +245,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v47'
+const APP_VERSION='v48'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited'
@@ -267,7 +267,7 @@ const LITE_SEED=[
 const getLiteCt=()=>{const v=lsGet('sbi_lite_ct');return(v&&v.length)?v:LITE_SEED.map(c=>({...c}))}
 const setLiteCt=v=>lsSet('sbi_lite_ct',v)
 const litePilares=c=>(LITE_PILARES[c.pilar]||LITE_PILARES.susten)
-let LITE_VAL=(localStorage.getItem('sbi_lite_val')!=='false')
+let LITE_VAL=false// valores protegidos por senha; sempre ocultos ao carregar
 const LITE_COR=['#2B4C9B','#7c3aed','#166534','#0891b2','#E04622','#854d0e','#be185d','#0f766e']
 window.setAppMode=function(m){
   if(m==='full'){if(!SEC_AUTH){const p=prompt('Versão completa (executiva + técnica + admin). Digite a senha:');if(p==null)return;if(p!=='123'){toast('Senha incorreta.',false);return}SEC_AUTH=true}APP_MODE='full'}
@@ -1097,9 +1097,9 @@ function liteData(){
   return {rows,pf,capFTE,contratos,totUsed,totFranq,totFora,totVal,totFte:totUsed/capFTE};
 }
 window.liteToggleVal=function(){
-  if(LITE_VAL){LITE_VAL=false;lsSet('sbi_lite_val',false);renderContent();return}
+  if(LITE_VAL){LITE_VAL=false;renderContent();return}
   const p=prompt('Mostrar valores (R$). Digite a senha:');if(p==null)return;if(p!=='123'){toast('Senha incorreta.',false);return}
-  LITE_VAL=true;lsSet('sbi_lite_val',true);renderContent();
+  LITE_VAL=true;renderContent();// só na sessão; recarregar volta a ocultar
 };
 window.liteAddCt=function(){
   const nome=prompt('Nome do contrato:');if(!nome)return;
