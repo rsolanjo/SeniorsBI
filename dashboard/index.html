@@ -245,10 +245,10 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v48'
+const APP_VERSION='v49'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
-let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited'
+let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
 // Versão limitada: 3 contratos, só H.H (sem valores). Pilares = escopo dos contratos (para controlar trabalho fora de escopo).
 const LITE_PILARES={
   susten:[
@@ -721,7 +721,11 @@ function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TE
 function renderContent(){
   const el=document.getElementById('main')
   const _nav=document.getElementById('secNav'),_st=document.getElementById('subTabs')
-  if(APP_MODE==='limited'){if(_nav)_nav.style.display='none';if(_st)_st.style.display='none';rLimitado().then(h=>{el.innerHTML=h;if(window.lucide)lucide.createIcons()});return}
+  if(APP_MODE==='limited'){
+    if(_nav)_nav.style.display='none';if(_st)_st.style.display='none';
+    const subnav=`<div style="display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap;">${[['painel','Painel'],['contratos','Contratos']].map(([k,l])=>`<button onclick="setLiteSub('${k}')" class="sub-tab ${LITE_SUB===k?'active':''}">${l}</button>`).join('')}</div>`;
+    if(LITE_SUB==='contratos'){el.innerHTML=subnav+rLiteContratos();if(window.lucide)lucide.createIcons();return}
+    rLimitado().then(h=>{el.innerHTML=subnav+h;if(window.lucide)lucide.createIcons()});return}
   if(_nav)_nav.style.display='flex';if(_st)_st.style.display=''
   if(TIME==='comparar'){renderCompare();return}
   const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','checklists'].includes(TECH_SUB))
@@ -1130,6 +1134,20 @@ window.liteExport=function(){
   const csv='﻿'+lines.join('\r\n'),blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='Lite_contratos_'+(MD_ATV_START||'inicio')+'_a_'+(MD_ATV_END||'fim')+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);toast('Excel (CSV) exportado.');
 };
+window.setLiteSub=function(s){LITE_SUB=s;renderContent()};
+// Aba Contratos da Lite — cadastro/edição com centro de custo (mesmo padrão da versão completa)
+function rLiteContratos(){
+  const ct=getLiteCt();
+  const bh=(bg,col)=>`cursor:pointer;background:${bg};color:${col};border:none;border-radius:.4rem;padding:.33rem .7rem;font-size:.68rem;font-weight:700;`;
+  const rows=ct.map(c=>{
+    const escopo=litePilares(c).map(p=>p.nome).join(' · ');
+    const valTd=LITE_VAL?`<td style="color:#166534;font-weight:700;">${fmtR(c.valor)}</td><td style="color:#64748b;">${c.franquia?fmtR(Math.round((c.valor||0)/c.franquia)):'-'}/h</td>`:`<td style="color:#cbd5e1;">•••••</td><td style="color:#cbd5e1;">•••</td>`;
+    return `<tr><td style="font-weight:600;">${esc(c.nome)}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(c.cc)}</span></td><td>${esc(c.tipo)}</td><td style="color:#64748b;">${c.franquia||'-'}h/mês</td>${valTd}<td style="font-size:.62rem;color:#64748b;max-width:16rem;">${esc(escopo)}</td><td><div style="display:flex;gap:.1rem;"><button class="act-btn act-edit" onclick="liteEditCt('${c.id}')">Editar</button><button class="act-btn act-del" onclick="liteDelCt('${c.id}')">✕</button></div></td></tr>`;
+  }).join('');
+  return `<div class="card overflow-x-auto"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.62rem;gap:.5rem;flex-wrap:wrap;"><div style="font-size:.9rem;font-weight:800;color:#0f172a;">Contratos monitorados (${ct.length})</div><div style="display:flex;gap:.4rem;"><button onclick="liteToggleVal()" style="${bh(LITE_VAL?'#fef9c3':'#e0e7ff',LITE_VAL?'#854d0e':'#3730a3')}">${LITE_VAL?'🙈 Ocultar valores':'👁 Mostrar valores'}</button><button onclick="liteReset()" style="${bh('#f1f5f9','#64748b')}">↺ Padrão</button><button onclick="liteAddCt()" style="${bh('#2B4C9B','#fff')}">＋ Novo</button></div></div>
+<table><thead><tr><th>Contrato</th><th>Centro de Custo</th><th>Tipo</th><th>Franquia</th><th>Valor/mês</th><th>R$/h</th><th>Escopo (pilares)</th><th>Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="8" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum contrato. Use ＋ Novo.</td></tr>'}</tbody></table>
+<div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;">O <b>Centro de Custo (CC)</b> é o número que casa a atividade do Milldesk (campo <code>location</code>) com o contrato — é por ele que as horas são somadas. Valores ficam protegidos por senha (123). Cadastros salvos só neste navegador.</div></div>`;
+}
 async function rLimitado(){
   const valBtn=`<button onclick="liteToggleVal()" class="badge" style="cursor:pointer;background:${LITE_VAL?'#fef9c3':'#e0e7ff'};color:${LITE_VAL?'#854d0e':'#3730a3'};border:none;font-weight:700;">${LITE_VAL?'🙈 Ocultar valores':'👁 Mostrar valores'}</button>`;
   const xlsBtn=`<button onclick="liteExport()" class="badge" style="cursor:pointer;background:#dcfce7;color:#166534;border:none;font-weight:700;">⬇ Excel</button>`;
