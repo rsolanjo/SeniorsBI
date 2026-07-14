@@ -245,7 +245,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v49'
+const APP_VERSION='v50'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -257,8 +257,10 @@ const LITE_PILARES={
     {nome:'Governança e transparência',kw:/relat[oó]rio|governan|checklist|documenta|reuni|indicador|mudan|invent[aá]rio|pop\b|procedimento|dashboard|template|sensor/i},
     {nome:'Evolução planejada',kw:/projeto|evolu|migra|implanta|upgrade|assessment|reestrutur|rollout|novo/i}
   ],
-  projeto:[{nome:'Projetos e Evolução (rede, segurança, M365, servidores, AWS)',kw:/projeto|evolu|migra|implanta|reestrutur|aws|nuvem|upgrade|assessment|pentest|rollout|novo/i}]
+  projeto:[{nome:'Projetos e Evolução (rede, segurança, M365, servidores, AWS)',kw:/projeto|evolu|migra|implanta|reestrutur|aws|nuvem|upgrade|assessment|pentest|rollout|novo/i}],
+  avulso:[{nome:'Demanda avulsa (sob demanda / por hora)',kw:/[\s\S]/}]
 }
+const LITE_TIPOS=['Sustentação','Projeto','Avulso']
 const LITE_SEED=[
   {id:'mileto-sg',cc:'2807',nome:'Mileto — Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:45000,cor:'#2B4C9B',pilar:'susten'},
   {id:'mileto-proj',cc:'2809',nome:'Mileto — Projetos / Evolução',tipo:'Projeto',franquia:80,valor:20900,cor:'#7c3aed',pilar:'projeto'},
@@ -269,6 +271,11 @@ const setLiteCt=v=>lsSet('sbi_lite_ct',v)
 const litePilares=c=>(LITE_PILARES[c.pilar]||LITE_PILARES.susten)
 let LITE_VAL=false// valores protegidos por senha; sempre ocultos ao carregar
 const LITE_COR=['#2B4C9B','#7c3aed','#166534','#0891b2','#E04622','#854d0e','#be185d','#0f766e']
+const LITE_CAP_H=168// horas/mês de referência p/ custo-hora do funcionário
+const getLiteFunc=()=>lsGet('sbi_lite_func')||[]
+const setLiteFunc=v=>lsSet('sbi_lite_func',v)
+const liteNorm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim()
+function liteTechRate(nome){const fs=getLiteFunc(),n=liteNorm(nome);if(!n)return 0;let f=fs.find(x=>liteNorm(x.nome)===n);if(!f)f=fs.find(x=>liteNorm(x.nome).split(' ')[0]===n.split(' ')[0]);return(f&&f.salario)?f.salario/LITE_CAP_H:0}
 window.setAppMode=function(m){
   if(m==='full'){if(!SEC_AUTH){const p=prompt('Versão completa (executiva + técnica + admin). Digite a senha:');if(p==null)return;if(p!=='123'){toast('Senha incorreta.',false);return}SEC_AUTH=true}APP_MODE='full'}
   else{APP_MODE='limited'}
@@ -723,8 +730,9 @@ function renderContent(){
   const _nav=document.getElementById('secNav'),_st=document.getElementById('subTabs')
   if(APP_MODE==='limited'){
     if(_nav)_nav.style.display='none';if(_st)_st.style.display='none';
-    const subnav=`<div style="display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap;">${[['painel','Painel'],['contratos','Contratos']].map(([k,l])=>`<button onclick="setLiteSub('${k}')" class="sub-tab ${LITE_SUB===k?'active':''}">${l}</button>`).join('')}</div>`;
-    if(LITE_SUB==='contratos'){el.innerHTML=subnav+rLiteContratos();if(window.lucide)lucide.createIcons();return}
+    const subnav=`<div style="display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap;">${[['painel','Painel'],['cadastro','Cadastro'],['relatorios','Relatórios']].map(([k,l])=>`<button onclick="setLiteSub('${k}')" class="sub-tab ${LITE_SUB===k?'active':''}">${l}</button>`).join('')}</div>`;
+    if(LITE_SUB==='cadastro'){el.innerHTML=subnav+rLiteContratos()+'<div style="height:1rem;"></div>'+rLiteFunc();if(window.lucide)lucide.createIcons();return}
+    if(LITE_SUB==='relatorios'){el.innerHTML=subnav+rLiteRelatorios();if(window.lucide)lucide.createIcons();return}
     rLimitado().then(h=>{el.innerHTML=subnav+h;if(window.lucide)lucide.createIcons()});return}
   if(_nav)_nav.style.display='flex';if(_st)_st.style.display=''
   if(TIME==='comparar'){renderCompare();return}
@@ -1088,39 +1096,45 @@ const hmSigned=m=>{const s=m<0?'-':'';m=Math.abs(Math.round(m));return s+Math.fl
 const LITE_ALERT_PCT=80;
 function liteData(){
   const tkById={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkById[t.id]=t});
-  const rows=(MD.ativs||[]).map(a=>{const iso=mdActISO(a.start),cc=mdCC(a.loc||''),t=tkById[a.tid];return{cc,wh:a.wh||0,iso,ag:a.ag,cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'',assunto:a.assunto||(t?t.t:'')||'',atv:a.atv||''}}).filter(a=>atvInRange(a.iso)&&a.ag&&!isExcludedTech(a.ag));
+  const rows=(MD.ativs||[]).map(a=>{const iso=mdActISO(a.start),cc=mdCC(a.loc||''),t=tkById[a.tid];return{cc,wh:a.wh||0,iso,ag:a.ag,tid:a.tid,cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'',assunto:a.assunto||(t?t.t:'')||'',atv:a.atv||'',hm:a.hm||''}}).filter(a=>atvInRange(a.iso)&&a.ag&&!isExcludedTech(a.ag));
   const pf=mdPeriodFactor(),capFTE=Math.max(1,mdBizDays(MD_ATV_START,MD_ATV_END))*8*60;
   const contratos=getLiteCt().map(ct=>{
     const pil=litePilares(ct),acts=rows.filter(a=>String(a.cc)===String(ct.cc)),used=acts.reduce((s,a)=>s+a.wh,0);
     const franqP=(ct.franquia||0)*60*pf,saldo=franqP-used,uso=franqP?Math.round(used/franqP*100):0,fte=used/capFTE;
     const rhora=ct.franquia?(ct.valor||0)/ct.franquia:0,excedH=saldo<0?-saldo/60:0,excedR=excedH*rhora;
-    const pilMin={},fora=[];acts.forEach(a=>{const txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();const p=pil.find(pl=>pl.kw.test(txt));if(p)pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;else fora.push(a)});
-    return {ct,pil,used,franqP,saldo,uso,fte,rhora,excedR,pilMin,fora,foraMin:fora.reduce((s,a)=>s+a.wh,0)};
+    const pilMin={},fora=[],tec={};acts.forEach(a=>{tec[a.ag]=(tec[a.ag]||0)+a.wh;const txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();const p=pil.find(pl=>pl.kw.test(txt));if(p)pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;else fora.push(a)});
+    return {ct,pil,acts,used,franqP,saldo,uso,fte,rhora,excedR,pilMin,tec,fora,foraMin:fora.reduce((s,a)=>s+a.wh,0)};
   });
-  const totUsed=contratos.reduce((s,x)=>s+x.used,0),totFranq=contratos.reduce((s,x)=>s+x.franqP,0),totFora=contratos.reduce((s,x)=>s+x.foraMin,0),totVal=contratos.reduce((s,x)=>s+(x.ct.valor||0),0);
-  return {rows,pf,capFTE,contratos,totUsed,totFranq,totFora,totVal,totFte:totUsed/capFTE};
+  // por técnico (global, contratos Lite) — horas + valor pelo salário cadastrado
+  const liteCC=new Set(getLiteCt().map(c=>String(c.cc))),limRows=rows.filter(a=>liteCC.has(String(a.cc)));
+  const tmap={};limRows.forEach(a=>{(tmap[a.ag]=tmap[a.ag]||{nome:a.ag,min:0,n:0}).min+=a.wh;tmap[a.ag].n++});
+  const tecnicos=Object.values(tmap).map(t=>{const rate=liteTechRate(t.nome);return{...t,rate,valor:(t.min/60)*rate}}).sort((a,b)=>b.min-a.min);
+  const totUsed=contratos.reduce((s,x)=>s+x.used,0),totFranq=contratos.reduce((s,x)=>s+x.franqP,0),totFora=contratos.reduce((s,x)=>s+x.foraMin,0),totVal=contratos.reduce((s,x)=>s+(x.ct.valor||0),0),totTecVal=tecnicos.reduce((s,t)=>s+t.valor,0);
+  return {rows,limRows,pf,capFTE,contratos,tecnicos,totUsed,totFranq,totFora,totVal,totFte:totUsed/capFTE,totTecVal};
 }
 window.liteToggleVal=function(){
   if(LITE_VAL){LITE_VAL=false;renderContent();return}
   const p=prompt('Mostrar valores (R$). Digite a senha:');if(p==null)return;if(p!=='123'){toast('Senha incorreta.',false);return}
   LITE_VAL=true;renderContent();// só na sessão; recarregar volta a ocultar
 };
+const litePilarFor=tp=>/avuls/i.test(tp)?'avulso':/projeto/i.test(tp)?'projeto':'susten';
 window.liteAddCt=function(){
   const nome=prompt('Nome do contrato:');if(!nome)return;
   const cc=prompt('Centro de custo (número, ex.: 2807):');if(cc==null)return;
-  const fr=prompt('Franquia de horas/mês (ex.: 168):','168');if(fr==null)return;
-  const vl=prompt('Valor mensal R$ (0 se não usar):','0');if(vl==null)return;
-  const tp=(prompt('Tipo (Sustentação / Projeto):','Sustentação')||'Sustentação').trim();
-  const list=getLiteCt();list.push({id:'ct_'+String(cc).trim()+'_'+list.length,cc:String(cc).trim(),nome:nome.trim(),tipo:tp,franquia:+fr||0,valor:+vl||0,cor:LITE_COR[list.length%LITE_COR.length],pilar:/projeto/i.test(tp)?'projeto':'susten'});
+  const tp=(prompt('Tipo — Sustentação, Projeto ou Avulso:','Sustentação')||'Sustentação').trim();
+  const fr=prompt(/avuls/i.test(tp)?'Franquia de horas/mês (0 para avulso por hora):':'Franquia de horas/mês (ex.: 168):',/avuls/i.test(tp)?'0':'168');if(fr==null)return;
+  const vl=prompt(/avuls/i.test(tp)?'Valor da hora avulsa R$ (ou 0):':'Valor mensal R$ (0 se não usar):','0');if(vl==null)return;
+  const list=getLiteCt();list.push({id:'ct_'+String(cc).trim()+'_'+list.length,cc:String(cc).trim(),nome:nome.trim(),tipo:tp,franquia:+fr||0,valor:+vl||0,cor:LITE_COR[list.length%LITE_COR.length],pilar:litePilarFor(tp)});
   setLiteCt(list);toast('Contrato adicionado.');renderContent();
 };
 window.liteEditCt=function(id){
   const list=getLiteCt(),c=list.find(x=>x.id===id);if(!c)return;
   const nome=prompt('Nome do contrato:',c.nome);if(nome==null)return;
   const cc=prompt('Centro de custo:',c.cc);if(cc==null)return;
-  const fr=prompt('Franquia de horas/mês:',c.franquia);if(fr==null)return;
-  const vl=prompt('Valor mensal R$:',c.valor||0);if(vl==null)return;
-  c.nome=nome.trim()||c.nome;c.cc=String(cc).trim();c.franquia=+fr||0;c.valor=+vl||0;
+  const tp=(prompt('Tipo — Sustentação, Projeto ou Avulso:',c.tipo)||c.tipo).trim();
+  const fr=prompt('Franquia de horas/mês (0 = avulso por hora):',c.franquia);if(fr==null)return;
+  const vl=prompt('Valor mensal R$ (ou valor/hora se avulso):',c.valor||0);if(vl==null)return;
+  c.nome=nome.trim()||c.nome;c.cc=String(cc).trim();c.tipo=tp;c.franquia=+fr||0;c.valor=+vl||0;c.pilar=litePilarFor(tp);
   setLiteCt(list);toast('Contrato atualizado.');renderContent();
 };
 window.liteDelCt=function(id){if(!confirm('Remover este contrato da Lite?'))return;setLiteCt(getLiteCt().filter(x=>x.id!==id));toast('Contrato removido.');renderContent();};
@@ -1134,6 +1148,92 @@ window.liteExport=function(){
   const csv='﻿'+lines.join('\r\n'),blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='Lite_contratos_'+(MD_ATV_START||'inicio')+'_a_'+(MD_ATV_END||'fim')+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);toast('Excel (CSV) exportado.');
 };
+// ── Funcionários da Lite (nome + salário → custo-hora p/ valorar horas dos técnicos) ──
+window.liteAddFunc=function(){
+  const nome=prompt('Nome do funcionário (como aparece nas atividades do Milldesk):');if(!nome)return;
+  const sal=prompt('Salário mensal R$:','0');if(sal==null)return;
+  const cargo=(prompt('Cargo / Nível (opcional, ex.: N1, N2, Analista):','')||'').trim();
+  const list=getLiteFunc();list.push({id:'f_'+Date.now()+'_'+list.length,nome:nome.trim(),salario:+sal||0,cargo});
+  setLiteFunc(list);toast('Funcionário adicionado.');renderContent();
+};
+window.liteEditFunc=function(id){
+  const list=getLiteFunc(),f=list.find(x=>x.id===id);if(!f)return;
+  const nome=prompt('Nome do funcionário:',f.nome);if(nome==null)return;
+  const sal=prompt('Salário mensal R$:',f.salario||0);if(sal==null)return;
+  const cargo=(prompt('Cargo / Nível:',f.cargo||'')||'').trim();
+  f.nome=nome.trim()||f.nome;f.salario=+sal||0;f.cargo=cargo;
+  setLiteFunc(list);toast('Funcionário atualizado.');renderContent();
+};
+window.liteDelFunc=function(id){if(!confirm('Remover funcionário?'))return;setLiteFunc(getLiteFunc().filter(x=>x.id!==id));toast('Funcionário removido.');renderContent();};
+function rLiteFunc(){
+  const fs=getLiteFunc(),bh=(bg,col)=>`cursor:pointer;background:${bg};color:${col};border:none;border-radius:.4rem;padding:.33rem .7rem;font-size:.68rem;font-weight:700;`;
+  const rows=fs.map(f=>{const rate=f.salario?f.salario/LITE_CAP_H:0;const vv=LITE_VAL?`<td style="color:#854d0e;font-weight:700;">${fmtR(f.salario)}</td><td style="color:#166534;font-weight:700;">${rate?fmtR(Math.round(rate))+'/h':'-'}</td>`:`<td style="color:#cbd5e1;">•••••</td><td style="color:#cbd5e1;">•••</td>`;
+    return `<tr><td style="font-weight:600;">${esc(f.nome)}</td><td>${f.cargo?`<span class="tag">${esc(f.cargo)}</span>`:'<span style="color:#cbd5e1;">-</span>'}</td>${vv}<td><div style="display:flex;gap:.1rem;"><button class="act-btn act-edit" onclick="liteEditFunc('${f.id}')">Editar</button><button class="act-btn act-del" onclick="liteDelFunc('${f.id}')">✕</button></div></td></tr>`}).join('');
+  return `<div class="card overflow-x-auto"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.62rem;gap:.5rem;flex-wrap:wrap;"><div style="font-size:.9rem;font-weight:800;color:#0f172a;">Funcionários (${fs.length})</div><button onclick="liteAddFunc()" style="${bh('#2B4C9B','#fff')}">＋ Novo</button></div>
+<table><thead><tr><th>Nome</th><th>Cargo/Nível</th><th>Salário</th><th>Custo-hora</th><th>Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="5" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum funcionário. Use ＋ Novo para valorar as horas dos técnicos.</td></tr>'}</tbody></table>
+<div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;">O <b>custo-hora</b> = salário ÷ ${LITE_CAP_H}h/mês. É o que valoriza as horas de cada técnico no Painel e nos relatórios. O nome deve casar com o que aparece nas atividades do Milldesk. Salários protegidos por senha (123).</div></div>`;
+}
+// ── Modal de detalhes (inconsistências) ──
+function liteOpenModal(title,inner){
+  let ov=document.getElementById('liteModal');
+  if(!ov){ov=document.createElement('div');ov.id='liteModal';ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow:auto;';ov.onclick=e=>{if(e.target===ov)liteCloseModal()};document.body.appendChild(ov)}
+  ov.innerHTML=`<div style="background:#fff;border-radius:.7rem;max-width:62rem;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35);"><div style="display:flex;align-items:center;justify-content:space-between;padding:.85rem 1.1rem;border-bottom:1px solid #f1f5f9;"><div style="font-size:.92rem;font-weight:800;color:#0f172a;">${title}</div><button onclick="liteCloseModal()" style="cursor:pointer;background:none;border:none;font-size:1.15rem;color:#94a3b8;line-height:1;">✕</button></div><div style="padding:1rem 1.1rem;">${inner}</div></div>`;
+  ov.style.display='flex';if(window.lucide)lucide.createIcons();
+}
+window.liteCloseModal=function(){const ov=document.getElementById('liteModal');if(ov)ov.style.display='none'};
+window.liteForaDetalhe=function(cc){
+  const d=liteData(),x=cc==='ALL'?null:d.contratos.find(c=>String(c.ct.cc)===String(cc));
+  const list=x?x.fora.map(a=>({...a,_ct:x.ct.nome})):d.contratos.flatMap(c=>c.fora.map(a=>({...a,_ct:c.ct.nome})));
+  const titulo=x?`Fora de escopo — ${esc(x.ct.nome)}`:'Fora de escopo — todos os contratos';
+  if(!list.length){liteOpenModal(titulo,'<div style="color:#166534;padding:1rem;text-align:center;">✓ Nenhuma atividade fora de escopo no período.</div>');return}
+  list.sort((a,b)=>b.wh-a.wh);
+  const totMin=list.reduce((s,a)=>s+a.wh,0);
+  const rows=list.map(a=>`<tr><td style="white-space:nowrap;">${esc(a.iso.split('-').reverse().join('/'))}${a.hm?' '+esc(a.hm):''}</td><td style="font-weight:600;white-space:nowrap;">${esc((a.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="font-size:.66rem;color:#64748b;">${esc((a._ct||'').split('—')[0].trim())}</td><td>${esc(a.tid||'-')}</td><td style="white-space:nowrap;">${minToHM(a.wh)}h</td><td style="font-size:.66rem;color:#334155;">${esc(a.assunto||a.atv||a.cat||'-')}</td></tr>`).join('');
+  const inner=`<div style="font-size:.72rem;color:#991b1b;margin-bottom:.6rem;font-weight:700;">${list.length} atividade(s) · ${minToHM(totMin)}h fora dos pilares contratados.</div><div style="overflow-x:auto;max-height:60vh;"><table><thead><tr><th>Data</th><th>Técnico</th><th>Contrato</th><th>Chamado</th><th>Horas</th><th>Descrição</th></tr></thead><tbody>${rows}</tbody></table></div><div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;">Fora de escopo = atividade cujo assunto/categoria não bate com nenhum pilar do contrato. Revise se deveria ser cobrada à parte, reclassificada, ou se falta ajustar as palavras-chave do pilar.</div>`;
+  liteOpenModal(titulo,inner);
+};
+// ── Relatórios (Excel / PDF) ──
+const LITE_REPS={exec:'Resumo Executivo',tecnico:'Horas por Técnico',fora:'Fora de Escopo',completo:'Relatório Completo'};
+function liteReportSecoes(tipo){
+  const d=liteData(),money=LITE_VAL,secs=[];
+  if(tipo==='exec'||tipo==='completo'){
+    const head=['Contrato','CC','Tipo','Franquia (h)','Consumido (h)','Saldo (h)','Uso %','FTE','Fora escopo (h)'];if(money)head.push('Valor/mês (R$)','R$/h','Excedente (R$)');
+    const rows=d.contratos.map(x=>{const r=[x.ct.nome,x.ct.cc,x.ct.tipo,x.ct.franquia,hmSigned(x.used),hmSigned(x.saldo),x.uso+'%',x.fte.toFixed(1),hmSigned(x.foraMin)];if(money)r.push(fmtR(x.ct.valor),fmtR(Math.round(x.rhora)),x.excedR?fmtR(Math.round(x.excedR)):'-');return r});
+    secs.push({nome:'Resumo por contrato',head,rows});
+  }
+  if(tipo==='tecnico'||tipo==='completo'){
+    const head=['Técnico','Atividades','Horas'];if(money)head.push('Custo-hora (R$)','Valor (R$)');
+    const rows=d.tecnicos.map(t=>{const r=[t.nome,t.n,minToHM(t.min)+'h'];if(money)r.push(t.rate?fmtR(Math.round(t.rate)):'(sem salário)',t.rate?fmtR(Math.round(t.valor)):'-');return r});
+    secs.push({nome:'Horas e valor por técnico',head,rows});
+  }
+  if(tipo==='fora'||tipo==='completo'){
+    const head=['Contrato','Data','Técnico','Chamado','Horas','Descrição'];
+    const rows=d.contratos.flatMap(x=>x.fora.map(a=>[x.ct.nome,a.iso.split('-').reverse().join('/'),(a.ag||'').split(' ').slice(0,2).join(' '),a.tid||'-',minToHM(a.wh)+'h',(a.assunto||a.atv||a.cat||'-')]));
+    secs.push({nome:'Atividades fora de escopo',head,rows});
+  }
+  return {secoes:secs,d};
+}
+window.liteReportXLS=function(tipo){
+  if(!MD.loaded){toast('Sincronize o Milldesk antes.',false);return}
+  const {secoes}=liteReportSecoes(tipo),sep=';',q=v=>`"${String(v).replace(/"/g,'""')}"`,L=[q('SeniorsBI Lite — '+(LITE_REPS[tipo]||tipo)),q('Período: '+(MD_ATV_START||'')+' a '+(MD_ATV_END||'')),''];
+  secoes.forEach(s=>{L.push(q(s.nome));L.push(s.head.map(q).join(sep));s.rows.forEach(r=>L.push(r.map(q).join(sep)));L.push('')});
+  const csv='﻿'+L.join('\r\n'),blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='Lite_'+tipo+'_'+(MD_ATV_START||'')+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);toast('Excel exportado.');
+};
+window.liteReportPDF=function(tipo){
+  if(!MD.loaded){toast('Sincronize o Milldesk antes.',false);return}
+  const {secoes,d}=liteReportSecoes(tipo);
+  const secHTML=secoes.map(s=>`<h2>${s.nome}</h2><table><thead><tr>${s.head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${s.rows.map(r=>`<tr>${r.map(c=>`<td>${String(c)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${s.head.length}">—</td></tr>`}</tbody></table>`).join('');
+  const kpis=`<div class="kpis"><span><b>${minToHM(d.totUsed)}h</b> consumido</span><span><b>${hmSigned(d.totFranq-d.totUsed)}h</b> saldo</span><span><b>${d.totFte.toFixed(1)}</b> FTE</span><span><b>${minToHM(d.totFora)}h</b> fora de escopo</span>${LITE_VAL?`<span><b>${fmtR(d.totVal)}</b>/mês</span>`:''}</div>`;
+  const doc=`<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><title>Lite — ${LITE_REPS[tipo]||tipo}</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;margin:24px;}h1{font-size:17px;margin:0 0 2px;}h2{font-size:12.5px;margin:16px 0 6px;color:#2B4C9B;border-bottom:2px solid #e2e8f0;padding-bottom:3px;}.sub{color:#64748b;font-size:11px;margin-bottom:8px;}.kpis{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;margin:8px 0 4px;}.kpis span{background:#f1f5f9;padding:4px 8px;border-radius:5px;}table{border-collapse:collapse;width:100%;font-size:10px;margin-bottom:6px;}th,td{border:1px solid #e2e8f0;padding:3px 6px;text-align:left;}th{background:#f8fafc;}@media print{.noprint{display:none;}}</style></head><body><h1>Grupo Seniors — SeniorsBI Lite</h1><div class="sub">${LITE_REPS[tipo]||tipo} · Período ${MD_ATV_START||'—'} a ${MD_ATV_END||'—'}${LITE_VAL?'':' · (valores ocultos)'}</div>${kpis}${secHTML}<button class="noprint" onclick="window.print()" style="margin-top:16px;padding:8px 16px;cursor:pointer;">Imprimir / Salvar PDF</button></body></html>`;
+  const w=window.open('','_blank');if(!w){toast('Permita pop-ups para gerar o PDF.',false);return}
+  w.document.write(doc);w.document.close();setTimeout(()=>{try{w.focus();w.print()}catch(e){}},400);
+};
+function rLiteRelatorios(){
+  const card=(tipo,desc,ic,cor)=>`<div class="card" style="border-top:3px solid ${cor};"><div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;"><i data-lucide="${ic}" style="width:1rem;height:1rem;color:${cor};"></i><div style="font-size:.85rem;font-weight:800;color:#0f172a;">${LITE_REPS[tipo]}</div></div><div style="font-size:.66rem;color:#64748b;margin-bottom:.7rem;min-height:2.2rem;">${desc}</div><div style="display:flex;gap:.4rem;"><button onclick="liteReportXLS('${tipo}')" style="flex:1;cursor:pointer;background:#dcfce7;color:#166534;border:none;border-radius:.4rem;padding:.42rem;font-size:.7rem;font-weight:700;">⬇ Excel</button><button onclick="liteReportPDF('${tipo}')" style="flex:1;cursor:pointer;background:#fee2e2;color:#991b1b;border:none;border-radius:.4rem;padding:.42rem;font-size:.7rem;font-weight:700;">⬇ PDF</button></div></div>`;
+  return `<div class="card mb-4"><div style="font-size:.95rem;font-weight:800;color:#0f172a;">Relatórios</div><div style="font-size:.66rem;color:#64748b;margin-top:.25rem;">Relatórios personalizados da Lite no período selecionado (barra do topo). <b>Excel</b> baixa CSV; <b>PDF</b> abre para imprimir/salvar. Os valores em R$ só entram se estiverem revelados com a senha.</div></div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${card('exec','Resumo por contrato: consumo vs. franquia, saldo, FTE e fora de escopo'+(LITE_VAL?', com valores.':' (sem valores).'),'file-bar-chart-2','#2B4C9B')}${card('tecnico','Horas trabalhadas por cada técnico'+(LITE_VAL?' e o valor (custo-hora × horas).':' no período.'),'users','#0891b2')}${card('fora','Todas as atividades fora do escopo contratado — técnico, chamado e descrição.','triangle-alert','#dc2626')}${card('completo','Tudo em um arquivo: contratos + técnicos + fora de escopo.','layers','#7c3aed')}</div>`;
+}
 window.setLiteSub=function(s){LITE_SUB=s;renderContent()};
 // Aba Contratos da Lite — cadastro/edição com centro de custo (mesmo padrão da versão completa)
 function rLiteContratos(){
@@ -1153,7 +1253,7 @@ async function rLimitado(){
   const xlsBtn=`<button onclick="liteExport()" class="badge" style="cursor:pointer;background:#dcfce7;color:#166534;border:none;font-weight:700;">⬇ Excel</button>`;
   const addBtn=`<button onclick="liteAddCt()" class="badge" style="cursor:pointer;background:#eff6ff;color:#1d4ed8;border:none;font-weight:700;">＋ Contrato</button>`;
   const rstBtn=`<button onclick="liteReset()" class="badge" style="cursor:pointer;background:#f8fafc;color:#94a3b8;border:none;font-weight:600;">↺ padrão</button>`;
-  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:1.02rem;font-weight:900;color:#0f172a;">Lite</span><span style="font-size:.7rem;color:#64748b;font-weight:600;">— controle de H.H por contrato</span>${LITE_VAL?'':'<span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">SEM VALORES</span>'}<span style="flex:1;"></span>${valBtn}${xlsBtn}${addBtn}${rstBtn}</div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Quanto de <b>homem-hora</b> cada contrato consumiu vs. as horas contratadas — com <b>saldo</b>, <b>FTE</b> e distribuição por <b>pilares (escopo)</b>. Atividades fora dos pilares aparecem como <b style="color:#dc2626;">fora de escopo</b>. Alerta ao atingir <b>${LITE_ALERT_PCT}%</b> da franquia.</div></div>`;
+  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:1.02rem;font-weight:900;color:#0f172a;">Lite</span><span style="font-size:.7rem;color:#64748b;font-weight:600;">— controle de H.H por contrato</span>${LITE_VAL?'':'<span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">SEM VALORES</span>'}<span style="flex:1;"></span>${valBtn}${xlsBtn}</div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Quanto de <b>homem-hora</b> cada contrato consumiu vs. as horas contratadas — com <b>saldo</b>, <b>FTE</b> e distribuição por <b>pilares (escopo)</b>. Atividades fora dos pilares aparecem como <b style="color:#dc2626;">fora de escopo</b>. Alerta ao atingir <b>${LITE_ALERT_PCT}%</b> da franquia.</div></div>`;
   if(!getMD().key)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Conecte o Milldesk para ver o H.H por contrato.</div>`;
   if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk (barra de período no topo) para carregar as horas.</div>`;
   const d=liteData();
@@ -1166,13 +1266,15 @@ async function rLimitado(){
     const excMetric=LITE_VAL?(x.saldo<0?`<div><div class="kpi-lbl">Excedente</div><div style="font-size:.9rem;font-weight:900;color:#dc2626;">${fmtR(Math.round(x.excedR))}</div></div>`:`<div><div class="kpi-lbl">Valor/h</div><div style="font-size:.9rem;font-weight:900;color:#334155;">${fmtR(Math.round(x.rhora))}</div></div>`):`<div><div class="kpi-lbl">Uso</div><div style="font-size:.9rem;font-weight:900;color:${usoC};">${uso}%</div></div>`;
     const metrics=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin:.5rem 0 .7rem;padding:.45rem;background:#f8fafc;border-radius:.5rem;"><div><div class="kpi-lbl">Saldo</div><div style="font-size:.9rem;font-weight:900;color:${x.saldo<0?'#dc2626':'#166534'};">${hmSigned(x.saldo)}h</div></div><div><div class="kpi-lbl">FTE</div><div style="font-size:.9rem;font-weight:900;color:#0891b2;">${x.fte.toFixed(1)}</div></div>${excMetric}</div>`;
     const pilRows=x.pil.map(pl=>{const m=x.pilMin[pl.nome]||0,p=x.used?Math.round(m/x.used*100):0;return `<div style="margin-bottom:.4rem;"><div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:.15rem;"><span style="font-weight:600;color:#334155;">${esc(pl.nome)}</span><span style="font-weight:800;color:${c.cor};">${minToHM(m)}h · ${p}%</span></div><div style="height:.3rem;background:#f1f5f9;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${p}%;background:${c.cor};"></div></div></div>`}).join('');
-    const foraCard=x.fora.length?`<div style="margin-top:.6rem;background:#fef2f2;border:1px solid #fecaca;border-radius:.5rem;padding:.5rem .6rem;"><div style="font-size:.66rem;font-weight:800;color:#991b1b;margin-bottom:.3rem;">⚠ Fora de escopo: ${minToHM(x.foraMin)}h em ${x.fora.length} atividade(s)</div>${x.fora.slice(0,6).map(a=>`<div style="font-size:.62rem;color:#7f1d1d;padding:.1rem 0;border-bottom:1px solid #fee2e2;">${esc(a.iso.split('-').reverse().join('/'))} · ${esc((a.ag||'').split(' ')[0])} · ${minToHM(a.wh)}h · ${esc((a.assunto||a.atv||a.cat||'-').slice(0,42))}</div>`).join('')}${x.fora.length>6?`<div style="font-size:.6rem;color:#991b1b;margin-top:.2rem;">+${x.fora.length-6} atividade(s)</div>`:''}</div>`:`<div style="margin-top:.6rem;font-size:.66rem;color:#166534;">✓ Nada fora de escopo no período.</div>`;
-    return `<div class="card" style="border-top:3px solid ${c.cor};"><div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.4rem;margin-bottom:.3rem;"><div style="min-width:0;"><div style="font-size:.85rem;font-weight:900;color:#0f172a;">${esc(c.nome)}</div><div style="font-size:.6rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">${esc(c.tipo)} · <b style="color:#64748b;">CC ${esc(c.cc)}</b> · ${c.franquia}h/mês</div>${valHdr}</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:1.4rem;font-weight:900;color:${c.cor};line-height:1;">${minToHM(x.used)}h</div><div style="font-size:.6rem;color:#94a3b8;">de ${minToHM(Math.round(x.franqP))}h no período</div></div></div><div style="display:flex;gap:.35rem;margin-bottom:.4rem;">${badge}<span style="flex:1;"></span><button onclick="liteEditCt('${c.id}')" title="Editar" style="cursor:pointer;background:none;border:none;color:#94a3b8;font-size:.72rem;">✏️</button><button onclick="liteDelCt('${c.id}')" title="Remover" style="cursor:pointer;background:none;border:none;color:#94a3b8;font-size:.72rem;">🗑️</button></div><div style="display:flex;align-items:center;gap:.5rem;"><div style="flex:1;height:.5rem;background:#f1f5f9;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${Math.min(uso,100)}%;background:${usoC};transition:width .5s;"></div></div><span style="font-size:.8rem;font-weight:900;color:${usoC};min-width:2.6rem;text-align:right;">${uso}%</span></div>${metrics}<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Pilares (escopo)</div>${pilRows}${foraCard}</div>`;
+    const foraCard=x.fora.length?`<div style="margin-top:.6rem;background:#fef2f2;border:1px solid #fecaca;border-radius:.5rem;padding:.5rem .6rem;"><div style="font-size:.66rem;font-weight:800;color:#991b1b;margin-bottom:.3rem;">⚠ Fora de escopo: ${minToHM(x.foraMin)}h em ${x.fora.length} atividade(s)</div>${x.fora.slice(0,4).map(a=>`<div style="font-size:.62rem;color:#7f1d1d;padding:.1rem 0;border-bottom:1px solid #fee2e2;">${esc(a.iso.split('-').reverse().join('/'))} · ${esc((a.ag||'').split(' ')[0])} · ${minToHM(a.wh)}h · ${esc((a.assunto||a.atv||a.cat||'-').slice(0,42))}</div>`).join('')}<button onclick="liteForaDetalhe('${esc(c.cc)}')" style="margin-top:.4rem;cursor:pointer;background:#fff;border:1px solid #fecaca;color:#991b1b;border-radius:.35rem;padding:.28rem .5rem;font-size:.63rem;font-weight:700;width:100%;">Ver todos os detalhes (${x.fora.length}) →</button></div>`:`<div style="margin-top:.6rem;font-size:.66rem;color:#166534;">✓ Nada fora de escopo no período.</div>`;
+    return `<div class="card" style="border-top:3px solid ${c.cor};"><div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.4rem;margin-bottom:.3rem;"><div style="min-width:0;"><div style="font-size:.85rem;font-weight:900;color:#0f172a;">${esc(c.nome)}</div><div style="font-size:.6rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-top:.15rem;">${esc(c.tipo)} · <span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:800;padding:.03rem .34rem;font-size:.6rem;">CC ${esc(c.cc)}</span> · ${c.franquia?c.franquia+'h/mês':'avulso'}</div>${valHdr}</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:1.4rem;font-weight:900;color:${c.cor};line-height:1;">${minToHM(x.used)}h</div><div style="font-size:.6rem;color:#94a3b8;">de ${minToHM(Math.round(x.franqP))}h no período</div></div></div><div style="display:flex;gap:.35rem;margin-bottom:.4rem;">${badge}<span style="flex:1;"></span><button onclick="liteEditCt('${c.id}')" title="Editar" style="cursor:pointer;background:none;border:none;color:#94a3b8;font-size:.72rem;">✏️</button><button onclick="liteDelCt('${c.id}')" title="Remover" style="cursor:pointer;background:none;border:none;color:#94a3b8;font-size:.72rem;">🗑️</button></div><div style="display:flex;align-items:center;gap:.5rem;"><div style="flex:1;height:.5rem;background:#f1f5f9;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${Math.min(uso,100)}%;background:${usoC};transition:width .5s;"></div></div><span style="font-size:.8rem;font-weight:900;color:${usoC};min-width:2.6rem;text-align:right;">${uso}%</span></div>${metrics}<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Pilares (escopo)</div>${pilRows}${foraCard}</div>`;
   }).join('')||`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Nenhum contrato cadastrado. Use <b>＋ Contrato</b>.</div>`;
   const kc=[kpiCard(minToHM(d.totUsed)+'h','H.H consumido','#2B4C9B','clock'),kpiCard(hmSigned(d.totFranq-d.totUsed)+'h','Saldo total',(d.totFranq-d.totUsed)<0?'#dc2626':'#166534','battery-charging'),kpiCard(d.totFte.toFixed(1),'FTE total','#0891b2','users'),kpiCard(minToHM(d.totFora)+'h','Fora de escopo',d.totFora?'#dc2626':'#22c55e','triangle-alert')];
   if(LITE_VAL)kc.push(kpiCard(fmtR(d.totVal),'Contratos/mês','#854d0e','banknote'));
   const kpis=`<div class="grid grid-cols-2 md:grid-cols-${LITE_VAL?5:4} gap-3 mb-4">${kc.join('')}</div>`;
-  return head+alertBar+kpis+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`;
+  const tec=d.tecnicos;
+  const techTbl=tec.length?`<div class="card overflow-x-auto" style="margin-top:1rem;"><div style="font-size:.85rem;font-weight:800;color:#0f172a;margin-bottom:.5rem;">Horas por técnico${LITE_VAL?' · valor':''} <span style="font-size:.62rem;color:#94a3b8;font-weight:500;">(quem lançou a atividade, nos contratos Lite)</span></div><table><thead><tr><th>Técnico</th><th>Atividades</th><th>Horas</th>${LITE_VAL?'<th>Custo-hora</th><th>Valor</th>':''}</tr></thead><tbody>${tec.map(t=>`<tr><td style="font-weight:600;">${esc((t.nome||'').split(' ').slice(0,2).join(' '))}</td><td>${t.n}</td><td style="font-weight:700;">${minToHM(t.min)}h</td>${LITE_VAL?`<td style="color:#854d0e;">${t.rate?fmtR(Math.round(t.rate))+'/h':'<span style="color:#cbd5e1;">sem salário</span>'}</td><td style="color:#166534;font-weight:700;">${t.rate?fmtR(Math.round(t.valor)):'-'}</td>`:''}</tr>`).join('')}</tbody>${LITE_VAL?`<tfoot><tr style="font-weight:800;background:#f8fafc;"><td>Total</td><td></td><td>${minToHM(d.totUsed)}h</td><td></td><td style="color:#166534;">${fmtR(Math.round(d.totTecVal))}</td></tr></tfoot>`:''}</table><div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Valor = custo-hora (salário ÷ ${LITE_CAP_H}h) × horas. Cadastre salários em <b>Cadastro → Funcionários</b>.</div></div>`:'';
+  return head+alertBar+kpis+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`+techTbl;
 }
 window.mdConnect=function(){const k=(document.getElementById('mdBannerKey').value||'').trim(),zt=(document.getElementById('mdBannerZbx').value||'').trim();
   if(k)setMD({base:getMD().base,key:k})
