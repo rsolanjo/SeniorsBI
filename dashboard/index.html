@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v92'
+const APP_VERSION='v93'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1735,12 +1735,15 @@ async function rLimitado(){
   const custoCliRow=(k,v)=>`<div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.68rem;padding:.11rem 0;border-bottom:1px solid #f4f1ea;"><span style="color:#475569;font-weight:600;">${esc(k)}</span><span style="font-weight:800;color:#854d0e;white-space:nowrap;">${money(v)}</span></div>`;
   const custoCliBody=custoCliArr.length?custoCliArr.map(([k,v])=>custoCliRow(k,v)).join('')+`<div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.7rem;padding-top:.16rem;font-weight:800;"><span style="color:#0f172a;">Total</span><span style="color:#854d0e;white-space:nowrap;">${money(d.totCusto)}</span></div>`:'<div style="font-size:.66rem;color:#94a3b8;">sem custo apurado</div>';
   const custoCliCard=`<div class="card md:row-span-2" style="border-left:3px solid #854d0e;display:flex;flex-direction:column;"><div class="kpi-lbl">Custo H.H por cliente</div><div style="margin-top:.35rem;">${custoCliBody}</div></div>`;
-  // "Horas a consumir" é orçamento MENSAL: franquia do mês − consumido do MÊS (até hoje). Não muda com o filtro (diário/semanal) — senão o diário mostraria mais a consumir que o mensal.
-  const _fp=liteFteProj();
-  const remMes=_fp.dMes.totFranq-_fp.dMes.totUsed,usoMes=_fp.dMes.totFranq?Math.round(_fp.dMes.totUsed/_fp.dMes.totFranq*100):0;
+  // "Horas a consumir": franquia − consumido, na MESMA janela.
+  // Período dentro de 1 mês (Hoje/Semana/Mensal) → usa o saldo do MÊS (senão o diário mostraria mais a consumir que o mensal).
+  // Período multi-mês (Anual) → usa a franquia e o consumo do PRÓPRIO período.
+  const _fp=liteFteProj(),multiMes=d.mf>1;
+  const aConsBase=multiMes?d.totFranq:_fp.dMes.totFranq,aConsUsed=multiMes?d.totUsed:_fp.dMes.totUsed,aCons=aConsBase-aConsUsed;
+  const aConsPct=aConsBase?Math.max(0,Math.round(aCons/aConsBase*100)):0;
   const kc=[
     kpiCard(minToHM(d.totUsed)+'h','H.H consumido','#2B4C9B','clock',usoTot+'% de '+minToHM(d.totFranq)+'h'),
-    kpiCard(hmSigned(remMes)+'h','Horas a consumir',remMes<0?'#dc2626':'#166534','battery-charging',Math.max(0,100-usoMes)+'% da franquia do mês livre'),
+    kpiCard(hmSigned(aCons)+'h','Horas a consumir',aCons<0?'#dc2626':'#166534','battery-charging',aConsPct+'% da franquia '+(multiMes?'do período':'do mês')+' livre'),
     kpiCard(minToHM(d.avulsasMin)+'h','Horas avulsas','#7c3aed','receipt',fmt(d.avulsasCobrarH)+'h faturar · '+fmt(Math.round(d.avulsasPagarH))+'h pagar · saldo '+fmt(Math.round(saldoAv))+'h'),
     kpiCard(fmt(d.totFechados)+' / '+fmt(d.totPend),'Chamados','#0f766e','circle-check',fmt(d.totFechados)+' fech · '+fmt(d.totPend)+' pend · '+fmt(d.totSolic)+' solic'),
     kpiCard(d.totFte.toFixed(1),'FTE','#0891b2','users',nTecMes+' técnicos parciais no mês'),
