@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v100'
+const APP_VERSION='v101'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1253,6 +1253,7 @@ function liteData(){
     const pil=litePilares(ct),acts=rows.filter(a=>String(a.cc)===String(ct.cc)),used=acts.reduce((s,a)=>s+a.wh,0);
     const ctTickets=(MD.tickets||[]).filter(t=>String(mdCC(t.loc||''))===String(ct.cc));
     const solicSet=new Set(ctTickets.map(t=>t.id)),solic=solicSet.size,fechados=new Set(ctTickets.filter(t=>typeof mdIsOpen==='function'&&!mdIsOpen(t.st)).map(t=>t.id)).size,pendentes=solic-fechados;
+    const pendMap={};ctTickets.forEach(t=>{if(typeof mdIsOpen==='function'&&mdIsOpen(t.st)&&!pendMap[t.id])pendMap[t.id]={tid:t.id,st:t.st,assunto:t.t||'',ag:t.ag||'',dataBR:t.start||'',contrato:ct.nome,cc:ct.cc};});const pendList=Object.values(pendMap);
     const respSet={};ctTickets.forEach(t=>{if(t.ag)(respSet[t.ag]=respSet[t.ag]||new Set()).add(t.id)});const tecResp={};for(const k in respSet)tecResp[k]=respSet[k].size;// chamados por responsável (dono)
     const franqP=(ct.franquia||0)*60*mf,saldo=franqP-used,uso=franqP?Math.round(used/franqP*100):0,fte=used/capFTE;
     const rhora=ct.franquia?(ct.valor||0)/ct.franquia:0,excedH=saldo<0?-saldo/60:0,excedR=excedH*rhora;
@@ -1272,7 +1273,7 @@ function liteData(){
       if(p){pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;(pilTk[p.nome]=pilTk[p.nome]||new Set()).add(a.tid);pilVal[p.nome]=(pilVal[p.nome]||0)+val}else{fora.push(Object.assign({},a,{motivo:ov==='__FORA__'?'manual':(isDeploy?'projeto':'sem-pilar')}));foraTk.add(a.tid)}});
     const pilTkN={},pilTids={};for(const k in pilTk){pilTkN[k]=pilTk[k].size;pilTids[k]=[...pilTk[k]]}
     const tecN={},tecTids={};for(const k in tecTk){tecN[k]=tecTk[k].size;tecTids[k]=[...tecTk[k]]}
-    return {ct,pil,acts,used,franqP,saldo,uso,fte,rhora,excedR,valorP:(ct.valor||0)*mf,custoUsado,chamados:ctTk.size,foraTkN:foraTk.size,solic,fechados,pendentes,tecResp,pilMin,pilTkN,pilTids,pilVal,tec,tecN,tecTids,fora,foraMin:fora.reduce((s,a)=>s+a.wh,0)};
+    return {ct,pil,acts,used,franqP,saldo,uso,fte,rhora,excedR,valorP:(ct.valor||0)*mf,custoUsado,chamados:ctTk.size,foraTkN:foraTk.size,solic,fechados,pendentes,pendList,tecResp,pilMin,pilTkN,pilTids,pilVal,tec,tecN,tecTids,fora,foraMin:fora.reduce((s,a)=>s+a.wh,0)};
   });
   // por técnico (global, contratos Lite) — horas + valor pelo salário cadastrado
   const liteCC=new Set(getLiteCt().map(c=>String(c.cc))),limRows=rows.filter(a=>liteCC.has(String(a.cc)));
@@ -1316,7 +1317,7 @@ function liteData(){
   const totSolic=contratos.reduce((s,x)=>s+x.solic,0),totFechados=contratos.reduce((s,x)=>s+x.fechados,0),totPend=contratos.reduce((s,x)=>s+x.pendentes,0),totCusto=contratos.reduce((s,x)=>s+x.custoUsado,0);
   const totCh=new Set(limRows.map(a=>a.tid)).size;// chamados distintos (com atividade) nos 3 contratos
   const receitaPer=totVal+avulsasFaturarR-avulsasPagarR;// contratos + avulsas a faturar − a pagar aos técnicos
-  return {rows,limRows,pf,mf,capFTE,contratos,tecnicos,avulsas,avulsasByCC,avulsasMin,avulsasAprovMin,avulsasPendMin,avulsasVal,avulsasCobrarH,avulsasPagarH,avulsasFaturarR,avulsasPagarR,totUsed,totFranq,totFora,totVal,totFte:totUsed/capFTE,totTecVal,totSolic,totFechados,totPend,totCusto,totCh,receitaPer};
+  return {rows,limRows,pf,mf,capFTE,contratos,tecnicos,avulsas,avulsasByCC,avulsasMin,avulsasAprovMin,avulsasPendMin,avulsasVal,avulsasCobrarH,avulsasPagarH,avulsasFaturarR,avulsasPagarR,totUsed,totFranq,totFora,totVal,totFte:totUsed/capFTE,totTecVal,totSolic,totFechados,totPend,totCusto,totCh,receitaPer,pendentesList:contratos.flatMap(x=>x.pendList||[])};
 }
 // Diagnóstico objetivo do contrato: lucrativo / atenção / prejuízo — a partir de horas, custo, avulsas e FTE
 function liteDiag(x){
@@ -1406,6 +1407,12 @@ function liteOpenModal(title,inner){
 }
 window.liteCloseModal=function(){const ov=document.getElementById('liteModal');if(ov)ov.style.display='none'};
 window.liteChamadosPopup=function(titulo,csv){const ids=(csv||'').split(',').filter(Boolean);liteOpenModal('Chamados — '+esc(titulo),`<div style="font-size:.72rem;color:#64748b;margin-bottom:.6rem;">${ids.length} chamado(s) distinto(s):</div><div style="display:flex;flex-wrap:wrap;gap:.4rem;">${ids.map(i=>`<span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;font-size:.74rem;padding:.15rem .5rem;">${esc(i)}</span>`).join('')||'<span style="color:#94a3b8;">nenhum</span>'}</div>`)};
+window.litePendPopup=function(){
+  const d=liteData(),list=(d.pendentesList||[]).slice().sort((a,b)=>String(a.contrato||'').localeCompare(String(b.contrato||''))||String(a.tid).localeCompare(String(b.tid)));
+  const ctCurto=n=>String(n||'').replace(/servi[çc]o gerenciado/i,'SG').replace(/projetos?/i,'Proj').replace(/\s*-\s*/,' ');
+  const rows=list.map(t=>`<tr><td style="font-weight:700;white-space:nowrap;">${esc(t.tid)}</td><td style="white-space:nowrap;">${esc(ctCurto(t.contrato))}</td><td><span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700;">${esc(t.st||'-')}</span></td><td style="white-space:nowrap;">${esc((t.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="white-space:nowrap;font-size:.66rem;">${esc(String(t.dataBR||'').split(' ')[0])}</td><td style="font-size:.66rem;color:#334155;">${esc((t.assunto||'').slice(0,80))}</td></tr>`).join('')||`<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:1rem;">Nenhum chamado pendente no período.</td></tr>`;
+  liteOpenModal('Chamados pendentes ('+list.length+')',`<div style="font-size:.66rem;color:#64748b;margin-bottom:.5rem;">Chamados <b>em aberto</b> nos 3 contratos (CC 71, 2807, 2809), no período selecionado.</div><div style="overflow-x:auto;max-height:62vh;"><table style="width:100%;font-size:.72rem;"><thead><tr><th>Chamado</th><th>Contrato</th><th>Status</th><th>Responsável</th><th>Aberto em</th><th>Assunto</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+};
 window.liteTecInfo=function(cc,tech){
   const d=liteData(),x=d.contratos.find(c=>String(c.ct.cc)===String(cc));if(!x)return;
   const worked=(x.tecTids&&x.tecTids[tech])||[],wn=worked.length,resp=(x.tecResp&&x.tecResp[tech])||0;
@@ -1754,7 +1761,7 @@ async function rLimitado(){
     kpiCard(minToHM(d.totUsed)+'h','H.H consumido','#2B4C9B','clock',usoTot+'% de '+minToHM(d.totFranq)+'h'),
     kpiCard(hmSigned(aCons)+'h','Horas a consumir',aCons<0?'#dc2626':'#166534','battery-charging',aConsPct+'% da franquia '+(usaMesCorr?'do mês':'do período')+' livre'),
     kpiCard(minToHM(d.avulsasMin)+'h','Horas avulsas','#7c3aed','receipt',fmt(d.avulsasCobrarH)+'h faturar · '+fmt(Math.round(d.avulsasPagarH))+'h pagar · saldo '+fmt(Math.round(saldoAv))+'h'),
-    kpiCard(fmt(d.totFechados)+' / '+fmt(d.totPend),'Chamados','#0f766e','circle-check',fmt(d.totFechados)+' fech · '+fmt(d.totPend)+' pend · '+fmt(d.totSolic)+' solic'),
+    kpiCard(fmt(d.totFechados)+' / <span onclick="litePendPopup()" title="Ver chamados pendentes" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">'+fmt(d.totPend)+'</span>','Chamados','#0f766e','circle-check',fmt(d.totFechados)+' fech · <span onclick="litePendPopup()" style="cursor:pointer;text-decoration:underline dotted;">'+fmt(d.totPend)+' pend</span> · '+fmt(d.totSolic)+' solic'),
     kpiCard(d.totFte.toFixed(1),'FTE','#0891b2','users',nTecMes+' técnicos parciais no mês'),
     kpiCard(money(d.totVal),'Receita contratual','#166534','banknote','franquia dos contratos'),
     kpiCard(money(d.receitaPer),'Receita + avulsas','#16a34a','trending-up','contratos + a faturar − a pagar'),
