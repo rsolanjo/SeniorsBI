@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v102'
+const APP_VERSION='v103'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1315,7 +1315,7 @@ function liteData(){
   const avulsasByCC={};avulsas.forEach(a=>{avulsasByCC[a.cc]=(avulsasByCC[a.cc]||0)+a.ch});
   const totUsed=contratos.reduce((s,x)=>s+x.used,0),totFranq=contratos.reduce((s,x)=>s+x.franqP,0),totFora=contratos.reduce((s,x)=>s+x.foraMin,0),totVal=contratos.reduce((s,x)=>s+(x.ct.valor||0),0)*mf,totTecVal=tecnicos.reduce((s,t)=>s+t.valor,0);
   const totSolic=contratos.reduce((s,x)=>s+x.solic,0),totFechados=contratos.reduce((s,x)=>s+x.fechados,0),totPend=contratos.reduce((s,x)=>s+x.pendentes,0),totCusto=contratos.reduce((s,x)=>s+x.custoUsado,0);
-  const totCh=new Set(limRows.map(a=>a.tid)).size;// chamados distintos (com atividade) nos 3 contratos
+  const totCh=new Set(limRows.map(a=>a.tid)).size;// chamados distintos COM HORA TRABALHADA lançada (base activitiesWorkedHours). NÃO é o "Solicitações por Local" do Milldesk, que conta chamados com QUALQUER atividade (mesmo sem hora) — por isso o relatório do Milldesk vem maior.
   const receitaPer=totVal+avulsasFaturarR-avulsasPagarR;// contratos + avulsas a faturar − a pagar aos técnicos
   return {rows,limRows,pf,mf,capFTE,contratos,tecnicos,avulsas,avulsasByCC,avulsasMin,avulsasAprovMin,avulsasPendMin,avulsasVal,avulsasCobrarH,avulsasPagarH,avulsasFaturarR,avulsasPagarR,totUsed,totFranq,totFora,totVal,totFte:totUsed/capFTE,totTecVal,totSolic,totFechados,totPend,totCusto,totCh,receitaPer,pendentesList:contratos.flatMap(x=>x.pendList||[])};
 }
@@ -1505,7 +1505,7 @@ function liteReportSecoes(tipo){
   if(tipo==='exec'||tipo==='completo'){
     const wins=liteCompWindows(MD_ATV_END),aggs=wins.map(w=>({w,d:liteAggWindow(w.s,w.e)}));
     const head=['Indicador',...aggs.map(a=>a.w.label)],mrow=(lbl,fn)=>[lbl,...aggs.map(a=>fn(a.d))];
-    const rows=[mrow('H.H consumido',x=>minToHM(x.totUsed)+'h'),mrow('Horas avulsas',x=>minToHM(x.avulsasMin)+'h'),mrow('Chamados (c/ atividade)',x=>fmt(x.totCh)),mrow('FTE',x=>x.totFte.toFixed(1))];
+    const rows=[mrow('H.H consumido',x=>minToHM(x.totUsed)+'h'),mrow('Horas avulsas',x=>minToHM(x.avulsasMin)+'h'),mrow('Chamados (c/ hora lançada)',x=>fmt(x.totCh)),mrow('FTE',x=>x.totFte.toFixed(1))];
     if(money){rows.push(mrow('Receita + avulsas',x=>fmtR(Math.round(x.receitaPer))),mrow('Custo (HH+avulsas)',x=>fmtR(Math.round(x.totCusto+x.avulsasPagarR))),mrow('Margem',x=>{const c=x.totCusto+x.avulsasPagarR;return x.receitaPer?Math.round((x.receitaPer-c)/x.receitaPer*100)+'%':'—'}));}
     secs.push({nome:'Comparativo — últimos 3 meses e ano',head,rows,note:'Calculado sobre todas as atividades carregadas; chamados contados por atividade (quem lançou o apontamento).'});
     // Projeção do mês corrente + FTE por técnico (mesmo cálculo do painel)
