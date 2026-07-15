@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v80'
+const APP_VERSION='v81'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1279,7 +1279,6 @@ function liteData(){
   const stByTid={},openByTid={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t.id&&stByTid[t.id]===undefined){stByTid[t.id]=t.st;openByTid[t.id]=t.start}});
   const aprovM=getLiteAprov(),avccM=lsGet('sbi_lite_avcc')||{},cobrarM=lsGet('sbi_lite_cobrar')||{},pagarM=lsGet('sbi_lite_pagar')||{};
   // horas realmente trabalhadas (worked_hour) por chamado e por chamado+hora — de activitiesWorkedHours (MD.ativs)
-  const whByKey={};(MD.ativs||[]).forEach(a=>{if(!a.tid||!a.wh)return;const k=a.tid+'|'+(a.hm||'');whByKey[k]=(whByKey[k]||0)+a.wh});// worked_hour por chamado+hora inicial (casamento preciso com a avulsa)
   const avulsas=(MD.avulsas||[]).map(a=>{
     const tloc=locByTid[a.tid]||a.loc||'';// prefere a location do chamado (traz cliente|CC), cai p/ a da atividade
     let cc=String(avccM[a.tid]||mdCC(tloc)||mdCC(a.loc)||'');
@@ -1299,7 +1298,7 @@ function liteData(){
     const openIso=mdActISO(openByTid[a.tid]||''),retro=!!(openIso&&a.iso&&a.iso<openIso);// atividade datada antes da abertura do chamado = possível lançamento retroativo
     const vha=ct?(ct.valorHoraAvulsa!=null?ct.valorHoraAvulsa:(ct.franquia?(ct.valor||0)/ct.franquia:0)):0;// valor da hora avulsa (padrão = valor÷franquia)
     const faturarR=(+cobrar||0)*vha,pagarR=(+pagar||0)*liteTechRate(a.ag);// R$ a faturar da avulsa e R$ a pagar ao técnico
-    const realMin=whByKey[a.tid+'|'+(a.hi||'')]||durSame||a.ch;// horas realmente trabalhadas: worked_hour casado → duração do mesmo dia → charge_hour (nunca span multi-dia nem soma do chamado)
+    const realMin=durSame||a.ch;// horas trabalhadas = duração PRÓPRIA da atividade (início→fim, mesmo dia); sem início/fim → usa o charge_hour. NUNCA soma o worked_hour do chamado inteiro (inflava).
     return{...a,cc,cliente,contrato:ct?ct.nome:'',rhora:ct&&ct.franquia?(ct.valor||0)/ct.franquia:(ct?ct.valor||0:0),vha,faturarR,pagarR,realMin,status:st,closed,dur,comercial,cobrar,pagar,retro,aberturaBR:openByTid[a.tid]||'',aprov,aprovKey:key};
   }).filter(a=>liteCC.has(a.cc)&&(!a.iso||atvInRange(a.iso))).sort((a,b)=>(b.iso||'').localeCompare(a.iso||''));
   const avulsasMin=avulsas.reduce((s,a)=>s+a.ch,0),avulsasAprovMin=avulsas.filter(a=>a.aprov===true).reduce((s,a)=>s+a.ch,0),avulsasPendMin=avulsasMin-avulsasAprovMin,avulsasVal=avulsas.reduce((s,a)=>s+(a.ch/60)*(a.rhora||0),0);
