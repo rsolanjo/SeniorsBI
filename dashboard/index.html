@@ -248,7 +248,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v70'
+const APP_VERSION='v71'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1049,9 +1049,12 @@ function mdApprovalOf(r){
 // Horas avulsas (a cobrar) — endpoint activitiesHoursToCharge = relatório "Atividades com horas a cobrar"
 // (tem location/CC, start/end datas, start_time/end_time, charge_hour, agent, requester). NÃO entram na franquia.
 async function mdFetchAvulsas(base){
-  MD.avulsasErr='';let arr;
-  try{const r=await fetch(`${base}/activitiesHoursToCharge`);arr=await r.json()}
-  catch(e){MD.avulsasErr='Falha ao buscar horas a cobrar: '+e.message;MD.avulsas=[];MD.avulsasKeys=[];return}
+  MD.avulsasErr='';let arr,lastErr;
+  for(let i=0;i<4;i++){// tenta até 4x (Failed to fetch costuma ser transitório)
+    try{const r=await fetch(`${base}/activitiesHoursToCharge`,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);arr=await r.json();lastErr=null;break}
+    catch(e){lastErr=e;if(i<3)await new Promise(res=>setTimeout(res,600*(i+1)))}
+  }
+  if(lastErr){MD.avulsasErr='Falha ao buscar horas a cobrar: '+lastErr.message+' (após 4 tentativas). O endpoint é pesado; tente Sincronizar de novo.';MD.avulsas=[];MD.avulsasKeys=[];return}
   if(arr&&arr.error){MD.avulsasErr='Milldesk retornou: '+arr.error;MD.avulsas=[];MD.avulsasKeys=[];return}
   if(!Array.isArray(arr)){MD.avulsasErr='Resposta inesperada do endpoint activitiesHoursToCharge.';MD.avulsas=[];MD.avulsasKeys=[];return}
   MD.avulsasKeys=arr[0]?Object.keys(arr[0]):[];
