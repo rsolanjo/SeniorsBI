@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v89'
+const APP_VERSION='v90'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1665,7 +1665,7 @@ function liteChrome(){
     <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.9rem;">
       <div style="display:flex;align-items:center;gap:.7rem;">
         <img src="logo.png" alt="4 Seniors Brasil" style="height:80px;width:auto;object-fit:contain;flex-shrink:0;">
-        <div style="border-left:2px solid #e2e8f0;padding-left:.85rem;"><div style="font-size:1.75rem;font-weight:900;color:#0f172a;letter-spacing:-.045em;line-height:1;">SeniorsBI</div><div style="font-size:.66rem;color:#2B4C9B;font-weight:800;text-transform:uppercase;letter-spacing:.16em;margin-top:.2rem;">Painel de Dados</div></div>
+        <div style="border-left:2px solid #e2e8f0;padding-left:.85rem;"><div style="font-size:1.75rem;font-weight:900;color:#0f172a;letter-spacing:-.045em;line-height:1;">SeniorsBI</div><div style="font-size:.66rem;color:#2B4C9B;font-weight:800;text-transform:uppercase;letter-spacing:.16em;margin-top:.2rem;">Painel de Dados [ Lite ]</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">${status}${syncBtn}${modeBtn}</div>
     </div>
@@ -1734,7 +1734,7 @@ async function rLimitado(){
   // Tabulação de Custo H.H por cliente — MESMO corpo no KPI e na Análise (alinhado)
   const custoCliRow=(k,v)=>`<div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.68rem;padding:.11rem 0;border-bottom:1px solid #f4f1ea;"><span style="color:#475569;font-weight:600;">${esc(k)}</span><span style="font-weight:800;color:#854d0e;white-space:nowrap;">${money(v)}</span></div>`;
   const custoCliBody=custoCliArr.length?custoCliArr.map(([k,v])=>custoCliRow(k,v)).join('')+`<div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.7rem;padding-top:.16rem;font-weight:800;"><span style="color:#0f172a;">Total</span><span style="color:#854d0e;white-space:nowrap;">${money(d.totCusto)}</span></div>`:'<div style="font-size:.66rem;color:#94a3b8;">sem custo apurado</div>';
-  const custoCliCard=`<div class="card" style="border-left:3px solid #854d0e;"><div class="kpi-lbl">Custo H.H por cliente</div><div style="margin-top:.35rem;">${custoCliBody}</div></div>`;
+  const custoCliCard=`<div class="card md:row-span-2" style="border-left:3px solid #854d0e;display:flex;flex-direction:column;"><div class="kpi-lbl">Custo H.H por cliente</div><div style="margin-top:.35rem;">${custoCliBody}</div></div>`;
   const kc=[
     kpiCard(minToHM(d.totUsed)+'h','H.H consumido','#2B4C9B','clock',usoTot+'% de '+minToHM(d.totFranq)+'h'),
     kpiCard(hmSigned(d.totFranq-d.totUsed)+'h','Horas a consumir',(d.totFranq-d.totUsed)<0?'#dc2626':'#166534','battery-charging',Math.max(0,100-usoTot)+'% da franquia livre'),
@@ -1748,7 +1748,7 @@ async function rLimitado(){
   ];
   // #1) KPIs agrupados por assunto: Horas · Atendimento · Financeiro
   const grupoKpi=(titulo,cards,cols)=>`<div><div style="font-size:.58rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;margin:0 0 .35rem .12rem;">${titulo}</div><div class="grid ${cols} gap-3">${cards.join('')}</div></div>`;
-  const kpiGrid=`<div style="display:flex;flex-direction:column;gap:.75rem;height:100%;">${grupoKpi('Horas',[kc[0],kc[1],kc[2]],'grid-cols-1 sm:grid-cols-3')}${grupoKpi('Atendimento',[kc[3],kc[4]],'grid-cols-2')}${grupoKpi('Financeiro',[kc[5],kc[6],kc[7],kc[8],custoCliCard],'grid-cols-2 md:grid-cols-3')}</div>`;
+  const kpiGrid=`<div style="display:flex;flex-direction:column;gap:.75rem;height:100%;">${grupoKpi('Horas',[kc[0],kc[1],kc[2]],'grid-cols-1 sm:grid-cols-3')}${grupoKpi('Atendimento',[kc[3],kc[4]],'grid-cols-2')}${grupoKpi('Financeiro',[kc[5],kc[7],custoCliCard,kc[8],kc[6]],'grid-cols-2 md:grid-cols-3')}</div>`;
   const mcor=margem==null?'#94a3b8':margem>=30?'#16a34a':margem>=0?'#f59e0b':'#dc2626';
   // #3) Análise inteligente: tendências, riscos, PROJEÇÃO do mês e FTE detalhado (sem ícone; não repete os KPIs)
   const _w=liteCompWindows(MD_ATV_END),_mA=liteAggWindow(_w[2].s,_w[2].e),_mB=liteAggWindow(_w[1].s,_w[1].e);
