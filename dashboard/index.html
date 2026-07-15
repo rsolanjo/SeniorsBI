@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v90'
+const APP_VERSION='v91'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -356,9 +356,9 @@ const SECTION_SUBS={
 
 // ─── Técnicos excluídos das métricas (gestão/pré-venda, não entram em custo/FTE/alertas) ───
 const normName=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()
-// Teste: ninguém é ocultado. Raphael Solano aparece como "user" e Américo como "user 2" (anonimizados, mas visíveis).
+// Ninguém é ocultado e ninguém é renomeado: mostra o nome REAL do técnico da atividade (ex.: Raphael Solano).
 const isExcludedTech=nome=>false;
-const mdAgent=nome=>{const n=normName(nome);return n.includes('raphael solano')?'user':n.includes('americo')?'user 2':(nome||'')}
+const mdAgent=nome=>(nome||'')
 
 // ─── Roster ATIVO de funcionários (fonte: xls "Dados de SLA, Func e Clientes") ───
 // Quem está aqui é ativo. Técnico que aparece nos relatórios mas NÃO está aqui = já saiu → sem alerta de sobrecarga.
