@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v98'
+const APP_VERSION='v99'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1738,6 +1738,10 @@ async function rLimitado(){
   const custoCliRow=(k,v)=>`<div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.68rem;padding:.11rem 0;border-bottom:1px solid #f4f1ea;"><span style="color:#475569;font-weight:600;">${esc(k)}</span><span style="font-weight:800;color:#854d0e;white-space:nowrap;">${money(v)}</span></div>`;
   const custoCliBody=custoCliArr.length?custoCliArr.map(([k,v])=>custoCliRow(k,v)).join('')+`<div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.7rem;padding-top:.16rem;font-weight:800;"><span style="color:#0f172a;">Total</span><span style="color:#854d0e;white-space:nowrap;">${money(d.totCusto)}</span></div>`:'<div style="font-size:.66rem;color:#94a3b8;">sem custo apurado</div>';
   const custoCliCard=`<div class="card md:row-span-2" style="border-left:3px solid #854d0e;display:flex;flex-direction:column;"><div class="kpi-lbl">Custo H.H por cliente</div><div style="margin-top:.35rem;">${custoCliBody}</div></div>`;
+  // Card "Fechados por contrato" (entre Chamados e FTE) — mesmo estilo de tabela
+  const ctShort=x=>x.ct.nome.replace(/servi[çc]o gerenciado/i,'SG').replace(/projetos?/i,'Proj').replace(/\s*-\s*/,' ');
+  const fechRow=(k,v,cor)=>`<div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.68rem;padding:.11rem 0;border-bottom:1px solid #eefaf7;"><span style="color:#475569;font-weight:600;">${esc(k)}</span><span style="font-weight:800;color:#0f766e;white-space:nowrap;">${v}</span></div>`;
+  const fechCard=`<div class="card" style="border-left:3px solid #0f766e;"><div class="kpi-lbl">Fechados por contrato</div><div style="margin-top:.35rem;">${d.contratos.map(x=>fechRow(ctShort(x),x.fechados)).join('')}<div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.7rem;padding-top:.16rem;font-weight:800;"><span style="color:#0f172a;">Total</span><span style="color:#0f766e;">${d.totFechados}</span></div></div></div>`;
   // "Horas a consumir": franquia − consumido, na MESMA janela.
   // Período dentro de 1 mês (Hoje/Semana/Mensal) → usa o saldo do MÊS (senão o diário mostraria mais a consumir que o mensal).
   // Período multi-mês (Anual) → usa a franquia e o consumo do PRÓPRIO período.
@@ -1759,7 +1763,7 @@ async function rLimitado(){
   ];
   // #1) KPIs agrupados por assunto: Horas · Atendimento · Financeiro
   const grupoKpi=(titulo,cards,cols)=>`<div><div style="font-size:.58rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;margin:0 0 .35rem .12rem;">${titulo}</div><div class="grid ${cols} gap-3">${cards.join('')}</div></div>`;
-  const kpiGrid=`<div style="display:flex;flex-direction:column;gap:.7rem;">${grupoKpi('Horas',[kc[0],kc[1],kc[2]],'grid-cols-2 sm:grid-cols-3')}${grupoKpi('Atendimento',[kc[3],kc[4]],'grid-cols-2 sm:grid-cols-3')}${grupoKpi('Financeiro',[kc[5],kc[7],custoCliCard,kc[8],kc[6]],'grid-cols-2 sm:grid-cols-3')}</div>`;
+  const kpiGrid=`<div style="display:flex;flex-direction:column;gap:.7rem;">${grupoKpi('Horas',[kc[0],kc[1],kc[2]],'grid-cols-2 sm:grid-cols-3')}${grupoKpi('Atendimento',[kc[3],fechCard,kc[4]],'grid-cols-2 sm:grid-cols-3')}${grupoKpi('Financeiro',[kc[5],kc[7],custoCliCard,kc[6],kc[8]],'grid-cols-2 sm:grid-cols-3')}</div>`;
   const mcor=margem==null?'#94a3b8':margem>=30?'#16a34a':margem>=0?'#f59e0b':'#dc2626';
   // #3) Análise inteligente: tendências, riscos, PROJEÇÃO do mês e FTE detalhado (sem ícone; não repete os KPIs)
   const _w=liteCompWindows(MD_ATV_END),_mA=liteAggWindow(_w[2].s,_w[2].e),_mB=liteAggWindow(_w[1].s,_w[1].e);
@@ -1767,10 +1771,13 @@ async function rLimitado(){
   const tecs=d.tecnicos||[],topTec=tecs[0],topShare=(topTec&&d.totUsed)?Math.round(topTec.min/d.totUsed*100):0;
   const critico=[...d.contratos].sort((a,b)=>b.uso-a.uso)[0],ocioso=[...d.contratos].filter(c=>c.franqP>0&&c.used>0).sort((a,b)=>a.uso-b.uso)[0];
   const foraP=d.totUsed?Math.round(d.totFora/d.totUsed*100):0;
-  // Projeção do mês + FTE (helper único, mesmo cálculo dos relatórios)
-  const dMes=_fp.dMes,_bizEl=_fp.bizEl,_bizMo=_fp.bizMo,mesAndamento=_fp.mesAndamento;
-  const projCt=_fp.projCt.filter(c=>c.uso>0||c.proj>0),vaiEstourar=projCt.filter(c=>c.proj>=100).sort((a,b)=>b.proj-a.proj);
-  const tecFte=_fp.tecFte,sobrecarga=[..._fp.tecFte].sort((a,b)=>b.proj-a.proj).filter(t=>t.proj>=0.9);
+  // FTE/projeção: se o período está no MÊS CORRENTE (Hoje/Semana/Mensal) usa o ritmo do mês (com projeção); senão usa o PRÓPRIO período (fechado, sem projeção)
+  const _periodBiz=Math.max(1,mdBizDays(MD_ATV_START,MD_ATV_END));
+  const A=usaMesCorr
+    ?{fte:_fp.dMes.totFte,biz:_fp.bizEl,bizTot:_fp.bizMo,used:_fp.dMes.totUsed,nT:_fp.dMes.tecnicos.length,ct:_fp.projCt.filter(c=>c.uso>0||c.proj>0),tec:_fp.tecFte,pace:_fp.pace||1}
+    :{fte:d.totFte,biz:_periodBiz,bizTot:_periodBiz,used:d.totUsed,nT:d.tecnicos.length,ct:d.contratos.map(x=>({cli:cliNome(x),cc:String(x.ct.cc),uso:x.uso,proj:x.uso,used:x.used,fte:x.fte||0})).filter(c=>c.used>0||c.uso>0),tec:d.tecnicos.map(t=>({n:(t.nome||'').split(' ').slice(0,2).join(' '),nome:t.nome,min:t.min,fte:d.capFTE?t.min/d.capFTE:0,proj:d.capFTE?t.min/d.capFTE:0})).sort((a,b)=>b.fte-a.fte),pace:1};
+  const _bizEl=A.biz,_bizMo=A.bizTot,mesAndamento=usaMesCorr,dMes={totFte:A.fte,totUsed:A.used,tecnicos:{length:A.nT}};
+  const projCt=A.ct,tecFte=A.tec,vaiEstourar=A.ct.filter(c=>c.proj>=100).sort((a,b)=>b.proj-a.proj),sobrecarga=[...A.tec].sort((a,b)=>b.proj-a.proj).filter(t=>t.proj>=0.9);
   // Histórico de 3 meses por contrato — dá base ao veredito de reforço (não só o período atual)
   const _mC=liteAggWindow(_w[0].s,_w[0].e),histByCC={};
   [_mC,_mB,_mA].forEach((dm,i)=>{(dm.contratos||[]).forEach(x=>{const cc=String(x.ct.cc);(histByCC[cc]=histByCC[cc]||[0,0,0])[i]=x.used})});
@@ -1784,8 +1791,10 @@ async function rLimitado(){
   const insight=(cor,html)=>`<div style="display:flex;gap:.55rem;align-items:stretch;padding:.5rem 0;border-top:1px solid #eef2f7;"><div style="width:.26rem;background:${cor};border-radius:2px;flex-shrink:0;"></div><div style="font-size:.7rem;color:#334155;line-height:1.55;">${html}</div></div>`;
   const linhas=[];
   if(trend!=null)linhas.push(insight(trend>10?'#dc2626':trend<-10?'#0891b2':'#2B4C9B',`Consumo <b>${trend>=0?'+':''}${trend}%</b> vs. ${_w[1].label} (${minToHM(_mB.totUsed)}h → ${minToHM(_mA.totUsed)}h).${trend>25?' Ritmo acelerando.':trend<-25?' Forte queda no mês.':''}`));
-  if(mesAndamento&&vaiEstourar.length)linhas.push(insight(vaiEstourar[0].proj>=115?'#dc2626':'#f59e0b',`No ritmo do mês (${_bizEl} de ${_bizMo} dias úteis), ${vaiEstourar.slice(0,2).map(c=>`<b>${esc(c.cli)}</b> fecha ~<b>${c.proj}%</b>`).join(' · ')} da franquia — <b>risco de estourar</b>.`));
-  if(mesAndamento&&sobrecarga.length)linhas.push(insight(sobrecarga[0].proj>=1.1?'#dc2626':'#f59e0b',`Carga projetada: ${sobrecarga.slice(0,2).map(t=>`<b>${esc(t.n)}</b> ~${t.proj.toFixed(1)} FTE`).join(' · ')}${sobrecarga[0].proj>=1.1?' — <b>sobrecarga</b> (acima de 1 pessoa full-time).':' — perto do limite.'}`));
+  if(vaiEstourar.length)linhas.push(insight(vaiEstourar[0].proj>=115?'#dc2626':'#f59e0b',usaMesCorr
+    ?`No ritmo do mês (${_bizEl} de ${_bizMo} dias úteis), ${vaiEstourar.slice(0,2).map(c=>`<b>${esc(c.cli)}</b> fecha ~<b>${c.proj}%</b>`).join(' · ')} da franquia — <b>risco de estourar</b>.`
+    :`No período, ${vaiEstourar.slice(0,2).map(c=>`<b>${esc(c.cli)}</b> chegou a <b>${c.proj}%</b>`).join(' · ')} da franquia — <b>${vaiEstourar[0].proj>=100?'estourou':'no limite'}</b>.`));
+  if(sobrecarga.length)linhas.push(insight(sobrecarga[0].proj>=1.1?'#dc2626':'#f59e0b',`Carga ${usaMesCorr?'projetada':'no período'}: ${sobrecarga.slice(0,2).map(t=>`<b>${esc(t.n)}</b> ~${t.proj.toFixed(1)} FTE`).join(' · ')}${sobrecarga[0].proj>=1.1?' — <b>sobrecarga</b> (acima de 1 pessoa full-time).':' — perto do limite.'}`));
   if(topTec)linhas.push(insight(topShare>=50?'#dc2626':'#0f766e',`<b>${(topTec.nome||'').split(' ').slice(0,2).join(' ')}</b> concentra <b>${topShare}%</b> das horas${topShare>=50?' — dependência alta de um técnico.':topShare>=35?' do time.':' — carga distribuída.'}`));
   if(critico&&critico.uso>=85)linhas.push(insight(critico.uso>=100?'#dc2626':'#f59e0b',`<b>${cliNome(critico)}</b> já em <b>${critico.uso}%</b> da franquia${critico.uso>=100?' — contrato estourado.':' no período.'}`));
   else if(ocioso&&ocioso.uso<40)linhas.push(insight('#0891b2',`<b>${cliNome(ocioso)}</b> usou só <b>${ocioso.uso}%</b> da franquia — capacidade ociosa.`));
@@ -1795,7 +1804,7 @@ async function rLimitado(){
   // Bloco FTE — enxuto e decisório: "precisa de mais gente?" (veredito profissional + números-chave)
   const fteChip=(txt,cor,bg,tip)=>`<span title="${esc(tip||'')}" style="font-size:.6rem;background:${bg};color:${cor};border-radius:.3rem;padding:.12rem .4rem;font-weight:700;white-space:nowrap;">${txt}</span>`;
   const _fte=dMes.totFte,_wh=Math.floor(_fte),_fr=Math.round((_fte-_wh)*100),_nT=dMes.tecnicos.length,_top=tecFte[0];
-  const overloaded=tecFte.filter(t=>t.fte>=1),nearTechs=[..._fp.tecFte].sort((a,b)=>b.proj-a.proj).filter(t=>t.proj>=0.9);
+  const overloaded=tecFte.filter(t=>t.fte>=1),nearTechs=[...tecFte].sort((a,b)=>b.proj-a.proj).filter(t=>t.proj>=0.9);
   let vcor,vtit,vtxt;
   const emAlta=vaiEstourar.filter(c=>/em alta/.test(histTxt(c.cc))),soPico=vaiEstourar.filter(c=>/pico/.test(histTxt(c.cc)));
   if(overloaded.length||vaiEstourar.length){vcor='#dc2626';vtit='Limites em risco';
@@ -1808,16 +1817,16 @@ async function rLimitado(){
     vtxt=`Ainda sem estouro, mas pouca folga${nearTechs.length?` (<b>${esc(nearTechs[0].n)}</b> projeta ${nearTechs[0].proj.toFixed(1)} FTE)`:''}. Acompanhar a evolução nos próximos meses.`;}
   else{vcor='#16a34a';vtit='Dentro da capacidade';
     vtxt=`Ninguém ≥ 1 FTE e nenhum contrato projetado a estourar — há folga no período.`;}
-  const projH=t=>minToHM(Math.round((t.min||0)/(_fp.pace||1))),hd=t=>Math.round((t.min||0)/60);
+  const projH=t=>minToHM(Math.round((t.min||0)/(A.pace||1))),hd=t=>Math.round((t.min||0)/60);
   const fteBox=`<div style="margin-top:.55rem;border-top:2px solid #e2e8f0;padding-top:.5rem;">
     <div title="FTE aqui = RITMO do mês: horas ÷ dias úteis já passados ÷ 8h. Mostra quanto de uma pessoa full-time cada um está fazendo agora (e onde fecha o mês nesse ritmo) — não é o total de horas do mês." style="font-size:.6rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;cursor:help;">FTE — carga e limites ⓘ</div>
     <div style="display:flex;gap:.5rem;align-items:flex-start;background:${vcor}12;border:1px solid ${vcor}33;border-radius:.45rem;padding:.45rem .55rem;"><div style="width:.28rem;align-self:stretch;background:${vcor};border-radius:2px;flex-shrink:0;"></div><div><div style="font-size:.72rem;font-weight:800;color:${vcor};line-height:1.2;">${vtit}</div><div style="font-size:.66rem;color:#475569;line-height:1.45;margin-top:.15rem;">${vtxt}</div></div></div>
-    <div style="font-size:.66rem;color:#334155;line-height:1.5;margin-top:.45rem;">Equipe: <b>${minToHM(dMes.totUsed)}h</b> em ${_bizEl} dias úteis = <b>${_fte.toFixed(1)} FTE</b> de ritmo · <b>${_nT}</b> técnicos parciais.</div>
+    <div style="font-size:.66rem;color:#334155;line-height:1.5;margin-top:.45rem;">Equipe: <b>${minToHM(A.used)}h</b> em ${_bizEl} dias úteis = <b>${_fte.toFixed(1)} FTE</b>${usaMesCorr?' de ritmo':''} · <b>${_nT}</b> técnicos parciais.</div>
     <div style="font-size:.6rem;color:#94a3b8;margin:.35rem 0 .12rem;">FTE por contrato (soma dos técnicos):</div>
     <div style="display:flex;flex-wrap:wrap;gap:.25rem;">${projCt.map(c=>fteChip(esc(c.cli)+' '+c.fte.toFixed(1),c.fte>=1?'#991b1b':'#3730a3',c.fte>=1?'#fef2f2':'#eef2ff',c.cli+': '+c.fte.toFixed(2)+' FTE — carga do contrato (vários técnicos), não de 1 pessoa')).join('')||'<span style="font-size:.6rem;color:#cbd5e1;">—</span>'}</div>
-    <div style="font-size:.6rem;color:#94a3b8;margin:.35rem 0 .12rem;">Por técnico — horas no mês · FTE de ritmo:</div>
-    <div style="display:flex;flex-wrap:wrap;gap:.25rem;">${tecFte.slice(0,8).map(t=>fteChip(esc(t.n)+' '+hd(t)+'h·'+t.fte.toFixed(1),t.fte>=1?'#991b1b':t.fte>=.75?'#92400e':'#475569',t.fte>=1?'#fef2f2':t.fte>=.75?'#fffbeb':'#f1f5f9',t.nome+': '+minToHM(t.min)+'h em '+_bizEl+' dias ('+(t.min/60/_bizEl).toFixed(1)+'h/dia) = '+t.fte.toFixed(2)+' FTE de ritmo; no ritmo fecha ~'+projH(t)+'h no mês')).join('')||'<span style="font-size:.6rem;color:#cbd5e1;">—</span>'}</div>
-    <div style="font-size:.58rem;color:#94a3b8;margin-top:.35rem;line-height:1.4;">FTE = <b>ritmo</b> (horas ÷ dias úteis já passados ÷ 8h). Ex.: quem faz ~7h/dia aparece ~0,9 mesmo com poucas horas no total, porque o mês ainda não fechou.</div>
+    <div style="font-size:.6rem;color:#94a3b8;margin:.35rem 0 .12rem;">Por técnico — horas ${usaMesCorr?'no mês':'no período'} · FTE${usaMesCorr?' de ritmo':''}:</div>
+    <div style="display:flex;flex-wrap:wrap;gap:.25rem;">${tecFte.slice(0,8).map(t=>fteChip(esc(t.n)+' '+hd(t)+'h·'+t.fte.toFixed(1),t.fte>=1?'#991b1b':t.fte>=.75?'#92400e':'#475569',t.fte>=1?'#fef2f2':t.fte>=.75?'#fffbeb':'#f1f5f9',t.nome+': '+minToHM(t.min)+'h em '+_bizEl+' dias ('+(t.min/60/_bizEl).toFixed(1)+'h/dia) = '+t.fte.toFixed(2)+' FTE'+(usaMesCorr?' de ritmo; no ritmo fecha ~'+projH(t)+'h no mês':' no período'))).join('')||'<span style="font-size:.6rem;color:#cbd5e1;">—</span>'}</div>
+    ${usaMesCorr?'<div style="font-size:.58rem;color:#94a3b8;margin-top:.35rem;line-height:1.4;">FTE = <b>ritmo</b> (horas ÷ dias úteis já passados ÷ 8h). Ex.: quem faz ~7h/dia aparece ~0,9 mesmo com poucas horas no total, porque o mês ainda não fechou.</div>':'<div style="font-size:.58rem;color:#94a3b8;margin-top:.35rem;line-height:1.4;">FTE do período = horas ÷ (dias úteis do período × 8h).</div>'}
   </div>`;
   const analise=`<div class="card" style="background:linear-gradient(180deg,#f7f9ff,#fff);animation:liteDiagIn .5s ease both;"><div style="font-size:.68rem;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.15rem;">Análise do período</div>${linhas.join('')||'<div style="font-size:.7rem;color:#94a3b8;padding:.5rem 0;">Sem dados suficientes para análise.</div>'}${fteBox}</div>`;
   // Layout compacto e à esquerda: KPIs (2/3) + Análise (1/3) num bloco de largura limitada, alinhado à esquerda.
