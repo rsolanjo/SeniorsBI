@@ -248,7 +248,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v68'
+const APP_VERSION='v69'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -281,7 +281,7 @@ const LITE_PILARES_CC={
     {nome:'07 Email Security',kw:/email security|seguran[çc]a de e-?mail|\bspam\b|phishing|quarentena|anti-?spam/i},
     {nome:'08 Monitoramento',kw:/\bnoc\b|monitora|zabbix|disponib|indisponib|instabil|\blink\b|operadora|sensor|uptime|lat[êe]ncia/i},
     {nome:'09 AWS',kw:/\baws\b|amazon web|\bvpc\b|subnet|security group|\bec2\b|\bs3\b|cloudwatch|gateway/i},
-    {nome:'10 Governança',kw:/governan|mudan[çc]a|\bcab\b|\bgmud\b|relat[óo]rio|dashboard|documenta|invent[áa]rio|reuni[ãa]o|indicador|\bsla\b|evid[êe]ncia/i}
+    {nome:'10 Governança',kw:/governan|mudan[çc]a|\bcab\b|\bgmud\b|relat[óo]rio|dashboard|documenta|invent[áa]rio|reuni[ãa]o|indicador|\bsla\b|evid[êe]ncia|checklist|check-?list|rotina|\bpop\b|procedimento|template/i}
   ],
   '71':[// Compagás — Serviço Gerenciado (proposta v4, itens 01–10)
     {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|outlook|caixa postal|licen[çc]a/i},
@@ -292,7 +292,7 @@ const LITE_PILARES_CC={
     {nome:'06 Backup',kw:/backup|c[óo]pia de seguran|restore|restaura|snapshot|veeam|acronis|reten[çc]/i},
     {nome:'07 Sistemas Operacionais',kw:/linux|windows|sistema operacional|\bso\b|kernel|patch|atualiza[çc][ãa]o|servi[çc]o do windows/i},
     {nome:'08 Monitoramento',kw:/\bnoc\b|monitora|zabbix|disponib|indisponib|\blink\b|operadora|sensor|uptime|alerta|instabil/i},
-    {nome:'09 Governança',kw:/governan|mudan[çc]a|\bcab\b|\bgmud\b|documenta|invent[áa]rio|evid[êe]ncia|reuni[ãa]o|relat[óo]rio|dashboard/i},
+    {nome:'09 Governança',kw:/governan|mudan[çc]a|\bcab\b|\bgmud\b|documenta|invent[áa]rio|evid[êe]ncia|reuni[ãa]o|relat[óo]rio|dashboard|checklist|check-?list|rotina|\bpop\b|procedimento|template/i},
     {nome:'10 Suporte',kw:/suporte|atendimento|chamado|solicita[çc]|help ?desk|usu[áa]rio|senha|reset|desktop|esta[çc][ãa]o/i}
   ]
 }
