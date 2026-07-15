@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v97'
+const APP_VERSION='v98'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -276,14 +276,14 @@ const LITE_PILARES_CC={
   '2807':[// Mileto — Serviço Gerenciado (proposta 2026, itens 01–10)
     {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|file ?server|tenant|licen[çc]a|caixa postal|acronis|backup/i},
     {nome:'02 Antivírus / EPDR',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a|(?<!patch.*)watchguard(?!.*patch)/i},
-    {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti\b|\bfw\b|\bvpn\b|regra de acesso/i},
-    {nome:'04 Redes',kw:/switch|access ?point|\bap\b|ubiquiti|unifi|cloud ?key|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b/i},
+    {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti\b|\bfw\b|(?<!aws.*)\bvpn\b(?!.*aws)|regra de acesso|anydesk|\bbloque|desbloque/i},
+    {nome:'04 Redes',kw:/switch|access ?point|\bap\b|ubiquiti|unifi|cloud ?key|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b|redes|internet|lentid[ãa]o|conex[ãa]o lenta/i},
     {nome:'05 Active Directory',kw:/active directory|\bad\b|dom[íi]nio|\bgpo\b|controlador|\bdc\b|usu[áa]rio|autentica|replica[çc]|senha|reset|grupo|permiss|libera[çc][ãa]o de acesso|liberar acesso/i},
     {nome:'06 Patch Management',kw:/patch|windows update|hotfix|vulnerab|atualiza[çc][ãa]o de seguran|watchguard.*patch/i},
     {nome:'07 Email Security',kw:/email security|seguran[çc]a de e-?mail|\bspam\b|phishing|quarentena|anti-?spam/i},
     {nome:'08 Monitoramento',kw:/\bnoc\b|monitora|zabbix|disponib|indisponib|instabil|\blink\b|operadora|sensor|uptime|lat[êe]ncia/i},
     {nome:'09 AWS',kw:/\baws\b|amazon web|\bvpc\b|subnet|security group|\bec2\b|\bs3\b|cloudwatch|gateway/i},
-    {nome:'10 Governança',kw:/governan|mudan[çc]a|\bcab\b|gmud|relat[óo]rio|dashboard|documenta|invent[áa]rio|lansweeper|reuni[ãa]o|reuni[õo]es|indicador|\bsla\b|evid[êe]ncia|checklist|check-?list|ch[ae]cklist|rotina|\bpop\b|procedimento|template|glpi/i}
+    {nome:'10 Governança',kw:/governan|mudan[çc]a|\bcab\b|gmud|relat[óo]rio|dashboard|documenta|invent[áa]rio|lansweeper|reuni[ãa]o|reuni[õo]es|indicador|\bsla\b|evid[êe]ncia|checklist|check-?list|ch[ae]cklist|rotin|\bpop\b|procedimento|template|glpi|visita t[ée]cnica|visita semanal|atividades mileto|acompanhamento/i}
   ],
   '71':[// Compagás — Serviço Gerenciado (proposta v4, itens 01–10)
     {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|outlook|caixa postal|licen[çc]a|\bmfa\b|validar acesso|desativar conta|pedido de acesso/i},
@@ -1261,13 +1261,14 @@ function liteData(){
     acts.forEach(a=>{const rate=liteTechRate(a.ag),val=(a.wh/60)*rate;custoUsado+=val;ctTk.add(a.tid);
       tec[a.ag]=(tec[a.ag]||0)+a.wh;(tecTk[a.ag]=tecTk[a.ag]||new Set()).add(a.tid);
       const catTxt=(a.cat||'').toLowerCase(),txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();
-      const isDeploy=isSust&&!LITE_MAINT_RE.test(txt)&&LITE_DEPLOY_RE.test(txt);// deploy num contrato de sustentação = projeto (fora); manutenção/GMUD não conta
+      const deployTxt=(a.cat+' '+a.assunto).toLowerCase();// deploy é avaliado pelo CHAMADO (categoria/assunto), NÃO pelo nome da atividade (ex.: atividade "Novo report" não torna o chamado um deploy)
       const ov=pilOv[a.tid];// override manual vence tudo
       let p;
       if(ov==='__FORA__')p=null;
       else if(ov)p=pil.find(pl=>pl.nome===ov)||null;
-      else{p=catTxt.trim()?pil.find(pl=>pl.kw.test(catTxt)):null;if(!p&&!isDeploy)p=pil.find(pl=>pl.kw.test(txt))}// categoria manda, senão assunto (se não for deploy)
-      if(!p&&ov!=='__FORA__'&&pil.length===1)p=pil[0];// contrato de ESCOPO ÚNICO (ex.: Mileto - Projetos): tudo entra no pilar, nunca "fora de escopo"
+      else{p=catTxt.trim()?pil.find(pl=>pl.kw.test(catTxt)):null;if(!p)p=pil.find(pl=>pl.kw.test(txt))}// PILAR PRIMEIRO: se casa um pilar (ex.: WIFI→Redes, VPN→Firewall), é escopo — mesmo que a atividade tenha "novo/criação"
+      if(!p&&ov!=='__FORA__'&&pil.length===1)p=pil[0];// contrato de ESCOPO ÚNICO (ex.: Mileto - Projetos): tudo entra no pilar
+      const isDeploy=isSust&&!p&&ov!=='__FORA__'&&!LITE_MAINT_RE.test(deployTxt)&&LITE_DEPLOY_RE.test(deployTxt);// só quando NÃO casou nenhum pilar: deploy sem pilar = projeto (fora)
       if(p){pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;(pilTk[p.nome]=pilTk[p.nome]||new Set()).add(a.tid);pilVal[p.nome]=(pilVal[p.nome]||0)+val}else{fora.push(Object.assign({},a,{motivo:ov==='__FORA__'?'manual':(isDeploy?'projeto':'sem-pilar')}));foraTk.add(a.tid)}});
     const pilTkN={},pilTids={};for(const k in pilTk){pilTkN[k]=pilTk[k].size;pilTids[k]=[...pilTk[k]]}
     const tecN={},tecTids={};for(const k in tecTk){tecN[k]=tecTk[k].size;tecTids[k]=[...tecTk[k]]}
