@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v99'
+const APP_VERSION='v100'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -274,7 +274,7 @@ const LITE_PILARES={
 // Pilares por contrato (CC) — extraídos dos escopos das propostas (Serviço Gerenciado). 10 pilares cada.
 const LITE_PILARES_CC={
   '2807':[// Mileto — Serviço Gerenciado (proposta 2026, itens 01–10)
-    {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|file ?server|tenant|licen[çc]a|caixa postal|acronis|backup/i},
+    {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|file ?server|\bfs\b|acessos? a pasta|pasta do fs|tenant|licen[çc]a|caixa postal|acronis|backup/i},
     {nome:'02 Antivírus / EPDR',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a|(?<!patch.*)watchguard(?!.*patch)/i},
     {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti\b|\bfw\b|(?<!aws.*)\bvpn\b(?!.*aws)|regra de acesso|anydesk|\bbloque|desbloque/i},
     {nome:'04 Redes',kw:/switch|access ?point|\bap\b|ubiquiti|unifi|cloud ?key|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b|redes|internet|lentid[ãa]o|conex[ãa]o lenta/i},
@@ -282,8 +282,8 @@ const LITE_PILARES_CC={
     {nome:'06 Patch Management',kw:/patch|windows update|hotfix|vulnerab|atualiza[çc][ãa]o de seguran|watchguard.*patch/i},
     {nome:'07 Email Security',kw:/email security|seguran[çc]a de e-?mail|\bspam\b|phishing|quarentena|anti-?spam/i},
     {nome:'08 Monitoramento',kw:/\bnoc\b|monitora|zabbix|disponib|indisponib|instabil|\blink\b|operadora|sensor|uptime|lat[êe]ncia/i},
-    {nome:'09 AWS',kw:/\baws\b|amazon web|\bvpc\b|subnet|security group|\bec2\b|\bs3\b|cloudwatch|gateway/i},
-    {nome:'10 Governança',kw:/governan|mudan[çc]a|\bcab\b|gmud|relat[óo]rio|dashboard|documenta|invent[áa]rio|lansweeper|reuni[ãa]o|reuni[õo]es|indicador|\bsla\b|evid[êe]ncia|checklist|check-?list|ch[ae]cklist|rotin|\bpop\b|procedimento|template|glpi|visita t[ée]cnica|visita semanal|atividades mileto|acompanhamento/i}
+    {nome:'09 AWS',kw:/\baws\b|amazon web|\bvpc\b|subnet|security group|\bec2\b|\bs3\b|cloudwatch|gateway|sinn|ngbilling/i},
+    {nome:'10 Governança',kw:/governan|mudan[çc]a|\bcab\b|gmud|relat[óo]rio|dashboard|documenta|invent[áa]rio|lansweeper|reuni[ãa]o|reuni[õo]es|indicador|\bsla\b|evid[êe]ncia|checklist|check-?list|ch[ae]cklist|rotin|\bpop\b|procedimento|template|glpi|\bvisita\b|atividades mileto|levantamento|acompanhamento/i}
   ],
   '71':[// Compagás — Serviço Gerenciado (proposta v4, itens 01–10)
     {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|outlook|caixa postal|licen[çc]a|\bmfa\b|validar acesso|desativar conta|pedido de acesso/i},
@@ -1463,7 +1463,7 @@ function liteFteProj(){
   const now=new Date(),nowIso=isoLocal(now),mS=isoLocal(new Date(now.getFullYear(),now.getMonth(),1)),mE=isoLocal(new Date(now.getFullYear(),now.getMonth()+1,0));
   const bizEl=Math.max(1,mdBizDays(mS,nowIso)),bizMo=Math.max(1,mdBizDays(mS,mE)),pace=Math.min(1,bizEl/bizMo);
   const dMes=liteAggWindow(mS,nowIso),capPessoaMes=bizMo*8*60,mesAndamento=pace<0.97&&dMes.totUsed>0;
-  const cliNome=x=>x.ct.nome.split(/\s+[—-]\s+/)[0];
+  const cliNome=x=>x.ct.nome.replace(/servi[çc]o gerenciado/i,'SG').replace(/projetos?/i,'Proj').replace(/\s*-\s*/,' ');// nome curto distinto (Mileto SG vs Mileto Proj)
   const projCt=dMes.contratos.map(x=>({cli:cliNome(x),cc:x.ct.cc,uso:x.uso,proj:Math.round(x.uso/pace),fte:x.fte||0,franquia:x.ct.franquia,used:x.used}));
   const tecFte=(dMes.tecnicos||[]).map(t=>({n:(t.nome||'').split(' ').slice(0,2).join(' '),nome:t.nome,min:t.min,fte:dMes.capFTE?t.min/dMes.capFTE:0,proj:capPessoaMes?(t.min/pace)/capPessoaMes:0})).sort((a,b)=>b.fte-a.fte);
   return {dMes,pace,bizEl,bizMo,capPessoaMes,mesAndamento,projCt,tecFte};
@@ -1767,7 +1767,10 @@ async function rLimitado(){
   const mcor=margem==null?'#94a3b8':margem>=30?'#16a34a':margem>=0?'#f59e0b':'#dc2626';
   // #3) Análise inteligente: tendências, riscos, PROJEÇÃO do mês e FTE detalhado (sem ícone; não repete os KPIs)
   const _w=liteCompWindows(MD_ATV_END),_mA=liteAggWindow(_w[2].s,_w[2].e),_mB=liteAggWindow(_w[1].s,_w[1].e);
-  const trend=_mB.totUsed>0?Math.round((_mA.totUsed-_mB.totUsed)/_mB.totUsed*100):null;
+  // Trend: mês → vs mês anterior; período multi-mês (Anual) → vs MESMO período do ano anterior
+  let trend,trendLbl,trendFrom,trendTo;
+  if(d.mf>1){const shY=s=>(Number(s.slice(0,4))-1)+s.slice(4);const _dPY=liteAggWindow(shY(MD_ATV_START),shY(MD_ATV_END));trend=_dPY.totUsed>0?Math.round((d.totUsed-_dPY.totUsed)/_dPY.totUsed*100):null;trendLbl=String(Number((MD_ATV_END||'2026').slice(0,4))-1);trendFrom=_dPY.totUsed;trendTo=d.totUsed;}
+  else{trend=_mB.totUsed>0?Math.round((_mA.totUsed-_mB.totUsed)/_mB.totUsed*100):null;trendLbl=_w[1].label;trendFrom=_mB.totUsed;trendTo=_mA.totUsed;}
   const tecs=d.tecnicos||[],topTec=tecs[0],topShare=(topTec&&d.totUsed)?Math.round(topTec.min/d.totUsed*100):0;
   const critico=[...d.contratos].sort((a,b)=>b.uso-a.uso)[0],ocioso=[...d.contratos].filter(c=>c.franqP>0&&c.used>0).sort((a,b)=>a.uso-b.uso)[0];
   const foraP=d.totUsed?Math.round(d.totFora/d.totUsed*100):0;
@@ -1775,7 +1778,7 @@ async function rLimitado(){
   const _periodBiz=Math.max(1,mdBizDays(MD_ATV_START,MD_ATV_END));
   const A=usaMesCorr
     ?{fte:_fp.dMes.totFte,biz:_fp.bizEl,bizTot:_fp.bizMo,used:_fp.dMes.totUsed,nT:_fp.dMes.tecnicos.length,ct:_fp.projCt.filter(c=>c.uso>0||c.proj>0),tec:_fp.tecFte,pace:_fp.pace||1}
-    :{fte:d.totFte,biz:_periodBiz,bizTot:_periodBiz,used:d.totUsed,nT:d.tecnicos.length,ct:d.contratos.map(x=>({cli:cliNome(x),cc:String(x.ct.cc),uso:x.uso,proj:x.uso,used:x.used,fte:x.fte||0})).filter(c=>c.used>0||c.uso>0),tec:d.tecnicos.map(t=>({n:(t.nome||'').split(' ').slice(0,2).join(' '),nome:t.nome,min:t.min,fte:d.capFTE?t.min/d.capFTE:0,proj:d.capFTE?t.min/d.capFTE:0})).sort((a,b)=>b.fte-a.fte),pace:1};
+    :{fte:d.totFte,biz:_periodBiz,bizTot:_periodBiz,used:d.totUsed,nT:d.tecnicos.length,ct:d.contratos.map(x=>({cli:ctShort(x),cc:String(x.ct.cc),uso:x.uso,proj:x.uso,used:x.used,fte:x.fte||0})).filter(c=>c.used>0||c.uso>0),tec:d.tecnicos.map(t=>({n:(t.nome||'').split(' ').slice(0,2).join(' '),nome:t.nome,min:t.min,fte:d.capFTE?t.min/d.capFTE:0,proj:d.capFTE?t.min/d.capFTE:0})).sort((a,b)=>b.fte-a.fte),pace:1};
   const _bizEl=A.biz,_bizMo=A.bizTot,mesAndamento=usaMesCorr,dMes={totFte:A.fte,totUsed:A.used,tecnicos:{length:A.nT}};
   const projCt=A.ct,tecFte=A.tec,vaiEstourar=A.ct.filter(c=>c.proj>=100).sort((a,b)=>b.proj-a.proj),sobrecarga=[...A.tec].sort((a,b)=>b.proj-a.proj).filter(t=>t.proj>=0.9);
   // Histórico de 3 meses por contrato — dá base ao veredito de reforço (não só o período atual)
@@ -1790,14 +1793,14 @@ async function rLimitado(){
   const histSerieTxt=cc=>{const h=histSerie(cc);return `${_w[0].label} ${minToHM(h[0])}h · ${_w[1].label} ${minToHM(h[1])}h · ${_w[2].label} ${minToHM(h[2])}h`;};
   const insight=(cor,html)=>`<div style="display:flex;gap:.55rem;align-items:stretch;padding:.5rem 0;border-top:1px solid #eef2f7;"><div style="width:.26rem;background:${cor};border-radius:2px;flex-shrink:0;"></div><div style="font-size:.7rem;color:#334155;line-height:1.55;">${html}</div></div>`;
   const linhas=[];
-  if(trend!=null)linhas.push(insight(trend>10?'#dc2626':trend<-10?'#0891b2':'#2B4C9B',`Consumo <b>${trend>=0?'+':''}${trend}%</b> vs. ${_w[1].label} (${minToHM(_mB.totUsed)}h → ${minToHM(_mA.totUsed)}h).${trend>25?' Ritmo acelerando.':trend<-25?' Forte queda no mês.':''}`));
+  if(trend!=null)linhas.push(insight(trend>10?'#dc2626':trend<-10?'#0891b2':'#2B4C9B',`Consumo <b>${trend>=0?'+':''}${trend}%</b> vs. ${trendLbl} (${minToHM(trendFrom)}h → ${minToHM(trendTo)}h).${trend>25?' Em alta.':trend<-25?' Forte queda.':''}`));
   if(vaiEstourar.length)linhas.push(insight(vaiEstourar[0].proj>=115?'#dc2626':'#f59e0b',usaMesCorr
     ?`No ritmo do mês (${_bizEl} de ${_bizMo} dias úteis), ${vaiEstourar.slice(0,2).map(c=>`<b>${esc(c.cli)}</b> fecha ~<b>${c.proj}%</b>`).join(' · ')} da franquia — <b>risco de estourar</b>.`
     :`No período, ${vaiEstourar.slice(0,2).map(c=>`<b>${esc(c.cli)}</b> chegou a <b>${c.proj}%</b>`).join(' · ')} da franquia — <b>${vaiEstourar[0].proj>=100?'estourou':'no limite'}</b>.`));
   if(sobrecarga.length)linhas.push(insight(sobrecarga[0].proj>=1.1?'#dc2626':'#f59e0b',`Carga ${usaMesCorr?'projetada':'no período'}: ${sobrecarga.slice(0,2).map(t=>`<b>${esc(t.n)}</b> ~${t.proj.toFixed(1)} FTE`).join(' · ')}${sobrecarga[0].proj>=1.1?' — <b>sobrecarga</b> (acima de 1 pessoa full-time).':' — perto do limite.'}`));
   if(topTec)linhas.push(insight(topShare>=50?'#dc2626':'#0f766e',`<b>${(topTec.nome||'').split(' ').slice(0,2).join(' ')}</b> concentra <b>${topShare}%</b> das horas${topShare>=50?' — dependência alta de um técnico.':topShare>=35?' do time.':' — carga distribuída.'}`));
-  if(critico&&critico.uso>=85)linhas.push(insight(critico.uso>=100?'#dc2626':'#f59e0b',`<b>${cliNome(critico)}</b> já em <b>${critico.uso}%</b> da franquia${critico.uso>=100?' — contrato estourado.':' no período.'}`));
-  else if(ocioso&&ocioso.uso<40)linhas.push(insight('#0891b2',`<b>${cliNome(ocioso)}</b> usou só <b>${ocioso.uso}%</b> da franquia — capacidade ociosa.`));
+  if(critico&&critico.uso>=85)linhas.push(insight(critico.uso>=100?'#dc2626':'#f59e0b',`<b>${ctShort(critico)}</b> já em <b>${critico.uso}%</b> da franquia${critico.uso>=100?' — contrato estourado.':' no período.'}`));
+  else if(ocioso&&ocioso.uso<40)linhas.push(insight('#0891b2',`<b>${ctShort(ocioso)}</b> usou só <b>${ocioso.uso}%</b> da franquia — capacidade ociosa.`));
   if(foraP>=10)linhas.push(insight('#dc2626',`<b>${foraP}%</b> das horas fora do escopo (${minToHM(d.totFora)}h) — revisar contrato/classificação.`));
   if(LITE_VAL){const avPeso=d.totVal?Math.round(d.avulsasFaturarR/d.totVal*100):0;linhas.push(insight(mcor,`Margem <b style="color:${mcor};">${margem}%</b> (${margem>=30?'saudável':margem>=0?'apertada':'negativa'})${avPeso>0?` · avulsas rendem <b>+${avPeso}%</b> sobre a receita contratual`:''}.`));}
   else linhas.push(insight('#94a3b8','Revele os valores (senha) para a leitura financeira: margem e peso das avulsas.'));
