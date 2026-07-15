@@ -245,7 +245,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v52'
+const APP_VERSION='v53'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -266,6 +266,33 @@ const LITE_PILARES={
   projeto:[{nome:'Projetos e Evolução (rede, segurança, M365, servidores, AWS)',kw:/projeto|evolu|migra|implanta|reestrutur|aws|nuvem|upgrade|assessment|pentest|rollout|novo/i}],
   avulso:[{nome:'Demanda avulsa (sob demanda / por hora)',kw:/[\s\S]/}]
 }
+// Pilares por contrato (CC) — extraídos dos escopos das propostas (Serviço Gerenciado). 10 pilares cada.
+const LITE_PILARES_CC={
+  '2807':[// Mileto — Serviço Gerenciado (proposta 2026, itens 01–10)
+    {nome:'01 Microsoft 365 e File Server',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|file ?server|tenant|licen[çc]a|caixa postal|acronis|backup/i},
+    {nome:'02 Antivírus / EPDR',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a/i},
+    {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti\b|\bfw\b|\bvpn\b|regra de acesso/i},
+    {nome:'04 Rede — Switches e Access Points',kw:/switch|access ?point|ubiquiti|unifi|cloud ?key|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b/i},
+    {nome:'05 Servidores de Diretório (AD)',kw:/active directory|\bad\b|dom[íi]nio|\bgpo\b|controlador|\bdc\b|usu[áa]rio|autentica|replica[çc]|senha|reset|grupo|permiss/i},
+    {nome:'06 Patch Management',kw:/patch|windows update|hotfix|vulnerab|atualiza[çc][ãa]o de seguran|watchguard.*patch/i},
+    {nome:'07 Email Security',kw:/email security|seguran[çc]a de e-?mail|\bspam\b|phishing|quarentena|anti-?spam/i},
+    {nome:'08 NOC — Monitoramento',kw:/\bnoc\b|monitora|zabbix|disponib|indisponib|instabil|\blink\b|operadora|sensor|uptime|lat[êe]ncia/i},
+    {nome:'09 Ambiente AWS',kw:/\baws\b|amazon web|\bvpc\b|subnet|security group|\bec2\b|\bs3\b|cloudwatch|gateway/i},
+    {nome:'10 Governança e Gestão de Mudanças',kw:/governan|mudan[çc]a|\bcab\b|\bgmud\b|relat[óo]rio|dashboard|documenta|invent[áa]rio|reuni[ãa]o|indicador|\bsla\b|evid[êe]ncia/i}
+  ],
+  '71':[// Compagás — Serviço Gerenciado (proposta v4, itens 01–10)
+    {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|outlook|caixa postal|licen[çc]a/i},
+    {nome:'02 Antivírus',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a/i},
+    {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti\b|\bfw\b|\bvpn\b|regra de acesso/i},
+    {nome:'04 Rede — Switches e Access Points',kw:/switch|access ?point|\bap\b|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b|porta/i},
+    {nome:'05 Servidores e Ambiente VMware',kw:/vmware|esxi|vcenter|huawei|hypervisor|virtual|\bvm\b|\bhost\b|servidor f[íi]sico|servidor/i},
+    {nome:'06 Backup',kw:/backup|c[óo]pia de seguran|restore|restaura|snapshot|veeam|acronis|reten[çc]/i},
+    {nome:'07 Sistemas Operacionais (Linux/Windows)',kw:/linux|windows|sistema operacional|\bso\b|kernel|patch|atualiza[çc][ãa]o|servi[çc]o do windows/i},
+    {nome:'08 NOC — Monitoramento',kw:/\bnoc\b|monitora|zabbix|disponib|indisponib|\blink\b|operadora|sensor|uptime|alerta|instabil/i},
+    {nome:'09 Governança e Gestão de Mudanças',kw:/governan|mudan[çc]a|\bcab\b|\bgmud\b|documenta|invent[áa]rio|evid[êe]ncia|reuni[ãa]o|relat[óo]rio|dashboard/i},
+    {nome:'10 Suporte Gerenciado',kw:/suporte|atendimento|chamado|solicita[çc]|help ?desk|usu[áa]rio|senha|reset|impressora|desktop|esta[çc]|perif[ée]rico/i}
+  ]
+}
 const LITE_TIPOS=['Sustentação','Projeto','Avulso']
 const LITE_SEED=[
   {id:'mileto-sg',cc:'2807',nome:'Mileto — Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:45000,cor:'#2B4C9B',pilar:'susten'},
@@ -274,7 +301,7 @@ const LITE_SEED=[
 ]
 const getLiteCt=()=>{const v=lsGet('sbi_lite_ct');return(v&&v.length)?v:LITE_SEED.map(c=>({...c}))}
 const setLiteCt=v=>lsSet('sbi_lite_ct',v)
-const litePilares=c=>(LITE_PILARES[c.pilar]||LITE_PILARES.susten)
+const litePilares=c=>(LITE_PILARES_CC[String(c.cc)]||LITE_PILARES[c.pilar]||LITE_PILARES.susten)
 let LITE_VAL=false// valores protegidos por senha; sempre ocultos ao carregar
 const liteAprovKey=a=>a.tid+'|'+(a.iso||'')+'|'+a.ch
 const getLiteAprov=()=>lsGet('sbi_lite_aprov')||{}
@@ -1325,7 +1352,7 @@ async function rLimitado(){
   const kpis=`<div class="grid grid-cols-2 md:grid-cols-${LITE_VAL?5:4} gap-3 mb-4">${kc.join('')}</div>`;
   const avBanner=d.avulsasMin?`<div class="card mb-4" style="background:#faf5ff;border:1px solid #e9d5ff;"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="receipt" style="width:.95rem;height:.95rem;color:#7c3aed;"></i><span style="font-size:.72rem;font-weight:800;color:#6b21a8;">Horas avulsas (a cobrar): ${minToHM(d.avulsasMin)}h</span><span style="font-size:.66rem;color:#7c3aed;">— ${minToHM(d.avulsasAprovMin)}h aprovadas · ${minToHM(d.avulsasPendMin)}h pendentes · <b>não entram na franquia</b></span><span style="flex:1;"></span><button onclick="setLiteSub('avulsas')" style="cursor:pointer;background:#7c3aed;color:#fff;border:none;border-radius:.4rem;padding:.28rem .6rem;font-size:.64rem;font-weight:700;">Ver todas →</button></div></div>`:'';
   const tec=d.tecnicos;
-  const techTbl=tec.length?`<div class="card overflow-x-auto" style="margin-top:1rem;"><div style="font-size:.85rem;font-weight:800;color:#0f172a;margin-bottom:.5rem;">Horas por técnico${LITE_VAL?' · valor':''} <span style="font-size:.62rem;color:#94a3b8;font-weight:500;">(quem lançou a atividade, nos contratos Lite)</span></div><table><thead><tr><th>Técnico</th><th>Atividades</th><th>Horas</th>${LITE_VAL?'<th>Custo-hora</th><th>Valor</th>':''}</tr></thead><tbody>${tec.map(t=>`<tr><td style="font-weight:600;">${esc((t.nome||'').split(' ').slice(0,2).join(' '))}</td><td>${t.n}</td><td style="font-weight:700;">${minToHM(t.min)}h</td>${LITE_VAL?`<td style="color:#854d0e;">${t.rate?fmtR(Math.round(t.rate))+'/h':'<span style="color:#cbd5e1;">sem salário</span>'}</td><td style="color:#166534;font-weight:700;">${t.rate?fmtR(Math.round(t.valor)):'-'}</td>`:''}</tr>`).join('')}</tbody>${LITE_VAL?`<tfoot><tr style="font-weight:800;background:#f8fafc;"><td>Total</td><td></td><td>${minToHM(d.totUsed)}h</td><td></td><td style="color:#166534;">${fmtR(Math.round(d.totTecVal))}</td></tr></tfoot>`:''}</table><div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Valor = custo-hora (salário ÷ capacidade) × horas. Cadastre salários em <b>Cadastro → Funcionários</b>.</div></div>`:'';
+  const techTbl=tec.length?`<div class="card overflow-x-auto" style="margin-top:1rem;"><div style="font-size:.85rem;font-weight:800;color:#0f172a;margin-bottom:.5rem;">Horas por técnico${LITE_VAL?' · valor':''}</div><table><thead><tr><th>Técnico</th><th>Atividades</th><th>Horas</th>${LITE_VAL?'<th>Custo-hora</th><th>Valor</th>':''}</tr></thead><tbody>${tec.map(t=>`<tr><td style="font-weight:600;">${esc((t.nome||'').split(' ').slice(0,2).join(' '))}</td><td>${t.n}</td><td style="font-weight:700;">${minToHM(t.min)}h</td>${LITE_VAL?`<td style="color:#854d0e;">${t.rate?fmtR(Math.round(t.rate))+'/h':'<span style="color:#cbd5e1;">sem salário</span>'}</td><td style="color:#166534;font-weight:700;">${t.rate?fmtR(Math.round(t.valor)):'-'}</td>`:''}</tr>`).join('')}</tbody>${LITE_VAL?`<tfoot><tr style="font-weight:800;background:#f8fafc;"><td>Total</td><td></td><td>${minToHM(d.totUsed)}h</td><td></td><td style="color:#166534;">${fmtR(Math.round(d.totTecVal))}</td></tr></tfoot>`:''}</table><div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Valor = custo-hora (salário ÷ capacidade) × horas. Cadastre salários em <b>Cadastro → Funcionários</b>.</div></div>`:'';
   return head+alertBar+avBanner+kpis+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`+techTbl;
 }
 window.mdConnect=function(){const k=(document.getElementById('mdBannerKey').value||'').trim(),zt=(document.getElementById('mdBannerZbx').value||'').trim();
