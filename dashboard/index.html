@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v85'
+const APP_VERSION='v86'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1464,6 +1464,9 @@ function liteFteProj(){
 function liteReportSecoes(tipo){
   const d=liteData(),money=LITE_VAL,secs=[];
   const cNome=x=>x.ct.nome,cCurto=x=>x.ct.nome.split(/\s+[—-]\s+/)[0].trim(),tecCurto=n=>(n||'').split(' ').slice(0,2).join(' ');
+  // Histórico dos últimos 3 meses — cada relatório mostra o seu (calculado 1x)
+  const hist3=liteCompWindows(MD_ATV_END).slice(0,3).map(w=>({label:w.label,d:liteAggWindow(w.s,w.e)}));
+  const histNote='Últimos 3 meses (todas as atividades carregadas). Mês corrente é parcial (até hoje).';
   // Resumo por contrato (Executivo, Horas por Contrato, Completo)
   if(tipo==='exec'||tipo==='contrato'||tipo==='completo'){
     const head=['Contrato','CC','Tipo','Franquia (h)','Consumido','Saldo','Uso %','FTE','Chamados','Avulsas'];if(money)head.push('Receita (R$)','Custo HH (R$)','Margem');
@@ -1479,6 +1482,10 @@ function liteReportSecoes(tipo){
       if(x.foraMin>0){const r=['Fora de escopo',minToHM(x.foraMin)+'h',x.foraTkN,(x.used?Math.round(x.foraMin/x.used*100):0)+'%'];if(money)r.push('—');rows.push(r);}
       secs.push({nome:'Escopo — '+cCurto(x),head,rows});
     });
+    // Histórico 3 meses: consumo por contrato (horas e % da franquia)
+    secs.push({nome:'Consumo por contrato — últimos 3 meses',head:['Contrato',...hist3.map(h=>h.label)],
+      rows:d.contratos.map(x=>[cCurto(x),...hist3.map(h=>{const c=h.d.contratos.find(cc=>String(cc.ct.cc)===String(x.ct.cc));return c?minToHM(c.used)+'h ('+c.uso+'%)':'-'})]),
+      tot:['TOTAL',...hist3.map(h=>minToHM(h.d.totUsed)+'h')],note:histNote});
   }
   // Comparativo: últimos 3 meses + ano (Executivo, Completo)
   if(tipo==='exec'||tipo==='completo'){
@@ -1511,6 +1518,7 @@ function liteReportSecoes(tipo){
     const head=['Chamado','CC','Cliente','Contrato','Status','Data','Início','Fim','Comercial','Trabalhado','Técnico','A Cobrar (h)','A Pagar (h)','Assunto','Validado'];
     const rows=d.avulsas.map(a=>[a.tid||'-',a.cc||'',a.cliente||'',a.contrato?a.contrato.split(/\s+[—-]\s+/).slice(1).join(' - ').trim()||a.contrato:'',a.status||'',a.dataBR?liteDateOnly(a.dataBR):brDate(a.iso),a.hi||'FALTANDO',a.hf||'FALTANDO',a.comercial==null?'-':a.comercial?'Sim':'Não',a.realMin?minToHM(a.realMin)+'h':'',tecCurto(a.ag),a.cobrar,a.pagar,a.assunto||a.desc||'',a.aprov===true?'Validado':'']);
     secs.push({nome:'Detalhe das horas avulsas (a cobrar)',head,rows});
+    secs.push({nome:'Horas avulsas — últimos 3 meses',head:['Indicador',...hist3.map(h=>h.label)],rows:[['A cobrar (Milldesk)',...hist3.map(h=>minToHM(h.d.avulsasMin)+'h')],['A faturar (mín. 4h)',...hist3.map(h=>h.d.avulsasCobrarH+'h')],['Lançamentos',...hist3.map(h=>fmt(h.d.avulsas.length))]],note:histNote});
   }
   // Horas por técnico (Horas por Técnico, Completo)
   if(tipo==='tecnico'||tipo==='completo'){
@@ -1520,6 +1528,11 @@ function liteReportSecoes(tipo){
     const head2=['Contrato','Técnico','Horas'];if(money)head2.push('Valor (R$)');
     const rows2=[];d.contratos.forEach(x=>Object.entries(x.tec||{}).sort((a,b)=>b[1]-a[1]).forEach(([n,m])=>{const rt=liteTechRate(n),row=[cCurto(x),tecCurto(n),minToHM(m)+'h'];if(money)row.push(rt?fmtR(Math.round((m/60)*rt)):'-');rows2.push(row)}));
     secs.push({nome:'Horas por técnico em cada contrato',head:head2,rows:rows2});
+    // Histórico 3 meses: horas por técnico
+    const tset={};hist3.forEach(h=>h.d.tecnicos.forEach(t=>tset[t.nome]=1));
+    const hData=Object.keys(tset).map(nome=>({nome,mins:hist3.map(h=>{const t=h.d.tecnicos.find(x=>x.nome===nome);return t?t.min:0})})).sort((a,b)=>b.mins[2]-a.mins[2]);
+    const hrows=hData.map(x=>[tecCurto(x.nome),...x.mins.map(m=>m?minToHM(m)+'h':'-')]);
+    secs.push({nome:'Horas por técnico — últimos 3 meses',head:['Técnico',...hist3.map(h=>h.label)],rows:hrows,tot:['EQUIPE',...hist3.map(h=>minToHM(h.d.totUsed)+'h')],note:histNote});
   }
   // Relatório Financeiro (Financeiro, Completo)
   if(tipo==='financeiro'||tipo==='completo'){
@@ -1531,6 +1544,11 @@ function liteReportSecoes(tipo){
       secs.push({nome:'Demonstrativo por contrato',head,rows,tot:['TOTAL',fmtR(Math.round(d.totVal)),fmtR(Math.round(d.avulsasFaturarR)),fmtR(Math.round(d.totCusto)),fmtR(Math.round(d.avulsasPagarR)),fmtR(Math.round(totMg)),totRec?Math.round(totMg/totRec*100)+'%':'—']});
       secs.push({nome:'Resumo financeiro do período',head:['Indicador','Valor'],rows:[['Receita contratual',fmtR(Math.round(d.totVal))],['(+) Avulsas a faturar',fmtR(Math.round(d.avulsasFaturarR))],['(−) Avulsas a pagar aos técnicos',fmtR(Math.round(d.avulsasPagarR))],['(=) Receita do período',fmtR(Math.round(d.receitaPer))],['Custo de mão de obra (HH consumido)',fmtR(Math.round(d.totCusto))],['(+) Custo avulsas (a pagar)',fmtR(Math.round(d.avulsasPagarR))],['(=) Custo total',fmtR(Math.round(d.totCusto+d.avulsasPagarR))],['Margem bruta',fmtR(Math.round(d.receitaPer-(d.totCusto+d.avulsasPagarR)))],['Margem %',(d.receitaPer?Math.round((d.receitaPer-(d.totCusto+d.avulsasPagarR))/d.receitaPer*100):0)+'%']]});
       secs.push({nome:'Custo de mão de obra por técnico',head:['Técnico','Horas','Custo-hora','Custo total'],rows:d.tecnicos.filter(t=>t.rate>0).map(t=>[t.nome,minToHM(t.min)+'h',fmtR2(t.rate),fmtR(Math.round(t.valor))]),tot:['TOTAL',minToHM(d.totUsed)+'h','',fmtR(Math.round(d.totTecVal))]});
+      secs.push({nome:'Financeiro — últimos 3 meses',head:['Indicador',...hist3.map(h=>h.label)],rows:[
+        ['Receita + avulsas',...hist3.map(h=>fmtR(Math.round(h.d.receitaPer)))],
+        ['Custo total (HH+avulsas)',...hist3.map(h=>fmtR(Math.round(h.d.totCusto+h.d.avulsasPagarR)))],
+        ['Margem',...hist3.map(h=>{const c=h.d.totCusto+h.d.avulsasPagarR;return h.d.receitaPer?Math.round((h.d.receitaPer-c)/h.d.receitaPer*100)+'%':'—'})]
+      ],note:histNote});
     } else if(tipo==='financeiro'){
       secs.push({nome:'Relatório Financeiro',head:['Aviso'],rows:[['Revele os valores (senha 123) no topo do painel antes de gerar o relatório financeiro.']]});
     }
