@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v87'
+const APP_VERSION='v88'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -354,8 +354,10 @@ const SECTION_SUBS={
 
 // ─── Técnicos excluídos das métricas (gestão/pré-venda, não entram em custo/FTE/alertas) ───
 const normName=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()
-// Item 5: Raphael Solano e Américo não entram nas métricas (gestão/pré-venda).
-const isExcludedTech=nome=>{const n=normName(nome);return n.includes('raphael solano')||n.includes('americo')}
+// Item 5: Américo não entra nas métricas (gestão/pré-venda). Raphael Solano (usuário/teste) NÃO é excluído — aparece como "user".
+const isExcludedTech=nome=>{const n=normName(nome);return n.includes('americo')}
+// Normaliza o nome do agente: o usuário do teste aparece como "user" (para o trabalho dele continuar visível nos cards).
+const mdAgent=nome=>{const n=normName(nome);return n.includes('raphael solano')?'user':(nome||'')}
 
 // ─── Roster ATIVO de funcionários (fonte: xls "Dados de SLA, Func e Clientes") ───
 // Quem está aqui é ativo. Técnico que aparece nos relatórios mas NÃO está aqui = já saiu → sem alerta de sobrecarga.
@@ -1049,7 +1051,7 @@ async function mdFetchBacklog(base){
   const byId={}
   for(const st of STATUSES){let arr=[];try{arr=await mdGet(`${base}/showTicketsByStatus?status=${encodeURIComponent(st)}`)}catch(e){arr=[]}
     if(!Array.isArray(arr))continue
-    arr.forEach(r=>{if(!r||byId[r.id]||isExcludedTech(r.agent))return;byId[r.id]={id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:r.agent,st,start:r.start,ana:r.analysis,end:r.end,grupo:r.stage,cat:r.category,slaexp:r.slasexpirationdate}})}
+    arr.forEach(r=>{if(!r||byId[r.id]||isExcludedTech(r.agent))return;byId[r.id]={id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:mdAgent(r.agent),st,start:r.start,ana:r.analysis,end:r.end,grupo:r.stage,cat:r.category,slaexp:r.slasexpirationdate}})}
   return Object.values(byId)
 }
 // Categoria por chamado (activitiesWorkedHours nao traz categoria) - puxa showTicket dos chamados do periodo, limitado.
@@ -1081,7 +1083,7 @@ async function mdFetchAvulsas(base){
   if(!Array.isArray(arr)){MD.avulsasErr='Resposta inesperada do endpoint activitiesHoursToCharge.';MD.avulsas=null;MD.avulsasKeys=[];throw new Error('resposta inesperada')}
   MD.avulsasKeys=arr[0]?Object.keys(arr[0]):[];
   const out=[];arr.forEach(r=>{if(!r)return;const ch=mdWorkedMin(r.charge_hour||0);if(ch<=0)return;
-    out.push({tid:String(r.id_ticket||''),ag:r.agent||'',loc:r.location||'',cc:mdCC(r.location||''),iso:mdActISO(r.start||''),dataBR:String(r.start||'').trim(),fimBR:String(r.end||'').trim(),hi:String(r.start_time||'').trim(),hf:String(r.end_time||'').trim(),assunto:stripHtml(r.ticket||'').slice(0,140),atv:r.activity||'',desc:stripHtml(r.description||'').slice(0,220),tipo:r.typeofactivity||'',requester:r.requester||'',ch});
+    out.push({tid:String(r.id_ticket||''),ag:mdAgent(r.agent),loc:r.location||'',cc:mdCC(r.location||''),iso:mdActISO(r.start||''),dataBR:String(r.start||'').trim(),fimBR:String(r.end||'').trim(),hi:String(r.start_time||'').trim(),hf:String(r.end_time||'').trim(),assunto:stripHtml(r.ticket||'').slice(0,140),atv:r.activity||'',desc:stripHtml(r.description||'').slice(0,220),tipo:r.typeofactivity||'',requester:r.requester||'',ch});
   });
   MD.avulsas=out;MD.avulsasN=out.length;MD.avulsasRawN=arr.length;
 }
@@ -1102,7 +1104,7 @@ window.mdSync=async function(force){
     // 1) Chamados — leve e filtrado por data no servidor → sempre busca (crítico p/ status/contagem)
     let rawArr=[];
     try{rawArr=await mdFetchTicketsRange(base,start,end);
-      MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag));
+      MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag)).map(t=>({...t,ag:mdAgent(t.ag)}));
       const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});MD.backlog=Object.values(uniq).filter(t=>mdIsOpen(t.st))
     }catch(e){fail('Chamados',e.message,true)}
     if(!MES||TIME!=='picker')MES=start.slice(0,7)
@@ -1146,7 +1148,7 @@ async function fetchAtivs(){
   const cfg=getMD();if(!cfg.key)return{err:'no-key'};
   atvDefaults();
   const base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key,start=MD_ATV_START,end=MD_ATV_END;
-  const parse=arr=>arr.map(r=>({tid:(r.id_ticket||r.ticket_id||''),atv:r.activity,tipo:r.typeofactivity,assunto:(r.ticket||''),desc:(r.activitiesdescription||r.description||''),ag:r.agent,loc:(r.location||r.local||''),start:r.start,hm:(r.start_time||''),wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour)})).filter(a=>a.ag);
+  const parse=arr=>arr.map(r=>({tid:(r.id_ticket||r.ticket_id||''),atv:r.activity,tipo:r.typeofactivity,assunto:(r.ticket||''),desc:(r.activitiesdescription||r.description||''),ag:mdAgent(r.agent),loc:(r.location||r.local||''),start:r.start,hm:(r.start_time||''),wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour)})).filter(a=>a.ag);
   const ep='activitiesWorkedHours'; // traz location + agent + worked_hour por atividade (é o relatório do Milldesk)
   try{
     let arr=await mdGet(`${base}/${ep}?start=${start}&end=${end}`,{tries:4,timeout:90000});// ~12MB sem gzip → timeout alto e mais tentativas
