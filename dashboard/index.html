@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v76'
+const APP_VERSION='v77'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1014,8 +1014,28 @@ function mdPeriodRange(){
   return[ymd(new Date(d.getFullYear(),d.getMonth(),1)),ymd(d)] // mensal (padrão)
 }
 // Busca chamados no período; para ranges longos (ex.: anual) quebra por mês p/ não baixar tudo de uma vez.
+// GET robusto do Milldesk: retry com backoff + timeout (AbortController) + validação de JSON.
+// Só faz retry em falha transitória (rede / HTTP != ok / corpo não-JSON). Retorna o JSON parseado
+// (que pode conter {error} — o chamador decide). Lança se esgotar as tentativas.
+async function mdGet(url,opt){
+  opt=opt||{};const tries=opt.tries||3,tmo=opt.timeout||25000;let lastErr;
+  for(let i=0;i<tries;i++){
+    const ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+    const timer=ctl?setTimeout(()=>{try{ctl.abort()}catch(e){}},tmo):null;
+    try{
+      const r=await fetch(url,ctl?{cache:'no-store',signal:ctl.signal}:{cache:'no-store'});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const txt=await r.text();
+      let j;try{j=JSON.parse(txt)}catch(_){throw new Error('resposta não-JSON ('+(txt||'').slice(0,40)+')')}
+      return j;
+    }catch(e){lastErr=(e&&e.name==='AbortError')?new Error('timeout ('+Math.round(tmo/1000)+'s)'):e;
+      if(i<tries-1)await new Promise(res=>setTimeout(res,700*(i+1)));
+    }finally{if(timer)clearTimeout(timer)}
+  }
+  throw lastErr||new Error('falha desconhecida');
+}
 async function mdFetchTicketsRange(base,start,end){
-  const one=async(a,b)=>{const per=await fetch(`${base}/showTicketsPerPeriod?start=${a}&end=${b}`).then(r=>r.json());if(per&&per.error)throw new Error(per.error);return Array.isArray(per)?per:[]}
+  const one=async(a,b)=>{const per=await mdGet(`${base}/showTicketsPerPeriod?start=${a}&end=${b}`);if(per&&per.error)throw new Error(per.error);return Array.isArray(per)?per:[]}
   const s=new Date(start+'T12:00:00'),e=new Date(end+'T12:00:00'),days=(e-s)/864e5
   if(days<=62)return one(start,end)
   const out=[],pad=n=>String(n).padStart(2,'0');let cur=new Date(s.getFullYear(),s.getMonth(),1)
@@ -1026,7 +1046,7 @@ async function mdFetchTicketsRange(base,start,end){
 async function mdFetchBacklog(base){
   const STATUSES=['Aberto','Pendente','Em Execução','Em atendimento','Aguardando','Agendado','Em Espera','Reaberto']
   const byId={}
-  for(const st of STATUSES){let arr=[];try{arr=await fetch(`${base}/showTicketsByStatus?status=${encodeURIComponent(st)}`).then(r=>r.json())}catch(e){arr=[]}
+  for(const st of STATUSES){let arr=[];try{arr=await mdGet(`${base}/showTicketsByStatus?status=${encodeURIComponent(st)}`)}catch(e){arr=[]}
     if(!Array.isArray(arr))continue
     arr.forEach(r=>{if(!r||byId[r.id]||isExcludedTech(r.agent))return;byId[r.id]={id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:r.agent,st,start:r.start,ana:r.analysis,end:r.end,grupo:r.stage,cat:r.category,slaexp:r.slasexpirationdate}})}
   return Object.values(byId)
@@ -1034,7 +1054,7 @@ async function mdFetchBacklog(base){
 // Categoria por chamado (activitiesWorkedHours nao traz categoria) - puxa showTicket dos chamados do periodo, limitado.
 // Horas a cobrar (activitiesWorkedHours nao traz charge_hour) - endpoint hoursToChargeByContract: charge_hour + local por atividade.
 async function mdFetchCharge(base){
-  let arr=[];try{arr=await fetch(`${base}/hoursToChargeByContract`).then(r=>r.json())}catch(e){arr=[]}
+  let arr=[];try{arr=await mdGet(`${base}/hoursToChargeByContract`)}catch(e){arr=[]}
   if(!Array.isArray(arr))return{}
   const m={};arr.forEach(r=>{if(!r)return;const cli=mdLocCliente(r.location||'')||r.contract||'-',cm=mdWorkedMin(r.charge_hour);if(cm>0)m[cli]=(m[cli]||0)+cm})
   return m
@@ -1053,14 +1073,11 @@ function mdApprovalOf(r){
 // Horas avulsas (a cobrar) — endpoint activitiesHoursToCharge = relatório "Atividades com horas a cobrar"
 // (tem location/CC, start/end datas, start_time/end_time, charge_hour, agent, requester). NÃO entram na franquia.
 async function mdFetchAvulsas(base){
-  MD.avulsasErr='';let arr,lastErr;
-  for(let i=0;i<4;i++){// tenta até 4x (Failed to fetch costuma ser transitório)
-    try{const r=await fetch(`${base}/activitiesHoursToCharge`,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);arr=await r.json();lastErr=null;break}
-    catch(e){lastErr=e;if(i<3)await new Promise(res=>setTimeout(res,600*(i+1)))}
-  }
-  if(lastErr){MD.avulsasErr='Falha ao buscar horas a cobrar: '+lastErr.message+' (após 4 tentativas). O endpoint é pesado; tente Sincronizar de novo.';MD.avulsas=[];MD.avulsasKeys=[];return}
-  if(arr&&arr.error){MD.avulsasErr='Milldesk retornou: '+arr.error;MD.avulsas=[];MD.avulsasKeys=[];return}
-  if(!Array.isArray(arr)){MD.avulsasErr='Resposta inesperada do endpoint activitiesHoursToCharge.';MD.avulsas=[];MD.avulsasKeys=[];return}
+  MD.avulsasErr='';let arr;
+  try{arr=await mdGet(`${base}/activitiesHoursToCharge`,{tries:4,timeout:30000})}// endpoint pesado: 4 tentativas + timeout maior
+  catch(e){MD.avulsasErr='Falha ao buscar horas a cobrar: '+e.message+' (após 4 tentativas). Clique em Sincronizar para tentar de novo.';MD.avulsas=null;MD.avulsasKeys=[];throw e}
+  if(arr&&arr.error){MD.avulsasErr='Milldesk retornou: '+arr.error;MD.avulsas=null;MD.avulsasKeys=[];throw new Error(arr.error)}
+  if(!Array.isArray(arr)){MD.avulsasErr='Resposta inesperada do endpoint activitiesHoursToCharge.';MD.avulsas=null;MD.avulsasKeys=[];throw new Error('resposta inesperada')}
   MD.avulsasKeys=arr[0]?Object.keys(arr[0]):[];
   const out=[];arr.forEach(r=>{if(!r)return;const ch=mdWorkedMin(r.charge_hour||0);if(ch<=0)return;
     out.push({tid:String(r.id_ticket||''),ag:r.agent||'',loc:r.location||'',cc:mdCC(r.location||''),iso:mdActISO(r.start||''),dataBR:String(r.start||'').trim(),fimBR:String(r.end||'').trim(),hi:String(r.start_time||'').trim(),hf:String(r.end_time||'').trim(),assunto:stripHtml(r.ticket||'').slice(0,140),atv:r.activity||'',desc:stripHtml(r.description||'').slice(0,220),tipo:r.typeofactivity||'',requester:r.requester||'',ch});
@@ -1075,26 +1092,34 @@ async function mdFetchTicketCats(base,tids){
 window.mdSync=async function(){
   const cfg=getMD();if(!cfg.key){toast('Configure a chave da API Milldesk em Admin → Config Alertas.',false);setSection('admin');setSub('alertcfg');return}
   const[start,end]=mdPeriodRange(),base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key
-  MD.loading=true;renderContent()
+  MD.loading=true;MD.syncErrors=[];renderContent()
+  const fail=(ep,msg,critical)=>MD.syncErrors.push({ep,msg:String(msg||'falha'),critical:!!critical});
   try{
-    const rawArr=await mdFetchTicketsRange(base,start,end)
-    MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag))
-    const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});MD.backlog=Object.values(uniq).filter(t=>mdIsOpen(t.st))
+    // 1) Chamados — base de status/contagem (crítico)
+    let rawArr=[];
+    try{rawArr=await mdFetchTicketsRange(base,start,end);
+      MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag));
+      const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});MD.backlog=Object.values(uniq).filter(t=>mdIsOpen(t.st))
+    }catch(e){fail('Chamados',e.message,true)}
     if(!MES||TIME!=='picker')MES=start.slice(0,7)
-    // Atividades = fonte das horas (chamados só p/ status). Fallback p/ horas por chamado se indisponível.
+    // 2) Atividades = fonte das horas da Lite (crítico). Sem elas, não mostramos horas (evita número falso).
     MD_ATV_START=start;MD_ATV_END=end
     let ar={ativs:[]};try{ar=await fetchAtivs()}catch(e){ar={err:e.message}}
-    if(ar.ativs&&ar.ativs.length){MD.ativs=ar.ativs;MD.ativsTs=Date.now();try{lsSet('sbi_md_ativs',{ts:MD.ativsTs,start,end,ativs:MD.ativs.slice(0,6000)})}catch(e){}mdApplyFromAtivs()}
-    else{mdApplyToD(rawArr);if(ar.err&&ar.err!=='no-key')toast('Atividades indisponíveis ('+ar.err+') — usando horas por chamado.',false)}
-    try{MD.backlogFull=await mdFetchBacklog(base)}catch(e){MD.backlogFull=MD.backlogFull||[]}
+    if(ar.err&&ar.err!=='no-key'){MD.ativs=[];try{mdApplyToD(rawArr)}catch(e){}fail('Atividades (horas)',ar.err,true)}
+    else{MD.ativs=ar.ativs||[];MD.ativsTs=Date.now();try{lsSet('sbi_md_ativs',{ts:MD.ativsTs,start,end,ativs:MD.ativs.slice(0,6000)})}catch(e){}mdApplyFromAtivs()}
+    // 3..5) complementares — não bloqueiam, mas registram se falharem
+    try{MD.backlogFull=await mdFetchBacklog(base)}catch(e){MD.backlogFull=MD.backlogFull||[];fail('Backlog',e.message,false)}
     try{const tkK={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkK[t.id]=1});const ptids=(MD.ativs||[]).filter(a=>{const iso=mdActISO(a.start);return iso>=start&&iso<=end}).map(a=>a.tid).filter(id=>id&&!tkK[id]);await mdFetchTicketCats(base,ptids)}catch(e){}
     try{MD.chargeCli=await mdFetchCharge(base);mdApplyFromAtivs()}catch(e){}
-    try{await mdFetchAvulsas(base)}catch(e){MD.avulsas=MD.avulsas||[]}
+    // 6) Avulsas (horas a cobrar) — alimenta KPI/receita (crítico p/ números financeiros)
+    try{await mdFetchAvulsas(base)}catch(e){fail('Horas avulsas',MD.avulsasErr||e.message,true)}
+    MD.dataReliable=!MD.syncErrors.some(e=>e.critical)
     MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
-    document.getElementById('lastUpdate').textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
-    const _ld=document.getElementById('liveDot'),_ls=document.getElementById('liveStatus');if(_ld)_ld.style.background='#22c55e';if(_ls)_ls.textContent='Milldesk'
-    toast(`Milldesk: ${MD.tickets.length} chamados · ${D._hsrc==='atividades'?MD.ativs.length+' atividades':'horas por chamado'} · ${minToHM(D.totalHoras)}h.`)
-  }catch(e){MD.loading=false;toast('Falha Milldesk: '+e.message,false)}
+    const lu=document.getElementById('lastUpdate');if(lu)lu.textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
+    const _ld=document.getElementById('liveDot'),_ls=document.getElementById('liveStatus');if(_ld)_ld.style.background=MD.dataReliable?'#22c55e':'#dc2626';if(_ls)_ls.textContent=MD.dataReliable?'Milldesk':'Milldesk (falha)'
+    if(MD.dataReliable)toast(`Milldesk: ${MD.tickets.length} chamados · ${MD.ativs.length} atividades · ${minToHM(D.totalHoras)}h.`)
+    else toast('Sincronização incompleta: '+MD.syncErrors.filter(e=>e.critical).map(e=>e.ep).join(', ')+'. Os números podem estar errados — clique em Sincronizar.',false)
+  }catch(e){MD.loading=false;MD.dataReliable=false;fail('Geral',e.message,true);toast('Falha Milldesk: '+e.message,false)}
   renderContent()
 }
 // ─── Atividades ao vivo (listTicketsActivities): técnico + chamado + horário + horas por lançamento ───
@@ -1111,8 +1136,8 @@ async function fetchAtivs(){
   const parse=arr=>arr.map(r=>({tid:(r.id_ticket||r.ticket_id||''),atv:r.activity,tipo:r.typeofactivity,assunto:(r.ticket||''),desc:(r.activitiesdescription||r.description||''),ag:r.agent,loc:(r.location||r.local||''),start:r.start,hm:(r.start_time||''),wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour)})).filter(a=>a.ag);
   const ep='activitiesWorkedHours'; // traz location + agent + worked_hour por atividade (é o relatório do Milldesk)
   try{
-    let arr=await fetch(`${base}/${ep}?start=${start}&end=${end}`).then(r=>r.json());
-    if(arr&&arr.error)arr=await fetch(`${base}/${ep}`).then(r=>r.json());
+    let arr=await mdGet(`${base}/${ep}?start=${start}&end=${end}`,{timeout:30000});
+    if(arr&&arr.error)arr=await mdGet(`${base}/${ep}`,{timeout:30000});
     if(arr&&arr.error)return{err:arr.error};
     if(!Array.isArray(arr))return{err:'resposta inesperada'};
     try{MD.ativsRawN=arr.length;MD.ativsRaw=arr.slice(0,3)}catch(e){}
@@ -1436,12 +1461,13 @@ function rLiteAvulsas(){
   const bh=(bg,col)=>`cursor:pointer;background:${bg};color:${col};border:none;border-radius:.4rem;padding:.33rem .7rem;font-size:.68rem;font-weight:700;`;
   const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:.95rem;font-weight:800;color:#0f172a;">Horas avulsas (a cobrar)</span><span class="badge" style="background:#f3e8ff;color:#6b21a8;font-weight:700;">FORA DA FRANQUIA</span></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Atividades marcadas como <b>a cobrar</b> no Milldesk (relatório <b>Atividades com horas a cobrar</b>). Exportação na aba <b>Relatórios</b>.</div></div>`;
   if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk para ver as horas avulsas.</div>`;
+  const relBanner=liteRelBanner();
   const d=liteData(),av=d.avulsas;
   const kpis=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(minToHM(d.avulsasMin)+'h','A cobrar Milldesk (3 contratos)','#7c3aed','receipt','soma das horas do relatório')}${kpiCard(fmt(d.avulsasCobrarH)+'h','A cobrar (faturável)','#166534','file-text','mín. 4h · múltiplos de 4h')}${kpiCard(fmt(Math.round(d.avulsasPagarH*100)/100)+'h','A pagar (técnicos)','#854d0e','wallet','horas a cobrar; Eduardo Kalil = 0')}${kpiCard(fmt(av.length),'Lançamentos','#0891b2','list')}</div>`;
   if(!av.length){
     const err=MD.avulsasErr?`<div style="background:#fee2e2;border:1px solid #fecaca;color:#991b1b;font-size:.72rem;font-weight:700;padding:.6rem .8rem;border-radius:.5rem;margin-bottom:.6rem;">⚠ ${esc(MD.avulsasErr)}<div style="font-weight:400;margin-top:.2rem;">Clique em <b>Sincronizar</b> no topo para tentar de novo.</div></div>`:'';
     const info=`<div style="font-size:.62rem;color:#94a3b8;margin-top:.6rem;">Diagnóstico: o endpoint retornou <b>${fmt(MD.avulsasRawN||0)}</b> registro(s); <b>${fmt(MD.avulsasN||0)}</b> com horas a cobrar; após filtrar pelos 3 contratos e período, sobraram <b>0</b>. Se você tem lançamentos a cobrar no período, me mande o total do relatório do Milldesk.</div>`;
-    return head+err+kpis+`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhuma hora a cobrar encontrada neste período.${info}</div>`}
+    return head+relBanner+err+kpis+`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhuma hora a cobrar encontrada neste período.${info}</div>`}
   // Consolidação: a faturar por cliente e a pagar por técnico
   const fatCli={},fatCliR={},fatCliReal={},pagTec={},pagTecR={},pagTecReal={};
   av.forEach(a=>{const cli=(a.cliente||'-').split('/')[0].trim();fatCli[cli]=(fatCli[cli]||0)+(+a.cobrar||0);fatCliR[cli]=(fatCliR[cli]||0)+(+a.cobrar||0)*(a.rhora||0);fatCliReal[cli]=(fatCliReal[cli]||0)+(a.realMin||0);const t=(a.ag||'-').split(' ').slice(0,2).join(' ');pagTec[t]=(pagTec[t]||0)+(+a.pagar||0);pagTecR[t]=(pagTecR[t]||0)+(+a.pagar||0)*liteTechRate(a.ag);pagTecReal[t]=(pagTecReal[t]||0)+(a.realMin||0)});
@@ -1456,7 +1482,7 @@ function rLiteAvulsas(){
   const numIn=(v,fn,key,cor)=>`<input type="number" step="0.5" min="0" value="${v}" onchange="${fn}('${key}',this.value)" style="width:3.4rem;font-size:.64rem;padding:.12rem .2rem;border:1px solid #e2e8f0;border-radius:.3rem;text-align:right;color:${cor};font-weight:700;">`;
   const rows=av.map(a=>`<tr style="${a.comercial===true?'background:#fef4f4;':''}"><td style="font-weight:700;white-space:nowrap;">${esc(a.tid||'-')}${a.retro?`<span title="Possível lançamento retroativo — a data da atividade (${esc(liteDateOnly(a.dataBR)||brDate(a.iso))}) é anterior à abertura do chamado (${esc(a.aberturaBR)}). Confira se foi lançado em outro dia." style="color:#dc2626;font-weight:900;cursor:help;"> *</span>`:''}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(a.cc||'—')}</span></td><td style="font-size:.64rem;font-weight:600;color:#334155;">${esc(a.cliente||'-')}</td><td style="font-size:.63rem;color:${a.contrato?'#166534':'#cbd5e1'};">${a.contrato?esc(a.contrato.split('—')[1]?a.contrato.split('—')[1].trim():a.contrato):'—'}</td><td>${stBadge(a)}</td><td style="white-space:nowrap;font-size:.64rem;">${esc(a.dataBR?liteDateOnly(a.dataBR):brDate(a.iso))}</td><td style="white-space:nowrap;font-size:.64rem;">${hr(a.hi)}</td><td style="white-space:nowrap;font-size:.64rem;color:#64748b;">${hr(a.hf)}</td><td style="text-align:center;">${comBadge(a)}</td><td style="white-space:nowrap;font-weight:700;color:#2B4C9B;">${minToHM(a.realMin)}h</td><td style="font-weight:600;white-space:nowrap;">${esc((a.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="white-space:nowrap;">${numIn(a.cobrar,'liteSetCobrar',a.aprovKey,'#166534')}h</td><td style="white-space:nowrap;">${numIn(a.pagar,'liteSetPagar',a.aprovKey,'#854d0e')}h</td><td style="font-size:.64rem;color:#334155;">${esc(a.assunto||a.desc||'-')}</td><td>${apCheck(a)}</td></tr>`).join('');
   const diag='<div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;">Fonte: relatório <b>Atividades com horas a cobrar</b> do Milldesk, filtrado nos <b>3 contratos</b> (CC 71, 2807, 2809). <b>Horário comercial = Sim</b> (seg-sex 8-18h, exceto feriado) fica em <span style="color:#991b1b;font-weight:700;">vermelho</span> — dificilmente é hora extra/avulsa, mas fica exposto pra verificar. <b>Trabalhado</b> = horas realmente executadas (<i>worked_hour</i> do Milldesk); <b>A Cobrar</b> e <b>A Pagar</b> são separadas (a cobrança tem mínimo/arredondamento). <b>A Cobrar</b> = mín. 4h e múltiplos de 4h (editável). <b>A Pagar</b> = horas a cobrar do Milldesk, editável; Eduardo Kalil vem 0. <b style="color:#dc2626;">*</b> ao lado do chamado = possível <b>lançamento retroativo</b> (data da atividade anterior à abertura do chamado — passe o mouse). Clique nos cabeçalhos ↕ para ordenar. Marque <b>Validado</b> ao conferir.</div>';
-  return head+kpis+consolida+`<div class="card overflow-x-auto"><table><thead><tr><th>Chamado</th><th>CC</th><th>Cliente</th><th>Contrato</th><th>Status</th><th>Data</th><th>Início</th><th>Fim</th><th>Horário comercial</th><th title="Horas realmente trabalhadas (worked_hour)">Trabalhado</th><th>Técnico</th><th title="Horas faturáveis (mín. 4h, múltiplos de 4h)">A Cobrar</th><th title="Horas pagas ao técnico">A Pagar</th><th>Assunto</th><th>Validado</th></tr></thead><tbody>${rows}</tbody></table>${diag}</div>`;
+  return head+relBanner+kpis+consolida+`<div class="card overflow-x-auto"><table><thead><tr><th>Chamado</th><th>CC</th><th>Cliente</th><th>Contrato</th><th>Status</th><th>Data</th><th>Início</th><th>Fim</th><th>Horário comercial</th><th title="Horas realmente trabalhadas (worked_hour)">Trabalhado</th><th>Técnico</th><th title="Horas faturáveis (mín. 4h, múltiplos de 4h)">A Cobrar</th><th title="Horas pagas ao técnico">A Pagar</th><th>Assunto</th><th>Validado</th></tr></thead><tbody>${rows}</tbody></table>${diag}</div>`;
 }
 function rLiteRelatorios(){
   const card=(tipo,desc,ic,cor)=>`<div class="card" style="border-top:3px solid ${cor};"><div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;"><i data-lucide="${ic}" style="width:1rem;height:1rem;color:${cor};"></i><div style="font-size:.85rem;font-weight:800;color:#0f172a;">${LITE_REPS[tipo]}</div></div><div style="font-size:.66rem;color:#64748b;margin-bottom:.7rem;min-height:2.2rem;">${desc}</div><div style="display:flex;gap:.4rem;"><button onclick="liteReportXLS('${tipo}')" style="flex:1;cursor:pointer;background:#dcfce7;color:#166534;border:none;border-radius:.4rem;padding:.42rem;font-size:.7rem;font-weight:700;">⬇ Excel</button><button onclick="liteReportPDF('${tipo}')" style="flex:1;cursor:pointer;background:#fee2e2;color:#991b1b;border:none;border-radius:.4rem;padding:.42rem;font-size:.7rem;font-weight:700;">⬇ PDF</button></div></div>`;
@@ -1515,12 +1541,17 @@ function rLiteContratos(){
 <table><thead><tr><th>Contrato</th><th>Centro de Custo</th><th>Tipo</th><th>Franquia</th><th>Valor/mês</th><th>R$/h</th><th>Escopo (pilares)</th><th>Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="8" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum contrato. Use + Novo.</td></tr>'}</tbody></table>
 <div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;">O <b>Centro de Custo (CC)</b> é o número que casa a atividade do Milldesk (campo <code>location</code>) com o contrato — é por ele que as horas são somadas. Valores ficam protegidos por senha (123). Cadastros salvos só neste navegador.</div></div>`;
 }
+// Banner de confiabilidade: se algum fetch crítico falhou, avisa em destaque e NÃO deixa os números passarem por confiáveis.
+function liteRelBanner(){
+  const errs=(MD.syncErrors||[]).filter(e=>e.critical);if(!errs.length)return'';
+  return `<div class="card mb-4" style="background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="wifi-off" style="width:1rem;height:1rem;color:#dc2626;"></i><div style="font-size:.76rem;font-weight:800;color:#991b1b;">Dados incompletos — números podem estar errados</div><button onclick="mdSync()" style="margin-left:auto;cursor:pointer;background:#dc2626;color:#fff;border:none;border-radius:.4rem;padding:.3rem .7rem;font-size:.68rem;font-weight:700;">⟳ Sincronizar de novo</button></div><div style="font-size:.66rem;color:#b91c1c;margin-top:.35rem;line-height:1.5;">Falha ao carregar: <b>${errs.map(e=>esc(e.ep)).join(', ')}</b>. ${esc(errs[0].msg)}<br>Enquanto isso, trate os valores abaixo como <b>parciais</b> — não use para decisão até sincronizar com sucesso.</div></div>`;
+}
 async function rLimitado(){
   if(!getMD().key)return `<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Conecte o Milldesk (Versão completa → Admin → Config) para ver o H.H por contrato.</div>`;
   if(!MD.loaded)return `<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Use o filtro de período acima para sincronizar o Milldesk e carregar as horas.</div>`;
   const d=liteData();
   const alerta=d.contratos.filter(x=>x.uso>=LITE_ALERT_PCT);
-  const alertBar=alerta.length?`<div class="card mb-4" style="background:#fffbeb;border:1px solid #fde68a;"><div style="font-size:.72rem;font-weight:800;color:#92400e;display:flex;align-items:center;gap:.4rem;"><i data-lucide="triangle-alert" style="width:.9rem;height:.9rem;"></i> ${alerta.length} contrato(s) em ${LITE_ALERT_PCT}%+ da franquia</div><div style="font-size:.66rem;color:#b45309;margin-top:.25rem;">${alerta.map(x=>`${esc(x.ct.nome.split('—')[0].trim())} <b>${x.uso}%</b>`).join(' · ')}</div></div>`:'';
+  const alertBar=liteRelBanner()+(alerta.length?`<div class="card mb-4" style="background:#fffbeb;border:1px solid #fde68a;"><div style="font-size:.72rem;font-weight:800;color:#92400e;display:flex;align-items:center;gap:.4rem;"><i data-lucide="triangle-alert" style="width:.9rem;height:.9rem;"></i> ${alerta.length} contrato(s) em ${LITE_ALERT_PCT}%+ da franquia</div><div style="font-size:.66rem;color:#b45309;margin-top:.25rem;">${alerta.map(x=>`${esc(x.ct.nome.split('—')[0].trim())} <b>${x.uso}%</b>`).join(' · ')}</div></div>`:'');
   const cards=d.contratos.map(x=>{
     const c=x.ct,uso=x.uso,usoC=uso>=100?'#dc2626':uso>=LITE_ALERT_PCT?'#f59e0b':'#22c55e';
     const badge=uso>=100?`<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:800;">ESTOUROU ${uso}%</span>`:uso>=LITE_ALERT_PCT?`<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:800;">${uso}%</span>`:'';
