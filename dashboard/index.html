@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v96'
+const APP_VERSION='v97'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -275,7 +275,7 @@ const LITE_PILARES={
 const LITE_PILARES_CC={
   '2807':[// Mileto — Serviço Gerenciado (proposta 2026, itens 01–10)
     {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|file ?server|tenant|licen[çc]a|caixa postal|acronis|backup/i},
-    {nome:'02 Antivírus / EPDR',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a|watchguard/i},
+    {nome:'02 Antivírus / EPDR',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a|(?<!patch.*)watchguard(?!.*patch)/i},
     {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti\b|\bfw\b|\bvpn\b|regra de acesso/i},
     {nome:'04 Redes',kw:/switch|access ?point|\bap\b|ubiquiti|unifi|cloud ?key|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b/i},
     {nome:'05 Active Directory',kw:/active directory|\bad\b|dom[íi]nio|\bgpo\b|controlador|\bdc\b|usu[áa]rio|autentica|replica[çc]|senha|reset|grupo|permiss|libera[çc][ãa]o de acesso|liberar acesso/i},
@@ -1820,8 +1820,8 @@ async function rLimitado(){
   </div>`;
   const analise=`<div class="card" style="background:linear-gradient(180deg,#f7f9ff,#fff);animation:liteDiagIn .5s ease both;"><div style="font-size:.68rem;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.15rem;">Análise do período</div>${linhas.join('')||'<div style="font-size:.7rem;color:#94a3b8;padding:.5rem 0;">Sem dados suficientes para análise.</div>'}${fteBox}</div>`;
   // Layout compacto e à esquerda: KPIs (2/3) + Análise (1/3) num bloco de largura limitada, alinhado à esquerda.
-  // Layout compacto e à esquerda: KPIs (2/3) + Análise (1/3) num bloco de largura limitada, alinhado à esquerda.
-  const topSection=`<div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4 items-start" style="max-width:1120px;"><div class="lg:col-span-2">${kpiGrid}</div><div class="lg:col-span-1">${analise}</div></div>`;
+  // KPIs (2/3) + Análise (1/3) ocupando a MESMA largura dos cards de contrato abaixo (alinhados, simétricos).
+  const topSection=`<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-start"><div class="lg:col-span-2">${kpiGrid}</div><div class="lg:col-span-1">${analise}</div></div>`;
   const tec=d.tecnicos,cts=d.contratos;
   const tecRated=tec.filter(t=>t.rate>0),avgRate=tecRated.length?tecRated.reduce((s,t)=>s+t.rate,0)/tecRated.length:0;
   const cCol=x=>`${esc(x.ct.nome.split(/\s+[—-]\s+/)[0].trim())}<br><span style="font-weight:500;color:#94a3b8;font-size:.58rem;">CC ${esc(x.ct.cc)}</span>`;
