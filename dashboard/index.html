@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v94'
+const APP_VERSION='v95'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -275,26 +275,26 @@ const LITE_PILARES={
 const LITE_PILARES_CC={
   '2807':[// Mileto — Serviço Gerenciado (proposta 2026, itens 01–10)
     {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|file ?server|tenant|licen[çc]a|caixa postal|acronis|backup/i},
-    {nome:'02 Antivírus / EPDR',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a/i},
+    {nome:'02 Antivírus / EPDR',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a|watchguard/i},
     {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti\b|\bfw\b|\bvpn\b|regra de acesso/i},
-    {nome:'04 Redes',kw:/switch|access ?point|ubiquiti|unifi|cloud ?key|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b/i},
-    {nome:'05 Active Directory',kw:/active directory|\bad\b|dom[íi]nio|\bgpo\b|controlador|\bdc\b|usu[áa]rio|autentica|replica[çc]|senha|reset|grupo|permiss/i},
+    {nome:'04 Redes',kw:/switch|access ?point|\bap\b|ubiquiti|unifi|cloud ?key|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b/i},
+    {nome:'05 Active Directory',kw:/active directory|\bad\b|dom[íi]nio|\bgpo\b|controlador|\bdc\b|usu[áa]rio|autentica|replica[çc]|senha|reset|grupo|permiss|libera[çc][ãa]o de acesso|liberar acesso/i},
     {nome:'06 Patch Management',kw:/patch|windows update|hotfix|vulnerab|atualiza[çc][ãa]o de seguran|watchguard.*patch/i},
     {nome:'07 Email Security',kw:/email security|seguran[çc]a de e-?mail|\bspam\b|phishing|quarentena|anti-?spam/i},
     {nome:'08 Monitoramento',kw:/\bnoc\b|monitora|zabbix|disponib|indisponib|instabil|\blink\b|operadora|sensor|uptime|lat[êe]ncia/i},
     {nome:'09 AWS',kw:/\baws\b|amazon web|\bvpc\b|subnet|security group|\bec2\b|\bs3\b|cloudwatch|gateway/i},
-    {nome:'10 Governança',kw:/governan|mudan[çc]a|\bcab\b|\bgmud\b|relat[óo]rio|dashboard|documenta|invent[áa]rio|reuni[ãa]o|indicador|\bsla\b|evid[êe]ncia|checklist|check-?list|rotina|\bpop\b|procedimento|template/i}
+    {nome:'10 Governança',kw:/governan|mudan[çc]a|\bcab\b|gmud|relat[óo]rio|dashboard|documenta|invent[áa]rio|lansweeper|reuni[ãa]o|reuni[õo]es|indicador|\bsla\b|evid[êe]ncia|checklist|check-?list|ch[ae]cklist|rotina|\bpop\b|procedimento|template|glpi/i}
   ],
   '71':[// Compagás — Serviço Gerenciado (proposta v4, itens 01–10)
     {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|outlook|caixa postal|licen[çc]a/i},
-    {nome:'02 Antivírus',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a|\bcdc\b|csirt|abuse|\bioc\b|bloqueio|antispam|anti-?spam|\bspam\b|phishing/i},
-    {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti\b|\bfw\b|\bvpn\b|regra de acesso|sd-?wan|ipsec/i},
-    {nome:'04 Redes',kw:/switch|access ?point|\bap\b|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b|porta/i},
+    {nome:'02 Antivírus',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a|\bcdc\b|csirt|abuse|\bioc\b|bloqueio|antispam|anti-?spam|\bspam\b|phishing|ddos|\bdos\b|ataque|tr[áa]fego an[ôo]malo|conta[s]? suspeita|vulnerabil/i},
+    {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti|\bfw\b|\bvpn\b|regra de acesso|sd-?wan|ipsec|webfilter|web ?filter/i},
+    {nome:'04 Redes',kw:/switch|access ?point|\bap\b|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b|redes|\bdns\b|porta/i},
     {nome:'05 Servidores',kw:/vmware|esxi|vcenter|huawei|hypervisor|virtual|\bvm\b|\bhost\b|servidor f[íi]sico|servidor/i},
     {nome:'06 Backup',kw:/backup|c[óo]pia de seguran|restore|restaura|snapshot|veeam|acronis|reten[çc]/i},
     {nome:'07 Sistemas Operacionais',kw:/linux|windows|sistema operacional|\bso\b|kernel|patch|atualiza[çc][ãa]o|servi[çc]o do windows/i},
-    {nome:'08 Monitoramento',kw:/\bnoc\b|monitora|zabbix|disponib|indisponib|\blink\b|operadora|sensor|uptime|alerta|instabil/i},
-    {nome:'09 Governança',kw:/governan|mudan[çc]a|\bcab\b|\bgmud\b|documenta|invent[áa]rio|evid[êe]ncia|reuni[ãa]o|relat[óo]rio|dashboard|checklist|check-?list|rotina|\bpop\b|procedimento|template/i},
+    {nome:'08 Monitoramento',kw:/\bnoc\b|monitora|zabbix|grafana|disponib|indisponib|\blink\b|operadora|sensor|uptime|alerta|instabil/i},
+    {nome:'09 Governança',kw:/governan|mudan[çc]a|\bcab\b|gmud|documenta|invent[áa]rio|lansweeper|evid[êe]ncia|reuni[ãa]o|reuni[õo]es|relat[óo]rio|dashboard|checklist|check-?list|ch[ae]cklist|rotin|\bpop\b|procedimento|template|acompanhamento mensal|atividades rotineiras/i},
     {nome:'10 Suporte',kw:/suporte|atendimento|chamado|solicita[çc]|help ?desk|usu[áa]rio|senha|reset|desktop|esta[çc][ãa]o/i}
   ]
 }
@@ -1267,6 +1267,7 @@ function liteData(){
       if(ov==='__FORA__')p=null;
       else if(ov)p=pil.find(pl=>pl.nome===ov)||null;
       else{p=catTxt.trim()?pil.find(pl=>pl.kw.test(catTxt)):null;if(!p&&!isDeploy)p=pil.find(pl=>pl.kw.test(txt))}// categoria manda, senão assunto (se não for deploy)
+      if(!p&&ov!=='__FORA__'&&pil.length===1)p=pil[0];// contrato de ESCOPO ÚNICO (ex.: Mileto - Projetos): tudo entra no pilar, nunca "fora de escopo"
       if(p){pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;(pilTk[p.nome]=pilTk[p.nome]||new Set()).add(a.tid);pilVal[p.nome]=(pilVal[p.nome]||0)+val}else{fora.push(Object.assign({},a,{motivo:ov==='__FORA__'?'manual':(isDeploy?'projeto':'sem-pilar')}));foraTk.add(a.tid)}});
     const pilTkN={},pilTids={};for(const k in pilTk){pilTkN[k]=pilTk[k].size;pilTids[k]=[...pilTk[k]]}
     const tecN={},tecTids={};for(const k in tecTk){tecN[k]=tecTk[k].size;tecTids[k]=[...tecTk[k]]}
