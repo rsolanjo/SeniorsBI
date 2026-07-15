@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v79'
+const APP_VERSION='v80'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -304,11 +304,12 @@ const LITE_DEPLOY_RE=/\bnov[oa]s?\b|cria[çc][ãa]o|\bcriar\b|\bcriad[oa]s?\b|im
 // Manutenção/gestão de mudança = sustentação (NÃO é deploy), mesmo que crie algo. Vence o detector de deploy.
 const LITE_MAINT_RE=/gmud|mudan[çc]a|\bajust|manuten|revis[ãa]o|reinstal|repositório|reten[çc]/i
 const LITE_SEED=[
-  {id:'compagas-sg',cc:'71',nome:'Compagás — Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:47250,cor:'#166534',pilar:'susten'},
-  {id:'mileto-sg',cc:'2807',nome:'Mileto — Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:45000,cor:'#2B4C9B',pilar:'susten'},
-  {id:'mileto-proj',cc:'2809',nome:'Mileto — Projetos / Evolução',tipo:'Projeto',franquia:80,valor:20900,cor:'#7c3aed',pilar:'projeto'}
+  {id:'compagas-sg',cc:'71',nome:'Compagás - Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:47250,cor:'#166534',pilar:'susten'},
+  {id:'mileto-sg',cc:'2807',nome:'Mileto - Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:45000,cor:'#2B4C9B',pilar:'susten'},
+  {id:'mileto-proj',cc:'2809',nome:'Mileto - Projetos',tipo:'Projeto',franquia:80,valor:20900,cor:'#7c3aed',pilar:'projeto'}
 ]
-const getLiteCt=()=>{const v=lsGet('sbi_lite_ct');return(v&&v.length)?v:LITE_SEED.map(c=>({...c}))}
+const liteFixNome=n=>String(n||'').replace(/\s*—\s*/g,' - ').replace(/Projetos\s*\/\s*Evolução/gi,'Projetos');// padroniza nomes (em-dash→hífen; "Projetos / Evolução"→"Projetos")
+const getLiteCt=()=>{const v=lsGet('sbi_lite_ct');const list=(v&&v.length)?v:LITE_SEED.map(c=>({...c}));return list.map(c=>({...c,nome:liteFixNome(c.nome)}))}
 const setLiteCt=v=>lsSet('sbi_lite_ct',v)
 const litePilares=c=>{if(c&&c.pilaresEdit&&c.pilaresEdit.length)return c.pilaresEdit.map(p=>{let kw;try{kw=new RegExp(p.kws||'(?!)','i')}catch(e){kw=/(?!)/}return{nome:p.nome,kw}});return LITE_PILARES_CC[String(c.cc)]||LITE_PILARES[c.pilar]||LITE_PILARES.susten}
 let LITE_VAL=false// valores protegidos por senha; sempre ocultos ao carregar
@@ -1110,7 +1111,13 @@ window.mdSync=async function(force){
     if(ativsFresh){mdApplyFromAtivs()}
     else{
       let ar={ativs:[]};try{ar=await fetchAtivs()}catch(e){ar={err:e.message}}
-      if(ar.err&&ar.err!=='no-key'){MD.ativs=[];MD.ativsHistTs=0;try{mdApplyToD(rawArr)}catch(e){}fail('Atividades (horas)',ar.err,true)}
+      if(ar.err&&ar.err!=='no-key'){
+        MD.ativsHistTs=0;// força re-tentar no próximo sync
+        const cache=lsGet('sbi_md_ativs');
+        if(MD.ativs&&MD.ativs.length){mdApplyFromAtivs();fail('Atividades (horas)',ar.err+' — mantendo os dados já carregados',false)}// já temos dado bom em memória → mantém (não crítico)
+        else if(cache&&cache.ativs&&cache.ativs.length){MD.ativs=cache.ativs;mdApplyFromAtivs();fail('Atividades (horas)',ar.err+' — usando cache local de '+new Date(cache.ts).toLocaleString('pt-BR'),false)}// cache local → usa (não crítico)
+        else{MD.ativs=[];try{mdApplyToD(rawArr)}catch(e){}fail('Atividades (horas)',ar.err,true)}// sem dado nenhum → crítico (banner)
+      }
       else{MD.ativs=ar.ativs||[];MD.ativsTs=MD.ativsHistTs=Date.now();try{lsSet('sbi_md_ativs',{ts:MD.ativsTs,start,end,ativs:MD.ativs.slice(0,6000)})}catch(e){}mdApplyFromAtivs()}
     }
     // 3..5) complementares — não bloqueiam, mas registram se falharem
@@ -1218,6 +1225,21 @@ function liteComercial(iso,hi){if(!iso)return null;const d=new Date(iso+'T12:00:
 const LITE_ALERT_PCT=80;
 // Franquia é mensal cheia (não rateia por dia). Conta meses-calendário do período (mín. 1).
 function liteMonths(){if(!MD_ATV_START||!MD_ATV_END)return 1;const[sy,sm]=MD_ATV_START.slice(0,7).split('-').map(Number),[ey,em]=MD_ATV_END.slice(0,7).split('-').map(Number);return Math.max(1,(ey-sy)*12+(em-sm)+1)}
+// Resolve o CC de uma avulsa pelo NOME do cliente no assunto — usado quando o location vem "Não Cadastrado"/"Undetermined"
+// (o Milldesk não preencheu o centro de custo na atividade). Independe do fetch pesado de atividades.
+function liteGuessCC(txt){
+  const s=normName(txt);if(!s||s.length<3)return'';
+  const byCli={};getLiteCt().forEach(c=>{const cli=normName(String(c.nome).split(/\s+[—-]\s+/)[0]);if(cli&&cli.length>2)(byCli[cli]=byCli[cli]||[]).push(c)});
+  for(const cli in byCli){
+    if(s.includes(cli)){
+      const list=byCli[cli];if(list.length===1)return String(list[0].cc);
+      const proj=/projeto|evolu|implanta|migra|deploy|rollout/.test(s);// vários contratos do mesmo cliente → escolhe por tipo
+      const pick=list.find(c=>proj?/projeto|evolu/i.test(c.nome):/gerenc|sustenta|servic/i.test(c.nome))||list[0];
+      return String(pick.cc);
+    }
+  }
+  return '';
+}
 function liteData(){
   const tkById={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkById[t.id]=t});
   const rows=(MD.ativs||[]).map(a=>{const iso=mdActISO(a.start),cc=mdCC(a.loc||''),t=tkById[a.tid];return{cc,wh:a.wh||0,iso,ag:a.ag,tid:a.tid,cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'',assunto:a.assunto||(t?t.t:'')||'',atv:a.atv||'',hm:a.hm||''}}).filter(a=>atvInRange(a.iso)&&a.ag&&!isExcludedTech(a.ag));
@@ -1260,7 +1282,9 @@ function liteData(){
   const whByKey={};(MD.ativs||[]).forEach(a=>{if(!a.tid||!a.wh)return;const k=a.tid+'|'+(a.hm||'');whByKey[k]=(whByKey[k]||0)+a.wh});// worked_hour por chamado+hora inicial (casamento preciso com a avulsa)
   const avulsas=(MD.avulsas||[]).map(a=>{
     const tloc=locByTid[a.tid]||a.loc||'';// prefere a location do chamado (traz cliente|CC), cai p/ a da atividade
-    const cc=String(avccM[a.tid]||mdCC(tloc)||mdCC(a.loc)||''),ct=ctByCC[cc];
+    let cc=String(avccM[a.tid]||mdCC(tloc)||mdCC(a.loc)||'');
+    if(!cc)cc=liteGuessCC(a.assunto||a.desc||'');// location "Não Cadastrado" → resolve pelo nome do cliente no assunto (independe do fetch de 12MB)
+    const ct=ctByCC[cc];
     const st=stByTid[a.tid]||'',closed=!!st&&(typeof mdIsOpen==='function'?!mdIsOpen(st):false);
     const key=liteAprovKey(a),aprov=aprovM[key]?true:a.aprov;
     const di=liteParseDT((a.dataBR||'')+' '+(a.hi||'')),df=liteParseDT((a.fimBR||'')+' '+(a.hf||''));
@@ -1379,7 +1403,7 @@ window.liteChamadosPopup=function(titulo,csv){const ids=(csv||'').split(',').fil
 window.liteTecInfo=function(cc,tech){
   const d=liteData(),x=d.contratos.find(c=>String(c.ct.cc)===String(cc));if(!x)return;
   const worked=(x.tecTids&&x.tecTids[tech])||[],wn=worked.length,resp=(x.tecResp&&x.tecResp[tech])||0;
-  const nome=String(tech||'').split(' ').slice(0,2).join(' '),ctn=x.ct.nome.split('—')[0].trim();
+  const nome=String(tech||'').split(' ').slice(0,2).join(' '),ctn=x.ct.nome.split(/\s+[—-]\s+/)[0].trim();
   const diff=wn!==resp?`<div style="font-size:.68rem;color:#64748b;margin-top:.55rem;line-height:1.6;background:#f8fafc;border:1px solid #eef2f7;border-radius:.45rem;padding:.5rem .6rem;">A diferença é normal: um chamado tem <b>um único responsável</b> no Milldesk, mas pode receber apontamentos de <b>vários técnicos</b>. Aqui contamos <b>quem trabalhou</b> (lançou horas), não quem é dono.</div>`:'';
   liteOpenModal(esc(nome)+' — '+esc(ctn),
     `<div style="display:flex;gap:.6rem;margin-bottom:.2rem;">
@@ -1427,7 +1451,7 @@ function liteCompWindows(endIso){
 }
 function liteReportSecoes(tipo){
   const d=liteData(),money=LITE_VAL,secs=[];
-  const cNome=x=>x.ct.nome,cCurto=x=>x.ct.nome.split('—')[0].trim(),tecCurto=n=>(n||'').split(' ').slice(0,2).join(' ');
+  const cNome=x=>x.ct.nome,cCurto=x=>x.ct.nome.split(/\s+[—-]\s+/)[0].trim(),tecCurto=n=>(n||'').split(' ').slice(0,2).join(' ');
   // Resumo por contrato (Executivo, Horas por Contrato, Completo)
   if(tipo==='exec'||tipo==='contrato'||tipo==='completo'){
     const head=['Contrato','CC','Tipo','Franquia (h)','Consumido','Saldo','Uso %','FTE','Chamados','Avulsas'];if(money)head.push('Receita (R$)','Custo HH (R$)','Margem');
@@ -1462,7 +1486,7 @@ function liteReportSecoes(tipo){
   // Horas avulsas: detalhe (Horas Avulsas, Completo)
   if(tipo==='avulsas'||tipo==='completo'){
     const head=['Chamado','CC','Cliente','Contrato','Status','Data','Início','Fim','Comercial','Trabalhado','Técnico','A Cobrar (h)','A Pagar (h)','Assunto','Validado'];
-    const rows=d.avulsas.map(a=>[a.tid||'-',a.cc||'',a.cliente||'',a.contrato?a.contrato.split('—').slice(1).join('—').trim()||a.contrato:'',a.status||'',a.dataBR?liteDateOnly(a.dataBR):brDate(a.iso),a.hi||'FALTANDO',a.hf||'FALTANDO',a.comercial==null?'-':a.comercial?'Sim':'Não',a.realMin?minToHM(a.realMin)+'h':'',tecCurto(a.ag),a.cobrar,a.pagar,a.assunto||a.desc||'',a.aprov===true?'Validado':'']);
+    const rows=d.avulsas.map(a=>[a.tid||'-',a.cc||'',a.cliente||'',a.contrato?a.contrato.split(/\s+[—-]\s+/).slice(1).join(' - ').trim()||a.contrato:'',a.status||'',a.dataBR?liteDateOnly(a.dataBR):brDate(a.iso),a.hi||'FALTANDO',a.hf||'FALTANDO',a.comercial==null?'-':a.comercial?'Sim':'Não',a.realMin?minToHM(a.realMin)+'h':'',tecCurto(a.ag),a.cobrar,a.pagar,a.assunto||a.desc||'',a.aprov===true?'Validado':'']);
     secs.push({nome:'Detalhe das horas avulsas (a cobrar)',head,rows});
   }
   // Horas por técnico (Horas por Técnico, Completo)
@@ -1667,14 +1691,30 @@ async function rLimitado(){
     kpiCard(money(d.receitaPer),'Receita + avulsas','#16a34a','trending-up','contratos + a faturar − a pagar'),
     kpiCard(money(custoTotal),'Custo (HH + avulsas)','#854d0e','coins',(LITE_VAL&&margem!=null)?'margem '+margem+'%':'mão de obra + avulsas')
   ];
-  const kpiGrid=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 h-full">${kc.join('')}</div>`;
+  // #1) KPIs agrupados por assunto: Horas · Atendimento · Financeiro
+  const grupoKpi=(titulo,cards,cols)=>`<div><div style="font-size:.58rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;margin:0 0 .35rem .12rem;">${titulo}</div><div class="grid ${cols} gap-3">${cards.join('')}</div></div>`;
+  const kpiGrid=`<div style="display:flex;flex-direction:column;gap:.75rem;height:100%;">${grupoKpi('Horas',[kc[0],kc[1],kc[2]],'grid-cols-1 sm:grid-cols-3')}${grupoKpi('Atendimento',[kc[3],kc[4]],'grid-cols-2')}${grupoKpi('Financeiro',[kc[5],kc[6],kc[7]],'grid-cols-1 sm:grid-cols-3')}</div>`;
   const mcor=margem==null?'#94a3b8':margem>=30?'#16a34a':margem>=0?'#f59e0b':'#dc2626';
-  const insight=(ic,cor,html)=>`<div style="display:flex;gap:.5rem;align-items:flex-start;padding:.5rem 0;border-top:1px solid #f1f5f9;"><div style="width:1.45rem;height:1.45rem;border-radius:.4rem;background:${cor}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-lucide="${ic}" style="width:.74rem;height:.74rem;color:${cor};"></i></div><div style="font-size:.68rem;color:#334155;line-height:1.5;">${html}</div></div>`;
-  const analise=`<div class="card" style="height:100%;background:linear-gradient(180deg,#f7f9ff,#fff);animation:liteDiagIn .5s ease both;display:flex;flex-direction:column;"><div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.15rem;"><i data-lucide="sparkles" style="width:.9rem;height:.9rem;color:#2B4C9B;"></i><div style="font-size:.68rem;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.08em;">Análise do período</div></div>${insight('activity','#2B4C9B',`Consumo de <b>${minToHM(d.totUsed)}h</b> de <b>${minToHM(d.totFranq)}h</b> (<b>${usoTot}%</b>) ≈ <b>${d.totFte.toFixed(1)} FTE</b>. <b>${fmt(d.totSolic)}</b> chamados (${fmt(d.totFechados)} fech · ${fmt(d.totPend)} pend).`)}${insight('receipt','#7c3aed',`<b>${minToHM(d.avulsasMin)}h</b> avulsas${LITE_VAL?` — ${fmtR(Math.round(d.avulsasFaturarR))} a faturar`:' a cobrar à parte'}${d.totFora?` · <b style="color:#dc2626;">${minToHM(d.totFora)}h</b> fora de escopo`:''}.`)}${LITE_VAL?insight('trending-up',mcor,`Receita <b style="color:#166534;">${fmtR(Math.round(d.receitaPer))}</b> vs. custo <b style="color:#854d0e;">${fmtR(Math.round(custoTotal))}</b> → margem <b style="color:${mcor};">${margem}%</b> (${margem>=30?'saudável':margem>=0?'apertada':'negativa'}).`):insight('lock','#94a3b8','Revele os valores (senha) para o resumo financeiro completo.')}</div>`;
+  // #3) Análise inteligente do período (tendências e riscos — NÃO repete os KPIs), sem ícone
+  const _w=liteCompWindows(MD_ATV_END),_mA=liteAggWindow(_w[2].s,_w[2].e),_mB=liteAggWindow(_w[1].s,_w[1].e);
+  const trend=_mB.totUsed>0?Math.round((_mA.totUsed-_mB.totUsed)/_mB.totUsed*100):null;
+  const tecs=d.tecnicos||[],topTec=tecs[0],topShare=(topTec&&d.totUsed)?Math.round(topTec.min/d.totUsed*100):0;
+  const critico=[...d.contratos].sort((a,b)=>b.uso-a.uso)[0],ocioso=[...d.contratos].filter(c=>c.franqP>0&&c.used>0).sort((a,b)=>a.uso-b.uso)[0];
+  const foraP=d.totUsed?Math.round(d.totFora/d.totUsed*100):0,cliNome=x=>x.ct.nome.split(/\s+[—-]\s+/)[0];
+  const insight=(cor,html)=>`<div style="display:flex;gap:.55rem;align-items:stretch;padding:.5rem 0;border-top:1px solid #eef2f7;"><div style="width:.26rem;background:${cor};border-radius:2px;flex-shrink:0;"></div><div style="font-size:.7rem;color:#334155;line-height:1.55;">${html}</div></div>`;
+  const linhas=[];
+  if(trend!=null)linhas.push(insight(trend>10?'#dc2626':trend<-10?'#0891b2':'#2B4C9B',`Consumo <b>${trend>=0?'+':''}${trend}%</b> vs. ${_w[1].label} (${minToHM(_mB.totUsed)}h → ${minToHM(_mA.totUsed)}h).${trend>25?' Ritmo acelerando — vigiar franquia.':trend<-25?' Forte desaceleração no mês.':''}`));
+  if(topTec)linhas.push(insight(topShare>=50?'#dc2626':'#0f766e',`<b>${(topTec.nome||'').split(' ').slice(0,2).join(' ')}</b> concentra <b>${topShare}%</b> das horas${topShare>=50?' — dependência alta de um técnico.':topShare>=35?' do time.':' — carga distribuída.'}`));
+  if(critico&&critico.uso>=85)linhas.push(insight(critico.uso>=100?'#dc2626':'#f59e0b',`<b>${cliNome(critico)}</b> em <b>${critico.uso}%</b> da franquia${critico.uso>=100?' — contrato estourado.':' — perto do limite.'}`));
+  else if(ocioso&&ocioso.uso<40)linhas.push(insight('#0891b2',`<b>${cliNome(ocioso)}</b> usou só <b>${ocioso.uso}%</b> da franquia — capacidade contratada ociosa.`));
+  if(foraP>=10)linhas.push(insight('#dc2626',`<b>${foraP}%</b> das horas fora do escopo (${minToHM(d.totFora)}h) — revisar contrato/classificação.`));
+  if(LITE_VAL){const avPeso=d.totVal?Math.round(d.avulsasFaturarR/d.totVal*100):0;linhas.push(insight(mcor,`Margem <b style="color:${mcor};">${margem}%</b> (${margem>=30?'saudável':margem>=0?'apertada':'negativa'})${avPeso>0?` · avulsas rendem <b>+${avPeso}%</b> sobre a receita contratual`:''}.`));}
+  else linhas.push(insight('#94a3b8','Revele os valores (senha) para a leitura financeira: margem e peso das avulsas.'));
+  const analise=`<div class="card" style="height:100%;background:linear-gradient(180deg,#f7f9ff,#fff);animation:liteDiagIn .5s ease both;display:flex;flex-direction:column;"><div style="font-size:.68rem;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.15rem;">Análise do período</div>${linhas.join('')||'<div style="font-size:.7rem;color:#94a3b8;padding:.5rem 0;">Sem dados suficientes para análise.</div>'}</div>`;
   const topSection=`<div class="grid grid-cols-1 lg:grid-cols-4 gap-3 mb-4"><div class="lg:col-span-3">${kpiGrid}</div><div class="lg:col-span-1">${analise}</div></div>`;
   const tec=d.tecnicos,cts=d.contratos;
   const tecRated=tec.filter(t=>t.rate>0),avgRate=tecRated.length?tecRated.reduce((s,t)=>s+t.rate,0)/tecRated.length:0;
-  const cCol=x=>`${esc(x.ct.nome.split('—')[0].trim())}<br><span style="font-weight:500;color:#94a3b8;font-size:.58rem;">CC ${esc(x.ct.cc)}</span>`;
+  const cCol=x=>`${esc(x.ct.nome.split(/\s+[—-]\s+/)[0].trim())}<br><span style="font-weight:500;color:#94a3b8;font-size:.58rem;">CC ${esc(x.ct.cc)}</span>`;
   const techTbl=tec.length?`<div class="card overflow-x-auto" style="margin-top:1rem;"><div style="font-size:.85rem;font-weight:800;color:#0f172a;margin-bottom:.5rem;">Horas por técnico e contrato${LITE_VAL?' · valor':''}</div><table><thead><tr><th>Técnico</th><th title="Chamados atendidos (distintos)">Chamados</th>${cts.map(x=>`<th>${cCol(x)}</th>`).join('')}<th>Total</th>${LITE_VAL?'<th>Custo-hora</th><th>Valor</th>':''}</tr></thead><tbody>${tec.map(t=>`<tr><td style="font-weight:600;">${esc((t.nome||'').split(' ').slice(0,2).join(' '))}</td><td style="font-weight:700;color:#7c3aed;"><span onclick="liteChamadosPopup('${esc((t.nome||'').split(' ')[0])}','${(t.tids||[]).join(',')}')" style="cursor:pointer;text-decoration:underline dotted;">${t.ch}</span></td>${cts.map(x=>{const m=x.tec[t.nome]||0;return `<td style="${m?'font-weight:700;color:#334155;':'color:#cbd5e1;'}">${m?minToHM(m)+'h':'-'}</td>`}).join('')}<td style="font-weight:800;color:#2B4C9B;">${minToHM(t.min)}h</td>${LITE_VAL?`<td style="color:#854d0e;white-space:nowrap;">${t.rate?fmtR2(t.rate)+'/h':'<span style="color:#cbd5e1;">sem sal.</span>'}</td><td style="color:#166534;font-weight:700;">${t.rate?fmtR(Math.round(t.valor)):'-'}</td>`:''}</tr>`).join('')}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td>Total</td><td style="color:#7c3aed;" title="Chamados distintos dos 3 contratos (não é a soma por técnico, pois um chamado pode ter vários técnicos)">${d.totCh}</td>${cts.map(x=>`<td>${minToHM(x.used)}h</td>`).join('')}<td style="color:#2B4C9B;">${minToHM(d.totUsed)}h</td>${LITE_VAL?`<td style="color:#854d0e;white-space:nowrap;" title="Média do custo-hora dos técnicos que atenderam">${avgRate?fmtR2(avgRate)+'/h':'-'}</td><td style="color:#166534;">${fmtR(Math.round(d.totTecVal))}</td>`:''}</tr></tfoot></table><div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Horas de cada técnico por contrato (quem lançou a atividade).${LITE_VAL?` <b>Custo-hora no total = média do time</b> (soma dos custos-hora ÷ nº de técnicos). Valor = custo-hora × horas.`:' Cadastre salários em Cadastro → Funcionários para ver valores.'}</div></div>`:'';
   return alertBar+topSection+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`+techTbl;
 }
