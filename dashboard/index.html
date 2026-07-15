@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v88'
+const APP_VERSION='v89'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -322,6 +322,8 @@ const liteTimeOnly=s=>{const m=String(s||'').match(/\b(\d{1,2}:\d{2})\b/);return
 window.liteSetAvCC=function(tid,cc){const m=lsGet('sbi_lite_avcc')||{};if(cc)m[tid]=cc;else delete m[tid];lsSet('sbi_lite_avcc',m);renderContent()}
 window.liteSetCobrar=function(key,v){const m=lsGet('sbi_lite_cobrar')||{},n=parseFloat(String(v).replace(',','.'));if(isNaN(n))delete m[key];else m[key]=n;lsSet('sbi_lite_cobrar',m);renderContent()}
 window.liteSetPagar=function(key,v){const m=lsGet('sbi_lite_pagar')||{},n=parseFloat(String(v).replace(',','.'));if(isNaN(n))delete m[key];else m[key]=n;lsSet('sbi_lite_pagar',m);renderContent()}
+// Edita Início/Fim de uma hora avulsa (o Milldesk não tem no momento) — persiste local e recalcula duração/horário comercial/trabalhado
+window.liteSetHora=function(key,campo,v){const m=lsGet('sbi_lite_horaedit')||{};const o=m[key]||{};const val=String(v||'').trim();if(val)o[campo]=val;else delete o[campo];if(Object.keys(o).length)m[key]=o;else delete m[key];lsSet('sbi_lite_horaedit',m);renderContent()}
 const LITE_COR=['#2B4C9B','#7c3aed','#166534','#0891b2','#E04622','#854d0e','#be185d','#0f766e']
 // Funcionários da Lite = os MESMOS da versão completa (FUNCS/sbi_funcs) — sincronizado nos dois sentidos.
 // Custo-empresa: CLT = salário × encargos (fator editável); PJ = valor da nota (salário direto).
@@ -354,10 +356,9 @@ const SECTION_SUBS={
 
 // ─── Técnicos excluídos das métricas (gestão/pré-venda, não entram em custo/FTE/alertas) ───
 const normName=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()
-// Item 5: Américo não entra nas métricas (gestão/pré-venda). Raphael Solano (usuário/teste) NÃO é excluído — aparece como "user".
-const isExcludedTech=nome=>{const n=normName(nome);return n.includes('americo')}
-// Normaliza o nome do agente: o usuário do teste aparece como "user" (para o trabalho dele continuar visível nos cards).
-const mdAgent=nome=>{const n=normName(nome);return n.includes('raphael solano')?'user':(nome||'')}
+// Teste: ninguém é ocultado. Raphael Solano aparece como "user" e Américo como "user 2" (anonimizados, mas visíveis).
+const isExcludedTech=nome=>false;
+const mdAgent=nome=>{const n=normName(nome);return n.includes('raphael solano')?'user':n.includes('americo')?'user 2':(nome||'')}
 
 // ─── Roster ATIVO de funcionários (fonte: xls "Dados de SLA, Func e Clientes") ───
 // Quem está aqui é ativo. Técnico que aparece nos relatórios mas NÃO está aqui = já saiu → sem alerta de sobrecarga.
@@ -1279,7 +1280,7 @@ function liteData(){
   (MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t.id&&t.loc&&locByTid[t.id]===undefined)locByTid[t.id]=t.loc});
   const ctByCC={};getLiteCt().forEach(c=>ctByCC[String(c.cc)]=c);
   const stByTid={},openByTid={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t.id&&stByTid[t.id]===undefined){stByTid[t.id]=t.st;openByTid[t.id]=t.start}});
-  const aprovM=getLiteAprov(),avccM=lsGet('sbi_lite_avcc')||{},cobrarM=lsGet('sbi_lite_cobrar')||{},pagarM=lsGet('sbi_lite_pagar')||{};
+  const aprovM=getLiteAprov(),avccM=lsGet('sbi_lite_avcc')||{},cobrarM=lsGet('sbi_lite_cobrar')||{},pagarM=lsGet('sbi_lite_pagar')||{},horaM=lsGet('sbi_lite_horaedit')||{};
   // horas realmente trabalhadas (worked_hour) por chamado e por chamado+hora — de activitiesWorkedHours (MD.ativs)
   const avulsas=(MD.avulsas||[]).map(a=>{
     const tloc=locByTid[a.tid]||a.loc||'';// prefere a location do chamado (traz cliente|CC), cai p/ a da atividade
@@ -1288,12 +1289,13 @@ function liteData(){
     const ct=ctByCC[cc];
     const st=stByTid[a.tid]||'',closed=!!st&&(typeof mdIsOpen==='function'?!mdIsOpen(st):false);
     const key=liteAprovKey(a),aprov=aprovM[key]?true:a.aprov;
-    const di=liteParseDT((a.dataBR||'')+' '+(a.hi||'')),df=liteParseDT((a.fimBR||'')+' '+(a.hf||''));
+    const he=horaM[key]||{},hi=he.hi!=null?he.hi:a.hi,hf=he.hf!=null?he.hf:a.hf;// início/fim: usa o editado (se houver), senão o do Milldesk
+    const di=liteParseDT((a.dataBR||'')+' '+(hi||'')),df=liteParseDT((a.fimBR||'')+' '+(hf||''));
     const sameDay=(a.dataBR||'')===(a.fimBR||'')||!a.fimBR;// duração só vale dentro do mesmo dia (evita span multi-dia inflando)
     const durSame=(di&&df&&df>di&&sameDay)?Math.round((df-di)/60000):0;
     const dur=durSame||(a.ch||0);// duração exibida (mesmo dia) ou, sem hora, as horas a cobrar do Milldesk
     const cliente=String(tloc||a.loc).split('|')[0].trim()||mdLocCliente(tloc)||'-';
-    const comercial=liteComercial(a.iso,a.hi);// true=Sim (dentro comercial, verificar); false=Não (fora, avulsa ok); null=sem data
+    const comercial=liteComercial(a.iso,hi);// true=Sim (dentro comercial, verificar); false=Não (fora, avulsa ok); null=sem data
     const chH=a.ch/60,isEd=/eduardo\s*kalil/i.test(a.ag||'');
     const cobrarDef=liteRound4(chH),pagarDef=isEd?0:Math.round(chH*100)/100;// paga as horas a cobrar (Milldesk); Eduardo Kalil = 0
     const cobrar=cobrarM[key]!=null?cobrarM[key]:cobrarDef,pagar=pagarM[key]!=null?pagarM[key]:pagarDef;
@@ -1301,7 +1303,7 @@ function liteData(){
     const vha=ct?(ct.valorHoraAvulsa!=null?ct.valorHoraAvulsa:(ct.franquia?(ct.valor||0)/ct.franquia:0)):0;// valor da hora avulsa (padrão = valor÷franquia)
     const faturarR=(+cobrar||0)*vha,pagarR=(+pagar||0)*liteTechRate(a.ag);// R$ a faturar da avulsa e R$ a pagar ao técnico
     const realMin=durSame||a.ch;// horas trabalhadas = duração PRÓPRIA da atividade (início→fim, mesmo dia); sem início/fim → usa o charge_hour. NUNCA soma o worked_hour do chamado inteiro (inflava).
-    return{...a,cc,cliente,contrato:ct?ct.nome:'',rhora:ct&&ct.franquia?(ct.valor||0)/ct.franquia:(ct?ct.valor||0:0),vha,faturarR,pagarR,realMin,status:st,closed,dur,comercial,cobrar,pagar,retro,aberturaBR:openByTid[a.tid]||'',aprov,aprovKey:key};
+    return{...a,hi,hf,cc,cliente,contrato:ct?ct.nome:'',rhora:ct&&ct.franquia?(ct.valor||0)/ct.franquia:(ct?ct.valor||0:0),vha,faturarR,pagarR,realMin,status:st,closed,dur,comercial,cobrar,pagar,retro,aberturaBR:openByTid[a.tid]||'',aprov,aprovKey:key};
   }).filter(a=>liteCC.has(a.cc)&&(!a.iso||atvInRange(a.iso))).sort((a,b)=>(b.iso||'').localeCompare(a.iso||''));
   const avulsasMin=avulsas.reduce((s,a)=>s+a.ch,0),avulsasAprovMin=avulsas.filter(a=>a.aprov===true).reduce((s,a)=>s+a.ch,0),avulsasPendMin=avulsasMin-avulsasAprovMin,avulsasVal=avulsas.reduce((s,a)=>s+(a.ch/60)*(a.rhora||0),0);
   const avulsasCobrarH=avulsas.reduce((s,a)=>s+(+a.cobrar||0),0),avulsasPagarH=avulsas.reduce((s,a)=>s+(+a.pagar||0),0);
@@ -1630,8 +1632,9 @@ function rLiteAvulsas(){
   const hr=v=>v?esc(v):'<span style="color:#dc2626;font-weight:700;">faltando</span>';
   const comBadge=a=>a.comercial==null?'<span style="color:#cbd5e1;font-size:.6rem;">—</span>':a.comercial?'<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:800;" title="Dentro do horário comercial (seg-sex 8-18h): dificilmente é hora extra/avulsa — verificar">Sim</span>':'<span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;" title="Fora do horário comercial (noite/fim de semana/feriado): pode ser a cobrar">Não</span>';
   const numIn=(v,fn,key,cor)=>`<input type="number" step="0.5" min="0" value="${v}" onchange="${fn}('${key}',this.value)" style="width:3.4rem;font-size:.64rem;padding:.12rem .2rem;border:1px solid #e2e8f0;border-radius:.3rem;text-align:right;color:${cor};font-weight:700;">`;
-  const rows=av.map(a=>`<tr style="${a.comercial===true?'background:#fef4f4;':''}"><td style="font-weight:700;white-space:nowrap;">${esc(a.tid||'-')}${a.retro?`<span title="Possível lançamento retroativo — a data da atividade (${esc(liteDateOnly(a.dataBR)||brDate(a.iso))}) é anterior à abertura do chamado (${esc(a.aberturaBR)}). Confira se foi lançado em outro dia." style="color:#dc2626;font-weight:900;cursor:help;"> *</span>`:''}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(a.cc||'—')}</span></td><td style="font-size:.64rem;font-weight:600;color:#334155;">${esc(a.cliente||'-')}</td><td style="font-size:.63rem;color:${a.contrato?'#166534':'#cbd5e1'};">${a.contrato?esc(a.contrato.split('—')[1]?a.contrato.split('—')[1].trim():a.contrato):'—'}</td><td>${stBadge(a)}</td><td style="white-space:nowrap;font-size:.64rem;">${esc(a.dataBR?liteDateOnly(a.dataBR):brDate(a.iso))}</td><td style="white-space:nowrap;font-size:.64rem;">${hr(a.hi)}</td><td style="white-space:nowrap;font-size:.64rem;color:#64748b;">${hr(a.hf)}</td><td style="text-align:center;">${comBadge(a)}</td><td style="white-space:nowrap;font-weight:700;color:#2B4C9B;">${minToHM(a.realMin)}h</td><td style="font-weight:600;white-space:nowrap;">${esc((a.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="white-space:nowrap;">${numIn(a.cobrar,'liteSetCobrar',a.aprovKey,'#166534')}h</td><td style="white-space:nowrap;">${numIn(a.pagar,'liteSetPagar',a.aprovKey,'#854d0e')}h</td><td style="font-size:.64rem;color:#334155;">${esc(a.assunto||a.desc||'-')}</td><td>${apCheck(a)}</td></tr>`).join('');
-  const diag='<div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;">Fonte: relatório <b>Atividades com horas a cobrar</b> do Milldesk, filtrado nos <b>3 contratos</b> (CC 71, 2807, 2809). <b>Horário comercial = Sim</b> (seg-sex 8-18h, exceto feriado) fica em <span style="color:#991b1b;font-weight:700;">vermelho</span> — dificilmente é hora extra/avulsa, mas fica exposto pra verificar. <b>Trabalhado</b> = horas realmente executadas (<i>worked_hour</i> do Milldesk); <b>A Cobrar</b> e <b>A Pagar</b> são separadas (a cobrança tem mínimo/arredondamento). <b>A Cobrar</b> = mín. 4h e múltiplos de 4h (editável). <b>A Pagar</b> = horas a cobrar do Milldesk, editável; Eduardo Kalil vem 0. <b style="color:#dc2626;">*</b> ao lado do chamado = possível <b>lançamento retroativo</b> (data da atividade anterior à abertura do chamado — passe o mouse). Clique nos cabeçalhos ↕ para ordenar. Marque <b>Validado</b> ao conferir.</div>';
+  const timeIn=(v,key,campo)=>`<input type="time" value="${esc(v||'')}" onchange="liteSetHora('${key}','${campo}',this.value)" title="${v?'Editar':'Faltando no Milldesk — preencha aqui'}. Ajusta duração, horário comercial e Trabalhado." style="width:5.3rem;font-size:.62rem;padding:.1rem .15rem;border:1px solid ${v?'#e2e8f0':'#fca5a5'};border-radius:.3rem;color:#334155;background:${v?'#fff':'#fff7f7'};">`;
+  const rows=av.map(a=>`<tr style="${a.comercial===true?'background:#fef4f4;':''}"><td style="font-weight:700;white-space:nowrap;">${esc(a.tid||'-')}${a.retro?`<span title="Possível lançamento retroativo — a data da atividade (${esc(liteDateOnly(a.dataBR)||brDate(a.iso))}) é anterior à abertura do chamado (${esc(a.aberturaBR)}). Confira se foi lançado em outro dia." style="color:#dc2626;font-weight:900;cursor:help;"> *</span>`:''}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(a.cc||'—')}</span></td><td style="font-size:.64rem;font-weight:600;color:#334155;">${esc(a.cliente||'-')}</td><td style="font-size:.63rem;color:${a.contrato?'#166534':'#cbd5e1'};">${a.contrato?esc(a.contrato.split(/\s+[—-]\s+/)[1]?a.contrato.split(/\s+[—-]\s+/).slice(1).join(' - ').trim():a.contrato):'—'}</td><td>${stBadge(a)}</td><td style="white-space:nowrap;font-size:.64rem;">${esc(a.dataBR?liteDateOnly(a.dataBR):brDate(a.iso))}</td><td style="white-space:nowrap;">${timeIn(a.hi,a.aprovKey,'hi')}</td><td style="white-space:nowrap;">${timeIn(a.hf,a.aprovKey,'hf')}</td><td style="text-align:center;">${comBadge(a)}</td><td style="white-space:nowrap;font-weight:700;color:#2B4C9B;">${minToHM(a.realMin)}h</td><td style="font-weight:600;white-space:nowrap;">${esc((a.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="white-space:nowrap;">${numIn(a.cobrar,'liteSetCobrar',a.aprovKey,'#166534')}h</td><td style="white-space:nowrap;">${numIn(a.pagar,'liteSetPagar',a.aprovKey,'#854d0e')}h</td><td style="font-size:.64rem;color:#334155;">${esc(a.assunto||a.desc||'-')}</td><td>${apCheck(a)}</td></tr>`).join('');
+  const diag='<div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;">Fonte: relatório <b>Atividades com horas a cobrar</b> do Milldesk, filtrado nos <b>3 contratos</b> (CC 71, 2807, 2809). <b>Horário comercial = Sim</b> (seg-sex 8-18h, exceto feriado) fica em <span style="color:#991b1b;font-weight:700;">vermelho</span> — dificilmente é hora extra/avulsa, mas fica exposto pra verificar. <b>Trabalhado</b> = horas realmente executadas (<i>worked_hour</i> do Milldesk); <b>A Cobrar</b> e <b>A Pagar</b> são separadas (a cobrança tem mínimo/arredondamento). <b>Início/Fim</b> são <b>editáveis</b> aqui (o Milldesk não traz no momento) — ao preencher, recalculam a <b>duração</b>, o <b>horário comercial</b> e o <b>Trabalhado</b>; ficam salvos neste navegador. <b>A Cobrar</b> = mín. 4h e múltiplos de 4h (editável). <b>A Pagar</b> = horas a cobrar do Milldesk, editável. <b style="color:#dc2626;">*</b> ao lado do chamado = possível <b>lançamento retroativo</b> (data da atividade anterior à abertura do chamado — passe o mouse). Clique nos cabeçalhos ↕ para ordenar. Marque <b>Validado</b> ao conferir.</div>';
   return head+relBanner+kpis+consolida+`<div class="card overflow-x-auto"><table><thead><tr><th>Chamado</th><th>CC</th><th>Cliente</th><th>Contrato</th><th>Status</th><th>Data</th><th>Início</th><th>Fim</th><th>Horário comercial</th><th title="Horas realmente trabalhadas (worked_hour)">Trabalhado</th><th>Técnico</th><th title="Horas faturáveis (mín. 4h, múltiplos de 4h)">A Cobrar</th><th title="Horas pagas ao técnico">A Pagar</th><th>Assunto</th><th>Validado</th></tr></thead><tbody>${rows}</tbody></table>${diag}</div>`;
 }
 function rLiteRelatorios(){
