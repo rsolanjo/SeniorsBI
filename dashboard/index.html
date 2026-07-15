@@ -1226,14 +1226,16 @@ function liteData(){
   const stByTid={},openByTid={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t.id&&stByTid[t.id]===undefined){stByTid[t.id]=t.st;openByTid[t.id]=t.start}});
   const aprovM=getLiteAprov(),avccM=lsGet('sbi_lite_avcc')||{},cobrarM=lsGet('sbi_lite_cobrar')||{},pagarM=lsGet('sbi_lite_pagar')||{};
   // horas realmente trabalhadas (worked_hour) por chamado e por chamado+hora — de activitiesWorkedHours (MD.ativs)
-  const whByTid={},whByKey={};(MD.ativs||[]).forEach(a=>{if(!a.tid||!a.wh)return;whByTid[a.tid]=(whByTid[a.tid]||0)+a.wh;const k=a.tid+'|'+(a.hm||'');whByKey[k]=(whByKey[k]||0)+a.wh});
+  const whByKey={};(MD.ativs||[]).forEach(a=>{if(!a.tid||!a.wh)return;const k=a.tid+'|'+(a.hm||'');whByKey[k]=(whByKey[k]||0)+a.wh});// worked_hour por chamado+hora inicial (casamento preciso com a avulsa)
   const avulsas=(MD.avulsas||[]).map(a=>{
     const tloc=locByTid[a.tid]||a.loc||'';// prefere a location do chamado (traz cliente|CC), cai p/ a da atividade
     const cc=String(avccM[a.tid]||mdCC(tloc)||mdCC(a.loc)||''),ct=ctByCC[cc];
     const st=stByTid[a.tid]||'',closed=!!st&&(typeof mdIsOpen==='function'?!mdIsOpen(st):false);
     const key=liteAprovKey(a),aprov=aprovM[key]?true:a.aprov;
     const di=liteParseDT((a.dataBR||'')+' '+(a.hi||'')),df=liteParseDT((a.fimBR||'')+' '+(a.hf||''));
-    const dur=(di&&df&&df>di)?Math.round((df-di)/60000):(a.ch||0);// sem início/fim → puxa das horas a cobrar do Milldesk
+    const sameDay=(a.dataBR||'')===(a.fimBR||'')||!a.fimBR;// duração só vale dentro do mesmo dia (evita span multi-dia inflando)
+    const durSame=(di&&df&&df>di&&sameDay)?Math.round((df-di)/60000):0;
+    const dur=durSame||(a.ch||0);// duração exibida (mesmo dia) ou, sem hora, as horas a cobrar do Milldesk
     const cliente=String(tloc||a.loc).split('|')[0].trim()||mdLocCliente(tloc)||'-';
     const comercial=liteComercial(a.iso,a.hi);// true=Sim (dentro comercial, verificar); false=Não (fora, avulsa ok); null=sem data
     const chH=a.ch/60,isEd=/eduardo\s*kalil/i.test(a.ag||'');
@@ -1242,7 +1244,7 @@ function liteData(){
     const openIso=mdActISO(openByTid[a.tid]||''),retro=!!(openIso&&a.iso&&a.iso<openIso);// atividade datada antes da abertura do chamado = possível lançamento retroativo
     const vha=ct?(ct.valorHoraAvulsa!=null?ct.valorHoraAvulsa:(ct.franquia?(ct.valor||0)/ct.franquia:0)):0;// valor da hora avulsa (padrão = valor÷franquia)
     const faturarR=(+cobrar||0)*vha,pagarR=(+pagar||0)*liteTechRate(a.ag);// R$ a faturar da avulsa e R$ a pagar ao técnico
-    const realMin=whByKey[a.tid+'|'+(a.hi||'')]||(dur>0&&a.hi&&a.hf?dur:0)||whByTid[a.tid]||a.ch;// horas realmente trabalhadas (worked_hour); fallback: duração, total do chamado, ou a cobrar
+    const realMin=whByKey[a.tid+'|'+(a.hi||'')]||durSame||a.ch;// horas realmente trabalhadas: worked_hour casado → duração do mesmo dia → charge_hour (nunca span multi-dia nem soma do chamado)
     return{...a,cc,cliente,contrato:ct?ct.nome:'',rhora:ct&&ct.franquia?(ct.valor||0)/ct.franquia:(ct?ct.valor||0:0),vha,faturarR,pagarR,realMin,status:st,closed,dur,comercial,cobrar,pagar,retro,aberturaBR:openByTid[a.tid]||'',aprov,aprovKey:key};
   }).filter(a=>liteCC.has(a.cc)&&(!a.iso||atvInRange(a.iso))).sort((a,b)=>(b.iso||'').localeCompare(a.iso||''));
   const avulsasMin=avulsas.reduce((s,a)=>s+a.ch,0),avulsasAprovMin=avulsas.filter(a=>a.aprov===true).reduce((s,a)=>s+a.ch,0),avulsasPendMin=avulsasMin-avulsasAprovMin,avulsasVal=avulsas.reduce((s,a)=>s+(a.ch/60)*(a.rhora||0),0);
@@ -1484,7 +1486,7 @@ function liteChrome(){
     <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.9rem;">
       <div style="display:flex;align-items:center;gap:.7rem;">
         <img src="logo.png" alt="4 Seniors Brasil" style="height:80px;width:auto;object-fit:contain;flex-shrink:0;">
-        <div style="border-left:2px solid #e2e8f0;padding-left:.85rem;"><div style="font-size:1.75rem;font-weight:900;color:#0f172a;letter-spacing:-.045em;line-height:1;">SeniorsBI</div><div style="font-size:.66rem;color:#2B4C9B;font-weight:800;text-transform:uppercase;letter-spacing:.16em;margin-top:.2rem;">Painel de Contratos</div></div>
+        <div style="border-left:2px solid #e2e8f0;padding-left:.85rem;"><div style="font-size:1.75rem;font-weight:900;color:#0f172a;letter-spacing:-.045em;line-height:1;">SeniorsBI</div><div style="font-size:.66rem;color:#2B4C9B;font-weight:800;text-transform:uppercase;letter-spacing:.16em;margin-top:.2rem;">Painel de Dados</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">${status}${syncBtn}${modeBtn}</div>
     </div>
