@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v84'
+const APP_VERSION='v85'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1706,8 +1706,12 @@ async function rLimitado(){
   const money=v=>LITE_VAL?fmtR(Math.round(v)):'R$ •••';
   const cliNome=x=>x.ct.nome.split(/\s+[—-]\s+/)[0];
   const custoCli={};d.contratos.forEach(x=>{const c=cliNome(x);if(x.custoUsado>0)custoCli[c]=(custoCli[c]||0)+x.custoUsado});
-  const custoCliArr=Object.entries(custoCli).sort((a,b)=>b[1]-a[1]),custoCliTxt=custoCliArr.map(([k,v])=>`${k} ${money(v)}`).join(' · ')||'sem custo apurado';
+  const custoCliArr=Object.entries(custoCli).sort((a,b)=>b[1]-a[1]);
   const nTecMes=d.tecnicos.length;
+  // Tabulação de Custo H.H por cliente — MESMO corpo no KPI e na Análise (alinhado)
+  const custoCliRow=(k,v)=>`<div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.68rem;padding:.11rem 0;border-bottom:1px solid #f4f1ea;"><span style="color:#475569;font-weight:600;">${esc(k)}</span><span style="font-weight:800;color:#854d0e;white-space:nowrap;">${money(v)}</span></div>`;
+  const custoCliBody=custoCliArr.length?custoCliArr.map(([k,v])=>custoCliRow(k,v)).join('')+`<div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.7rem;padding-top:.16rem;font-weight:800;"><span style="color:#0f172a;">Total</span><span style="color:#854d0e;white-space:nowrap;">${money(d.totCusto)}</span></div>`:'<div style="font-size:.66rem;color:#94a3b8;">sem custo apurado</div>';
+  const custoCliCard=`<div class="card" style="border-left:3px solid #854d0e;"><div class="kpi-lbl">Custo H.H por cliente</div><div style="margin-top:.35rem;">${custoCliBody}</div></div>`;
   const kc=[
     kpiCard(minToHM(d.totUsed)+'h','H.H consumido','#2B4C9B','clock',usoTot+'% de '+minToHM(d.totFranq)+'h'),
     kpiCard(hmSigned(d.totFranq-d.totUsed)+'h','Horas a consumir',(d.totFranq-d.totUsed)<0?'#dc2626':'#166534','battery-charging',Math.max(0,100-usoTot)+'% da franquia livre'),
@@ -1716,11 +1720,11 @@ async function rLimitado(){
     kpiCard(d.totFte.toFixed(1),'FTE','#0891b2','users',nTecMes+' técnicos parciais no mês'),
     kpiCard(money(d.totVal),'Receita contratual','#166534','banknote','franquia dos contratos'),
     kpiCard(money(d.receitaPer),'Receita + avulsas','#16a34a','trending-up','contratos + a faturar − a pagar'),
-    kpiCard(money(d.totCusto),'Custo H.H total','#854d0e','coins',custoCliTxt)
+    kpiCard(money(d.totCusto),'Custo H.H total','#854d0e','coins',(LITE_VAL&&margem!=null)?'margem '+margem+'%':'mão de obra das horas')
   ];
   // #1) KPIs agrupados por assunto: Horas · Atendimento · Financeiro
   const grupoKpi=(titulo,cards,cols)=>`<div><div style="font-size:.58rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;margin:0 0 .35rem .12rem;">${titulo}</div><div class="grid ${cols} gap-3">${cards.join('')}</div></div>`;
-  const kpiGrid=`<div style="display:flex;flex-direction:column;gap:.75rem;height:100%;">${grupoKpi('Horas',[kc[0],kc[1],kc[2]],'grid-cols-1 sm:grid-cols-3')}${grupoKpi('Atendimento',[kc[3],kc[4]],'grid-cols-2')}${grupoKpi('Financeiro',[kc[5],kc[6],kc[7]],'grid-cols-1 sm:grid-cols-3')}</div>`;
+  const kpiGrid=`<div style="display:flex;flex-direction:column;gap:.75rem;height:100%;">${grupoKpi('Horas',[kc[0],kc[1],kc[2]],'grid-cols-1 sm:grid-cols-3')}${grupoKpi('Atendimento',[kc[3],kc[4]],'grid-cols-2')}${grupoKpi('Financeiro',[kc[5],kc[6],kc[7],custoCliCard],'grid-cols-2 sm:grid-cols-4')}</div>`;
   const mcor=margem==null?'#94a3b8':margem>=30?'#16a34a':margem>=0?'#f59e0b':'#dc2626';
   // #3) Análise inteligente: tendências, riscos, PROJEÇÃO do mês e FTE detalhado (sem ícone; não repete os KPIs)
   const _w=liteCompWindows(MD_ATV_END),_mA=liteAggWindow(_w[2].s,_w[2].e),_mB=liteAggWindow(_w[1].s,_w[1].e);
@@ -1732,6 +1736,16 @@ async function rLimitado(){
   const _fp=liteFteProj(),dMes=_fp.dMes,_bizEl=_fp.bizEl,_bizMo=_fp.bizMo,mesAndamento=_fp.mesAndamento;
   const projCt=_fp.projCt.filter(c=>c.uso>0||c.proj>0),vaiEstourar=projCt.filter(c=>c.proj>=100).sort((a,b)=>b.proj-a.proj);
   const tecFte=_fp.tecFte,sobrecarga=[..._fp.tecFte].sort((a,b)=>b.proj-a.proj).filter(t=>t.proj>=0.9);
+  // Histórico de 3 meses por contrato — dá base ao veredito de reforço (não só o período atual)
+  const _mC=liteAggWindow(_w[0].s,_w[0].e),histByCC={};
+  [_mC,_mB,_mA].forEach((dm,i)=>{(dm.contratos||[]).forEach(x=>{const cc=String(x.ct.cc);(histByCC[cc]=histByCC[cc]||[0,0,0])[i]=x.used})});
+  const histSerie=cc=>(histByCC[String(cc)]||[0,0,0]);
+  const histTxt=cc=>{const h=histSerie(cc),proj=_fp.pace?h[2]/_fp.pace:h[2];
+    if(h[1]>0&&proj>h[1]*1.05&&h[1]>=h[0]*0.9)return 'demanda em alta nos últimos meses';
+    if(h[1]>0&&proj>h[1]*1.4&&h[1]<proj*0.7)return 'pico deste mês (meses anteriores bem menores)';
+    if(h[1]>0&&proj<h[1]*0.7)return 'abaixo dos meses anteriores';
+    return 'em linha com os meses anteriores';};
+  const histSerieTxt=cc=>{const h=histSerie(cc);return `${_w[0].label} ${minToHM(h[0])}h · ${_w[1].label} ${minToHM(h[1])}h · ${_w[2].label} ${minToHM(h[2])}h`;};
   const insight=(cor,html)=>`<div style="display:flex;gap:.55rem;align-items:stretch;padding:.5rem 0;border-top:1px solid #eef2f7;"><div style="width:.26rem;background:${cor};border-radius:2px;flex-shrink:0;"></div><div style="font-size:.7rem;color:#334155;line-height:1.55;">${html}</div></div>`;
   const linhas=[];
   if(trend!=null)linhas.push(insight(trend>10?'#dc2626':trend<-10?'#0891b2':'#2B4C9B',`Consumo <b>${trend>=0?'+':''}${trend}%</b> vs. ${_w[1].label} (${minToHM(_mB.totUsed)}h → ${minToHM(_mA.totUsed)}h).${trend>25?' Ritmo acelerando.':trend<-25?' Forte queda no mês.':''}`));
@@ -1742,27 +1756,34 @@ async function rLimitado(){
   else if(ocioso&&ocioso.uso<40)linhas.push(insight('#0891b2',`<b>${cliNome(ocioso)}</b> usou só <b>${ocioso.uso}%</b> da franquia — capacidade ociosa.`));
   if(foraP>=10)linhas.push(insight('#dc2626',`<b>${foraP}%</b> das horas fora do escopo (${minToHM(d.totFora)}h) — revisar contrato/classificação.`));
   if(LITE_VAL){const avPeso=d.totVal?Math.round(d.avulsasFaturarR/d.totVal*100):0;linhas.push(insight(mcor,`Margem <b style="color:${mcor};">${margem}%</b> (${margem>=30?'saudável':margem>=0?'apertada':'negativa'})${avPeso>0?` · avulsas rendem <b>+${avPeso}%</b> sobre a receita contratual`:''}.`));
-    linhas.push(insight('#854d0e',`Custo H.H <b>${fmtR(Math.round(d.totCusto))}</b> — ${custoCliArr.map(([k,v])=>`${esc(k)} <b>${fmtR(Math.round(v))}</b>`).join(' · ')}.`));}
+    linhas.push(insight('#854d0e',`<div style="font-weight:800;color:#0f172a;margin-bottom:.2rem;">Custo H.H por cliente</div>${custoCliBody}`));}
   else linhas.push(insight('#94a3b8','Revele os valores (senha) para a leitura financeira: margem, custo H.H por cliente e peso das avulsas.'));
   // Bloco FTE — enxuto e decisório: "precisa de mais gente?" (veredito profissional + números-chave)
   const fteChip=(txt,cor,bg,tip)=>`<span title="${esc(tip||'')}" style="font-size:.6rem;background:${bg};color:${cor};border-radius:.3rem;padding:.12rem .4rem;font-weight:700;white-space:nowrap;">${txt}</span>`;
   const _fte=dMes.totFte,_wh=Math.floor(_fte),_fr=Math.round((_fte-_wh)*100),_nT=dMes.tecnicos.length,_top=tecFte[0];
   const overloaded=tecFte.filter(t=>t.fte>=1),nearTechs=[..._fp.tecFte].sort((a,b)=>b.proj-a.proj).filter(t=>t.proj>=0.9);
   let vcor,vtit,vtxt;
+  const emAlta=vaiEstourar.filter(c=>/em alta/.test(histTxt(c.cc))),soPico=vaiEstourar.filter(c=>/pico/.test(histTxt(c.cc)));
   if(overloaded.length||vaiEstourar.length){vcor='#dc2626';vtit='Precisa de reforço';
-    vtxt=[vaiEstourar.length?`<b>${vaiEstourar.map(c=>esc(c.cli)).join(' e ')}</b> deve${vaiEstourar.length>1?'m':''} estourar a franquia`:'',overloaded.length?`<b>${overloaded.map(t=>esc(t.n)).join(', ')}</b> acima de 1 FTE`:''].filter(Boolean).join('; ')+'. Avaliar +1 técnico ou redistribuir.';}
+    const partes=[];
+    vaiEstourar.slice(0,2).forEach(c=>partes.push(`<b>${esc(c.cli)}</b> projeta ~${c.proj}% da franquia <span style="color:#94a3b8;">(${histTxt(c.cc)})</span>`));
+    if(overloaded.length)partes.push(`<b>${overloaded.map(t=>esc(t.n)).join(', ')}</b> em ritmo ≥ 1 FTE`);
+    const conclusao=emAlta.length?` <b>${emAlta.map(c=>esc(c.cli)).join(' e ')}</b> vem crescendo há meses — reforço se justifica.`:soPico.length&&!emAlta.length?' Parece pico do mês — confirmar a tendência antes de contratar.':' Avaliar +1 técnico ou redistribuir.';
+    vtxt=partes.join('; ')+'.'+conclusao;}
   else if(nearTechs.length||projCt.some(c=>c.proj>=90)){vcor='#f59e0b';vtit='No limite — monitorar';
-    vtxt=`Ainda sem sobrecarga, mas pouca folga${nearTechs.length?` (<b>${esc(nearTechs[0].n)}</b> projeta ${nearTechs[0].proj.toFixed(1)} FTE)`:''}. Sem espaço para picos de demanda.`;}
+    vtxt=`Ainda sem sobrecarga, mas pouca folga${nearTechs.length?` (<b>${esc(nearTechs[0].n)}</b> projeta ${nearTechs[0].proj.toFixed(1)} FTE)`:''}. Acompanhar a evolução dos próximos meses antes de decidir por reforço.`;}
   else{vcor='#16a34a';vtit='Quadro atual dá conta';
     vtxt=`Ninguém ≥ 1 FTE e nenhum contrato projetado a estourar — há folga para absorver mais demanda sem contratar.`;}
+  const projH=t=>minToHM(Math.round((t.min||0)/(_fp.pace||1))),hd=t=>Math.round((t.min||0)/60);
   const fteBox=`<div style="margin-top:.55rem;border-top:2px solid #e2e8f0;padding-top:.5rem;">
-    <div title="1 FTE = 1 pessoa full-time = ${_bizMo} dias úteis × 8h = ${_bizMo*8}h/mês. Cada valor = horas ÷ essa capacidade." style="font-size:.6rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;cursor:help;">FTE — precisa de mais gente? ⓘ</div>
+    <div title="FTE aqui = RITMO do mês: horas ÷ dias úteis já passados ÷ 8h. Mostra quanto de uma pessoa full-time cada um está fazendo agora (e onde fecha o mês nesse ritmo) — não é o total de horas do mês." style="font-size:.6rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;cursor:help;">FTE — precisa de mais gente? ⓘ</div>
     <div style="display:flex;gap:.5rem;align-items:flex-start;background:${vcor}12;border:1px solid ${vcor}33;border-radius:.45rem;padding:.45rem .55rem;"><div style="width:.28rem;align-self:stretch;background:${vcor};border-radius:2px;flex-shrink:0;"></div><div><div style="font-size:.72rem;font-weight:800;color:${vcor};line-height:1.2;">${vtit}</div><div style="font-size:.66rem;color:#475569;line-height:1.45;margin-top:.15rem;">${vtxt}</div></div></div>
-    <div style="font-size:.66rem;color:#334155;line-height:1.5;margin-top:.45rem;">Equipe <b>${_fte.toFixed(1)} FTE</b>${_fr>0&&_wh>=1?` (${_wh} pessoa${_wh>1?'s':''} + ${_fr}% de outra)`:''} · <b>${_nT}</b> técnicos parciais${_top?` · mais dedicado <b>${esc(_top.n)}</b> ${_top.fte.toFixed(1)}`:''}.</div>
-    <div style="font-size:.6rem;color:#94a3b8;margin:.35rem 0 .12rem;">FTE por contrato (soma dos técnicos no contrato):</div>
+    <div style="font-size:.66rem;color:#334155;line-height:1.5;margin-top:.45rem;">Equipe: <b>${minToHM(dMes.totUsed)}h</b> em ${_bizEl} dias úteis = <b>${_fte.toFixed(1)} FTE</b> de ritmo · <b>${_nT}</b> técnicos parciais.</div>
+    <div style="font-size:.6rem;color:#94a3b8;margin:.35rem 0 .12rem;">FTE por contrato (soma dos técnicos):</div>
     <div style="display:flex;flex-wrap:wrap;gap:.25rem;">${projCt.map(c=>fteChip(esc(c.cli)+' '+c.fte.toFixed(1),c.fte>=1?'#991b1b':'#3730a3',c.fte>=1?'#fef2f2':'#eef2ff',c.cli+': '+c.fte.toFixed(2)+' FTE — carga do contrato (vários técnicos), não de 1 pessoa')).join('')||'<span style="font-size:.6rem;color:#cbd5e1;">—</span>'}</div>
-    <div style="font-size:.6rem;color:#94a3b8;margin:.35rem 0 .12rem;">FTE por técnico (quanto de 1 pessoa cada um é):</div>
-    <div style="display:flex;flex-wrap:wrap;gap:.25rem;">${tecFte.slice(0,8).map(t=>fteChip(esc(t.n)+' '+t.fte.toFixed(1),t.fte>=1?'#991b1b':t.fte>=.75?'#92400e':'#475569',t.fte>=1?'#fef2f2':t.fte>=.75?'#fffbeb':'#f1f5f9',t.nome+': '+Math.round(t.fte*100)+'% de uma pessoa'+(t.fte>=1?' — sobrecarga':''))).join('')||'<span style="font-size:.6rem;color:#cbd5e1;">—</span>'}</div>
+    <div style="font-size:.6rem;color:#94a3b8;margin:.35rem 0 .12rem;">Por técnico — horas no mês · FTE de ritmo:</div>
+    <div style="display:flex;flex-wrap:wrap;gap:.25rem;">${tecFte.slice(0,8).map(t=>fteChip(esc(t.n)+' '+hd(t)+'h·'+t.fte.toFixed(1),t.fte>=1?'#991b1b':t.fte>=.75?'#92400e':'#475569',t.fte>=1?'#fef2f2':t.fte>=.75?'#fffbeb':'#f1f5f9',t.nome+': '+minToHM(t.min)+'h em '+_bizEl+' dias ('+(t.min/60/_bizEl).toFixed(1)+'h/dia) = '+t.fte.toFixed(2)+' FTE de ritmo; no ritmo fecha ~'+projH(t)+'h no mês')).join('')||'<span style="font-size:.6rem;color:#cbd5e1;">—</span>'}</div>
+    <div style="font-size:.58rem;color:#94a3b8;margin-top:.35rem;line-height:1.4;">FTE = <b>ritmo</b> (horas ÷ dias úteis já passados ÷ 8h). Ex.: quem faz ~7h/dia aparece ~0,9 mesmo com poucas horas no total, porque o mês ainda não fechou.</div>
   </div>`;
   const analise=`<div class="card" style="background:linear-gradient(180deg,#f7f9ff,#fff);animation:liteDiagIn .5s ease both;"><div style="font-size:.68rem;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.15rem;">Análise do período</div>${linhas.join('')||'<div style="font-size:.7rem;color:#94a3b8;padding:.5rem 0;">Sem dados suficientes para análise.</div>'}${fteBox}</div>`;
   const topSection=`<div class="grid grid-cols-1 lg:grid-cols-4 gap-3 mb-4 items-start"><div class="lg:col-span-3">${kpiGrid}</div><div class="lg:col-span-1">${analise}</div></div>`;
