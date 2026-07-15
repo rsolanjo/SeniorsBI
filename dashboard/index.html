@@ -248,7 +248,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v69'
+const APP_VERSION='v70'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -297,6 +297,8 @@ const LITE_PILARES_CC={
   ]
 }
 const LITE_TIPOS=['Sustentação','Projeto','Avulso']
+// Sinais de PROJETO/DEPLOY (novo, criação, implantação, migração…). Num contrato de Sustentação, isso é fora de escopo (pertence a Projetos).
+const LITE_DEPLOY_RE=/\bnov[oa]s?\b|cria[çc][ãa]o|\bcriar\b|\bcriad[oa]s?\b|implanta[çc]|implementa[çc]|\bdeploy\b|provisionamento|provision|rollout|migra[çc][ãa]o|migrar|reestrutura|expans[ãa]o|proxy revers|sd-?wan|assessment|pentest|instala[çc][ãa]o de (?:nov|um novo|uma nova)/i
 const LITE_SEED=[
   {id:'compagas-sg',cc:'71',nome:'Compagás — Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:47250,cor:'#166534',pilar:'susten'},
   {id:'mileto-sg',cc:'2807',nome:'Mileto — Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:45000,cor:'#2B4C9B',pilar:'susten'},
@@ -1187,10 +1189,13 @@ function liteData(){
     const franqP=(ct.franquia||0)*60*mf,saldo=franqP-used,uso=franqP?Math.round(used/franqP*100):0,fte=used/capFTE;
     const rhora=ct.franquia?(ct.valor||0)/ct.franquia:0,excedH=saldo<0?-saldo/60:0,excedR=excedH*rhora;
     const pilMin={},pilTk={},pilVal={},fora=[],tec={},tecTk={},ctTk=new Set(),foraTk=new Set();let custoUsado=0;
+    const isSust=/sustenta/i.test(ct.tipo||'');
     acts.forEach(a=>{const rate=liteTechRate(a.ag),val=(a.wh/60)*rate;custoUsado+=val;ctTk.add(a.tid);
       tec[a.ag]=(tec[a.ag]||0)+a.wh;(tecTk[a.ag]=tecTk[a.ag]||new Set()).add(a.tid);
-      const txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase(),p=pil.find(pl=>pl.kw.test(txt));
-      if(p){pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;(pilTk[p.nome]=pilTk[p.nome]||new Set()).add(a.tid);pilVal[p.nome]=(pilVal[p.nome]||0)+val}else{fora.push(a);foraTk.add(a.tid)}});
+      const txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();
+      const isDeploy=isSust&&LITE_DEPLOY_RE.test(txt);// novo deploy num contrato de sustentação = projeto (fora)
+      const p=isDeploy?null:pil.find(pl=>pl.kw.test(txt));
+      if(p){pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;(pilTk[p.nome]=pilTk[p.nome]||new Set()).add(a.tid);pilVal[p.nome]=(pilVal[p.nome]||0)+val}else{fora.push(Object.assign({},a,{motivo:isDeploy?'projeto':'sem-pilar'}));foraTk.add(a.tid)}});
     const pilTkN={},pilTids={};for(const k in pilTk){pilTkN[k]=pilTk[k].size;pilTids[k]=[...pilTk[k]]}
     const tecN={},tecTids={};for(const k in tecTk){tecN[k]=tecTk[k].size;tecTids[k]=[...tecTk[k]]}
     return {ct,pil,acts,used,franqP,saldo,uso,fte,rhora,excedR,valorP:(ct.valor||0)*mf,custoUsado,chamados:ctTk.size,foraTkN:foraTk.size,pilMin,pilTkN,pilTids,pilVal,tec,tecN,tecTids,fora,foraMin:fora.reduce((s,a)=>s+a.wh,0)};
@@ -1314,9 +1319,10 @@ window.liteForaDetalhe=function(cc){
   const titulo=x?`Fora de escopo — ${esc(x.ct.nome)}`:'Fora de escopo — todos os contratos';
   if(!list.length){liteOpenModal(titulo,'<div style="color:#166534;padding:1rem;text-align:center;">✓ Nenhuma atividade fora de escopo no período.</div>');return}
   list.sort((a,b)=>b.wh-a.wh);
-  const totMin=list.reduce((s,a)=>s+a.wh,0);
-  const rows=list.map(a=>`<tr><td style="white-space:nowrap;">${esc(a.iso.split('-').reverse().join('/'))}${a.hm?' '+esc(a.hm):''}</td><td style="font-weight:600;white-space:nowrap;">${esc((a.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="font-size:.66rem;color:#64748b;">${esc((a._ct||'').split('—')[0].trim())}</td><td>${esc(a.tid||'-')}</td><td style="white-space:nowrap;">${minToHM(a.wh)}h</td><td style="font-size:.66rem;color:#334155;">${esc(a.assunto||a.atv||a.cat||'-')}</td></tr>`).join('');
-  const inner=`<div style="font-size:.72rem;color:#991b1b;margin-bottom:.6rem;font-weight:700;">${list.length} atividade(s) · ${minToHM(totMin)}h fora dos pilares contratados.</div><div style="overflow-x:auto;max-height:60vh;"><table><thead><tr><th>Data</th><th>Técnico</th><th>Contrato</th><th>Chamado</th><th>Horas</th><th>Descrição</th></tr></thead><tbody>${rows}</tbody></table></div><div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;">Fora de escopo = atividade cujo assunto/categoria não bate com nenhum pilar do contrato. Revise se deveria ser cobrada à parte, reclassificada, ou se falta ajustar as palavras-chave do pilar.</div>`;
+  const totMin=list.reduce((s,a)=>s+a.wh,0),projMin=list.filter(a=>a.motivo==='projeto').reduce((s,a)=>s+a.wh,0),semPilMin=totMin-projMin;
+  const motBadge=m=>m==='projeto'?'<span class="badge" style="background:#ede9fe;color:#6b21a8;font-weight:700;" title="Novo deploy/criação num contrato de Sustentação — pertence a Projetos">Projeto/Deploy</span>':'<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700;" title="Assunto não bateu com nenhum pilar — revisar ou ajustar palavra-chave">Sem pilar</span>';
+  const rows=list.map(a=>`<tr><td style="white-space:nowrap;">${esc(a.iso.split('-').reverse().join('/'))}${a.hm?' '+esc(a.hm):''}</td><td style="font-weight:600;white-space:nowrap;">${esc((a.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="font-size:.66rem;color:#64748b;">${esc((a._ct||'').split('—')[0].trim())}</td><td>${esc(a.tid||'-')}</td><td style="white-space:nowrap;">${minToHM(a.wh)}h</td><td>${motBadge(a.motivo)}</td><td style="font-size:.66rem;color:#334155;">${esc(a.assunto||a.atv||a.cat||'-')}</td></tr>`).join('');
+  const inner=`<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem;"><span style="font-size:.72rem;color:#991b1b;font-weight:700;">${list.length} atividade(s) · ${minToHM(totMin)}h fora do escopo.</span>${projMin?`<span class="badge" style="background:#ede9fe;color:#6b21a8;font-weight:700;">Projeto/Deploy: ${minToHM(projMin)}h</span>`:''}${semPilMin?`<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700;">Sem pilar: ${minToHM(semPilMin)}h</span>`:''}</div><div style="overflow-x:auto;max-height:60vh;"><table><thead><tr><th>Data</th><th>Técnico</th><th>Contrato</th><th>Chamado</th><th>Horas</th><th>Motivo</th><th>Descrição</th></tr></thead><tbody>${rows}</tbody></table></div><div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;"><b>Projeto/Deploy</b> = atividade de <b>novo/criação/implantação/migração</b> num contrato de <b>Sustentação</b> (sustentação só mantém o que existe; deploy é Projeto). <b>Sem pilar</b> = assunto não bateu com nenhum pilar — revise ou ajuste a palavra-chave no editor de Escopo.</div>`;
   liteOpenModal(titulo,inner);
 };
 // ── Relatórios (Excel / PDF) ──
