@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v77'
+const APP_VERSION='v78'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1407,55 +1407,132 @@ window.liteForaDetalhe=function(cc){
   liteOpenModal(titulo,inner);
 };
 // ── Relatórios (Excel / PDF) ──
-const LITE_REPS={exec:'Resumo Executivo',tecnico:'Horas por Técnico',fora:'Fora de Escopo',avulsas:'Horas Avulsas (a cobrar)',completo:'Relatório Completo'};
+const LITE_REPS={exec:'Relatório Executivo',avulsas:'Horas Avulsas',tecnico:'Horas por Técnico',contrato:'Horas por Contrato',financeiro:'Relatório Financeiro',completo:'Relatório Completo'};
+// Agrega os números da Lite para uma janela de datas arbitrária (reusa liteData trocando o período temporariamente)
+function liteAggWindow(s,e){const os=MD_ATV_START,oe=MD_ATV_END;MD_ATV_START=s;MD_ATV_END=e;let d;try{d=liteData()}finally{MD_ATV_START=os;MD_ATV_END=oe}return d;}
+function liteMonthBounds(y,m){const pad=n=>String(n).padStart(2,'0'),last=new Date(y,m+1,0).getDate();return[`${y}-${pad(m+1)}-01`,`${y}-${pad(m+1)}-${pad(last)}`];}
+// Janelas do comparativo: 3 últimos meses (terminando no mês do período) + o ano inteiro
+function liteCompWindows(endIso){
+  const base=(endIso&&/^\d{4}-\d{2}/.test(endIso))?endIso:new Date().toISOString().slice(0,10);
+  const y=+base.slice(0,4),m=+base.slice(5,7)-1,MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'],wins=[];
+  for(let i=2;i>=0;i--){const dt=new Date(y,m-i,1),yy=dt.getFullYear(),mm=dt.getMonth(),b=liteMonthBounds(yy,mm);wins.push({label:MES[mm]+'/'+String(yy).slice(2),s:b[0],e:b[1]});}
+  wins.push({label:'Ano '+y,s:`${y}-01-01`,e:`${y}-12-31`});
+  return wins;
+}
 function liteReportSecoes(tipo){
   const d=liteData(),money=LITE_VAL,secs=[];
-  if(tipo==='exec'||tipo==='completo'){
-    const head=['Contrato','CC','Tipo','Franquia (h)','Consumido (h)','Saldo (h)','Uso %','FTE','Fora escopo (h)'];if(money)head.push('Valor/mês (R$)','R$/h','Excedente (R$)');
-    const rows=d.contratos.map(x=>{const r=[x.ct.nome,x.ct.cc,x.ct.tipo,x.ct.franquia,hmSigned(x.used),hmSigned(x.saldo),x.uso+'%',x.fte.toFixed(1),hmSigned(x.foraMin)];if(money)r.push(fmtR(x.ct.valor),fmtR(Math.round(x.rhora)),x.excedR?fmtR(Math.round(x.excedR)):'-');return r});
-    secs.push({nome:'Resumo por contrato',head,rows});
+  const cNome=x=>x.ct.nome,cCurto=x=>x.ct.nome.split('—')[0].trim(),tecCurto=n=>(n||'').split(' ').slice(0,2).join(' ');
+  // Resumo por contrato (Executivo, Horas por Contrato, Completo)
+  if(tipo==='exec'||tipo==='contrato'||tipo==='completo'){
+    const head=['Contrato','CC','Tipo','Franquia (h)','Consumido','Saldo','Uso %','FTE','Chamados','Avulsas'];if(money)head.push('Receita (R$)','Custo HH (R$)','Margem');
+    const rows=d.contratos.map(x=>{const av=(d.avulsasByCC&&d.avulsasByCC[x.ct.cc])||0,rec=x.valorP,cst=x.custoUsado,mg=rec?Math.round((rec-cst)/rec*100)+'%':'—';const r=[cNome(x),x.ct.cc,x.ct.tipo,x.ct.franquia,minToHM(x.used)+'h',hmSigned(x.saldo)+'h',x.uso+'%',x.fte.toFixed(1),x.chamados,minToHM(av)+'h'];if(money)r.push(fmtR(Math.round(rec)),fmtR(Math.round(cst)),mg);return r});
+    const tot=['TOTAL','','','',minToHM(d.totUsed)+'h',hmSigned(d.totFranq-d.totUsed)+'h',(d.totFranq?Math.round(d.totUsed/d.totFranq*100):0)+'%',d.totFte.toFixed(1),'—',minToHM(d.avulsasMin)+'h'];if(money)tot.push(fmtR(Math.round(d.totVal)),fmtR(Math.round(d.totCusto)),'');
+    secs.push({nome:'Resumo por contrato',head,rows,tot});
   }
+  // Escopo (pilares) por contrato (Horas por Contrato, Completo)
+  if(tipo==='contrato'||tipo==='completo'){
+    d.contratos.forEach(x=>{
+      const head=['Pilar','Horas','Chamados','% do consumo'];if(money)head.push('Custo (R$)');
+      const rows=x.pil.map(pl=>{const m=x.pilMin[pl.nome]||0;if(m<=0)return null;const r=[pl.nome,minToHM(m)+'h',x.pilTkN[pl.nome]||0,(x.used?Math.round(m/x.used*100):0)+'%'];if(money)r.push(fmtR(Math.round(x.pilVal[pl.nome]||0)));return r}).filter(Boolean);
+      if(x.foraMin>0){const r=['Fora de escopo',minToHM(x.foraMin)+'h',x.foraTkN,(x.used?Math.round(x.foraMin/x.used*100):0)+'%'];if(money)r.push('—');rows.push(r);}
+      secs.push({nome:'Escopo — '+cCurto(x),head,rows});
+    });
+  }
+  // Comparativo: últimos 3 meses + ano (Executivo, Completo)
+  if(tipo==='exec'||tipo==='completo'){
+    const wins=liteCompWindows(MD_ATV_END),aggs=wins.map(w=>({w,d:liteAggWindow(w.s,w.e)}));
+    const head=['Indicador',...aggs.map(a=>a.w.label)],mrow=(lbl,fn)=>[lbl,...aggs.map(a=>fn(a.d))];
+    const rows=[mrow('H.H consumido',x=>minToHM(x.totUsed)+'h'),mrow('Horas avulsas',x=>minToHM(x.avulsasMin)+'h'),mrow('Chamados (c/ atividade)',x=>fmt(x.totCh)),mrow('FTE',x=>x.totFte.toFixed(1))];
+    if(money){rows.push(mrow('Receita + avulsas',x=>fmtR(Math.round(x.receitaPer))),mrow('Custo (HH+avulsas)',x=>fmtR(Math.round(x.totCusto+x.avulsasPagarR))),mrow('Margem',x=>{const c=x.totCusto+x.avulsasPagarR;return x.receitaPer?Math.round((x.receitaPer-c)/x.receitaPer*100)+'%':'—'}));}
+    secs.push({nome:'Comparativo — últimos 3 meses e ano',head,rows,note:'Calculado sobre todas as atividades carregadas; chamados contados por atividade (quem lançou o apontamento).'});
+  }
+  // Horas avulsas: consolidação (Executivo resumo, Horas Avulsas, Completo)
+  if(tipo==='exec'||tipo==='avulsas'||tipo==='completo'){
+    const fatCli={},fatCliReal={},pagTec={},pagTecReal={};
+    d.avulsas.forEach(a=>{const cli=(a.cliente||'-').split('/')[0].trim();fatCli[cli]=(fatCli[cli]||0)+(+a.cobrar||0);fatCliReal[cli]=(fatCliReal[cli]||0)+(a.realMin||0);const t=tecCurto(a.ag);pagTec[t]=(pagTec[t]||0)+(+a.pagar||0);pagTecReal[t]=(pagTecReal[t]||0)+(a.realMin||0)});
+    secs.push({nome:'Avulsas — a faturar por cliente',head:['Cliente','Trabalhado','A cobrar'],rows:Object.entries(fatCli).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,minToHM(fatCliReal[k])+'h',v+'h']),tot:['TOTAL',minToHM(Object.values(fatCliReal).reduce((s,x)=>s+x,0))+'h',d.avulsasCobrarH+'h']});
+    secs.push({nome:'Avulsas — a pagar por técnico',head:['Técnico','Trabalhado','A pagar'],rows:Object.entries(pagTec).sort((a,b)=>(pagTecReal[b[0]]||0)-(pagTecReal[a[0]]||0)).map(([k,v])=>[k,minToHM(pagTecReal[k])+'h',(Math.round(v*100)/100)+'h']),tot:['TOTAL',minToHM(Object.values(pagTecReal).reduce((s,x)=>s+x,0))+'h',(Math.round(d.avulsasPagarH*100)/100)+'h']});
+  }
+  // Horas avulsas: detalhe (Horas Avulsas, Completo)
+  if(tipo==='avulsas'||tipo==='completo'){
+    const head=['Chamado','CC','Cliente','Contrato','Status','Data','Início','Fim','Comercial','Trabalhado','Técnico','A Cobrar (h)','A Pagar (h)','Assunto','Validado'];
+    const rows=d.avulsas.map(a=>[a.tid||'-',a.cc||'',a.cliente||'',a.contrato?a.contrato.split('—').slice(1).join('—').trim()||a.contrato:'',a.status||'',a.dataBR?liteDateOnly(a.dataBR):brDate(a.iso),a.hi||'FALTANDO',a.hf||'FALTANDO',a.comercial==null?'-':a.comercial?'Sim':'Não',a.realMin?minToHM(a.realMin)+'h':'',tecCurto(a.ag),a.cobrar,a.pagar,a.assunto||a.desc||'',a.aprov===true?'Validado':'']);
+    secs.push({nome:'Detalhe das horas avulsas (a cobrar)',head,rows});
+  }
+  // Horas por técnico (Horas por Técnico, Completo)
   if(tipo==='tecnico'||tipo==='completo'){
     const head=['Técnico','Atividades','Horas'];if(money)head.push('Custo-hora (R$)','Valor (R$)');
-    const rows=d.tecnicos.map(t=>{const r=[t.nome,t.n,minToHM(t.min)+'h'];if(money)r.push(t.rate?fmtR(Math.round(t.rate)):'(sem salário)',t.rate?fmtR(Math.round(t.valor)):'-');return r});
-    secs.push({nome:'Horas e valor por técnico',head,rows});
-  }
-  if(tipo==='fora'||tipo==='completo'){
-    const head=['Contrato','Data','Técnico','Chamado','Horas','Descrição'];
-    const rows=d.contratos.flatMap(x=>x.fora.map(a=>[x.ct.nome,a.iso.split('-').reverse().join('/'),(a.ag||'').split(' ').slice(0,2).join(' '),a.tid||'-',minToHM(a.wh)+'h',(a.assunto||a.atv||a.cat||'-')]));
-    secs.push({nome:'Atividades fora de escopo',head,rows});
-  }
-  if(tipo==='tecnico'||tipo==='completo'){
+    const rows=d.tecnicos.map(t=>{const r=[t.nome,t.n,minToHM(t.min)+'h'];if(money)r.push(t.rate?fmtR2(t.rate):'(sem salário)',t.rate?fmtR(Math.round(t.valor)):'-');return r});
+    secs.push({nome:'Horas e valor por técnico',head,rows,tot:money?['TOTAL','',minToHM(d.totUsed)+'h','',fmtR(Math.round(d.totTecVal))]:['TOTAL','',minToHM(d.totUsed)+'h']});
     const head2=['Contrato','Técnico','Horas'];if(money)head2.push('Valor (R$)');
-    const rows2=[];d.contratos.forEach(x=>Object.entries(x.tec||{}).sort((a,b)=>b[1]-a[1]).forEach(([n,m])=>{const r=liteTechRate(n),row=[x.ct.nome,(n||'').split(' ').slice(0,2).join(' '),minToHM(m)+'h'];if(money)row.push(r?fmtR(Math.round((m/60)*r)):'-');rows2.push(row)}));
+    const rows2=[];d.contratos.forEach(x=>Object.entries(x.tec||{}).sort((a,b)=>b[1]-a[1]).forEach(([n,m])=>{const rt=liteTechRate(n),row=[cCurto(x),tecCurto(n),minToHM(m)+'h'];if(money)row.push(rt?fmtR(Math.round((m/60)*rt)):'-');rows2.push(row)}));
     secs.push({nome:'Horas por técnico em cada contrato',head:head2,rows:rows2});
   }
-  if(tipo==='avulsas'||tipo==='completo'){
-    const fatCli={},pagTec={};
-    d.avulsas.forEach(a=>{const cli=(a.cliente||'-').split('/')[0].trim();fatCli[cli]=(fatCli[cli]||0)+(+a.cobrar||0);const t=(a.ag||'-').split(' ').slice(0,2).join(' ');pagTec[t]=(pagTec[t]||0)+(+a.pagar||0)});
-    secs.push({nome:'A faturar por cliente',head:['Cliente','Horas a cobrar'],rows:Object.entries(fatCli).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v+'h'])});
-    secs.push({nome:'A pagar por técnico',head:['Técnico','Horas a pagar'],rows:Object.entries(pagTec).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,(Math.round(v*100)/100)+'h'])});
-    const head=['Chamado','CC','Cliente','Contrato','Status','Data','Início','Fim','Horário comercial','Duração','Técnico','A Cobrar (h)','A Pagar (h)','Assunto','Validado'];
-    const rows=d.avulsas.map(a=>[a.tid||'-',a.cc||'',a.cliente||'',a.contrato||'',a.status||'',a.dataBR?liteDateOnly(a.dataBR):brDate(a.iso),a.hi||'FALTANDO',a.hf||'FALTANDO',a.comercial==null?'-':a.comercial?'Sim (verificar)':'Não',a.dur?minToHM(a.dur)+'h':'',(a.ag||'').split(' ').slice(0,2).join(' '),a.cobrar,a.pagar,a.assunto||a.desc||'',a.aprov===true?'Validado':'']);
-    secs.push({nome:'Detalhe das horas avulsas (a cobrar)',head,rows});
+  // Relatório Financeiro (Financeiro, Completo)
+  if(tipo==='financeiro'||tipo==='completo'){
+    if(money){
+      const avR={};d.avulsas.forEach(a=>{avR[a.cc]=avR[a.cc]||{fat:0,pag:0};avR[a.cc].fat+=a.faturarR||0;avR[a.cc].pag+=a.pagarR||0});
+      const head=['Contrato','Receita contratual','Avulsas a faturar','Custo HH','Custo avulsas','Margem (R$)','Margem %'];
+      const rows=d.contratos.map(x=>{const rc=x.valorP,af=(avR[x.ct.cc]||{}).fat||0,ap=(avR[x.ct.cc]||{}).pag||0,ch=x.custoUsado,rec=rc+af,cst=ch+ap,mg=rec-cst;return[cCurto(x),fmtR(Math.round(rc)),fmtR(Math.round(af)),fmtR(Math.round(ch)),fmtR(Math.round(ap)),fmtR(Math.round(mg)),rec?Math.round(mg/rec*100)+'%':'—']});
+      const totRec=d.totVal+d.avulsasFaturarR,totCst=d.totCusto+d.avulsasPagarR,totMg=totRec-totCst;
+      secs.push({nome:'Demonstrativo por contrato',head,rows,tot:['TOTAL',fmtR(Math.round(d.totVal)),fmtR(Math.round(d.avulsasFaturarR)),fmtR(Math.round(d.totCusto)),fmtR(Math.round(d.avulsasPagarR)),fmtR(Math.round(totMg)),totRec?Math.round(totMg/totRec*100)+'%':'—']});
+      secs.push({nome:'Resumo financeiro do período',head:['Indicador','Valor'],rows:[['Receita contratual',fmtR(Math.round(d.totVal))],['(+) Avulsas a faturar',fmtR(Math.round(d.avulsasFaturarR))],['(−) Avulsas a pagar aos técnicos',fmtR(Math.round(d.avulsasPagarR))],['(=) Receita do período',fmtR(Math.round(d.receitaPer))],['Custo de mão de obra (HH consumido)',fmtR(Math.round(d.totCusto))],['(+) Custo avulsas (a pagar)',fmtR(Math.round(d.avulsasPagarR))],['(=) Custo total',fmtR(Math.round(d.totCusto+d.avulsasPagarR))],['Margem bruta',fmtR(Math.round(d.receitaPer-(d.totCusto+d.avulsasPagarR)))],['Margem %',(d.receitaPer?Math.round((d.receitaPer-(d.totCusto+d.avulsasPagarR))/d.receitaPer*100):0)+'%']]});
+      secs.push({nome:'Custo de mão de obra por técnico',head:['Técnico','Horas','Custo-hora','Custo total'],rows:d.tecnicos.filter(t=>t.rate>0).map(t=>[t.nome,minToHM(t.min)+'h',fmtR2(t.rate),fmtR(Math.round(t.valor))]),tot:['TOTAL',minToHM(d.totUsed)+'h','',fmtR(Math.round(d.totTecVal))]});
+    } else if(tipo==='financeiro'){
+      secs.push({nome:'Relatório Financeiro',head:['Aviso'],rows:[['Revele os valores (senha 123) no topo do painel antes de gerar o relatório financeiro.']]});
+    }
   }
   return {secoes:secs,d};
 }
+// Nome de arquivo: "<Nome do relatório> <AAAA-MM-DD>.ext"
+function liteRepFile(tipo,ext){const nm=(LITE_REPS[tipo]||tipo).replace(/[\\/:*?"<>|]/g,'-'),dt=new Date().toISOString().slice(0,10);return `${nm} ${dt}.${ext}`;}
+function liteRepGuard(tipo){
+  if(!MD.loaded){toast('Sincronize o Milldesk antes.',false);return false}
+  if((MD.syncErrors||[]).some(e=>e.critical)){toast('Dados incompletos (falha de sincronização). Sincronize com sucesso antes de exportar.',false);return false}
+  if(tipo==='financeiro'&&!LITE_VAL){toast('Revele os valores (senha 123) para gerar o Relatório Financeiro.',false);return false}
+  return true;
+}
 window.liteReportXLS=function(tipo){
-  if(!MD.loaded){toast('Sincronize o Milldesk antes.',false);return}
-  const {secoes}=liteReportSecoes(tipo),sep=';',q=v=>`"${String(v).replace(/"/g,'""')}"`,L=[q('SeniorsBI Lite — '+(LITE_REPS[tipo]||tipo)),q('Período: '+(MD_ATV_START||'')+' a '+(MD_ATV_END||'')),''];
-  secoes.forEach(s=>{L.push(q(s.nome));L.push(s.head.map(q).join(sep));s.rows.forEach(r=>L.push(r.map(q).join(sep)));L.push('')});
+  if(!liteRepGuard(tipo))return;
+  const {secoes}=liteReportSecoes(tipo),sep=';',q=v=>`"${String(v).replace(/"/g,'""')}"`;
+  const stamp=new Date().toLocaleString('pt-BR');
+  const L=[q('Grupo Seniors — SeniorsBI · '+(LITE_REPS[tipo]||tipo)),q('Período: '+brDate(MD_ATV_START)+' a '+brDate(MD_ATV_END)),q('Extraído em: '+stamp)+(LITE_VAL?'':' '+q('(valores ocultos)')),''];
+  secoes.forEach(s=>{L.push(q(s.nome));if(s.note)L.push(q(s.note));L.push(s.head.map(q).join(sep));s.rows.forEach(r=>L.push(r.map(q).join(sep)));if(s.tot)L.push(s.tot.map(q).join(sep));L.push('')});
   const csv='﻿'+L.join('\r\n'),blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download='Lite_'+tipo+'_'+(MD_ATV_START||'')+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);toast('Excel exportado.');
+  a.href=url;a.download=liteRepFile(tipo,'csv');document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);toast('Excel exportado: '+a.download);
 };
 window.liteReportPDF=function(tipo){
-  if(!MD.loaded){toast('Sincronize o Milldesk antes.',false);return}
+  if(!liteRepGuard(tipo))return;
   const {secoes,d}=liteReportSecoes(tipo);
-  const secHTML=secoes.map(s=>`<h2>${s.nome}</h2><table><thead><tr>${s.head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${s.rows.map(r=>`<tr>${r.map(c=>`<td>${String(c)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${s.head.length}">—</td></tr>`}</tbody></table>`).join('');
-  const kpis=(tipo==='exec'||tipo==='completo')?`<div class="kpis"><span><b>${minToHM(d.totUsed)}h</b> consumido</span><span><b>${hmSigned(d.totFranq-d.totUsed)}h</b> saldo</span><span><b>${d.totFte.toFixed(1)}</b> FTE</span><span><b>${minToHM(d.totFora)}h</b> fora de escopo</span>${LITE_VAL?`<span><b>${fmtR(d.totVal)}</b>/mês</span>`:''}</div>`:'';
-  const doc=`<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><title>Lite — ${LITE_REPS[tipo]||tipo}</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;margin:24px;}h1{font-size:17px;margin:0 0 2px;}h2{font-size:12.5px;margin:16px 0 6px;color:#2B4C9B;border-bottom:2px solid #e2e8f0;padding-bottom:3px;}.sub{color:#64748b;font-size:11px;margin-bottom:8px;}.kpis{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;margin:8px 0 4px;}.kpis span{background:#f1f5f9;padding:4px 8px;border-radius:5px;}table{border-collapse:collapse;width:100%;font-size:10px;margin-bottom:6px;}th,td{border:1px solid #e2e8f0;padding:3px 6px;text-align:left;}th{background:#f8fafc;}@media print{.noprint{display:none;}}</style></head><body><h1>Grupo Seniors — SeniorsBI Lite</h1><div class="sub">${LITE_REPS[tipo]||tipo} · Período ${MD_ATV_START||'—'} a ${MD_ATV_END||'—'}${LITE_VAL?'':' · (valores ocultos)'}</div>${kpis}${secHTML}<button class="noprint" onclick="window.print()" style="margin-top:16px;padding:8px 16px;cursor:pointer;">Imprimir / Salvar PDF</button></body></html>`;
+  const cell=c=>`<td>${String(c==null?'':c)}</td>`;
+  const secHTML=secoes.map(s=>`<h2>${esc(s.nome)}</h2>${s.note?`<div class="note">${esc(s.note)}</div>`:''}<table><thead><tr>${s.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${s.rows.length?s.rows.map(r=>`<tr>${r.map(cell).join('')}</tr>`).join(''):`<tr><td colspan="${s.head.length}">—</td></tr>`}</tbody>${s.tot?`<tfoot><tr class="tot">${s.tot.map(cell).join('')}</tr></tfoot>`:''}</table>`).join('');
+  const showKpi=(tipo==='exec'||tipo==='completo'||tipo==='contrato'||tipo==='financeiro');
+  const kpiStrip=showKpi?`<div class="kpis"><div class="kpi"><div class="v">${minToHM(d.totUsed)}h</div><div class="k">H.H consumido</div></div><div class="kpi"><div class="v">${d.totFte.toFixed(1)}</div><div class="k">FTE</div></div><div class="kpi"><div class="v">${minToHM(d.avulsasMin)}h</div><div class="k">Horas avulsas</div></div><div class="kpi"><div class="v">${fmt(d.totSolic)}</div><div class="k">Chamados</div></div>${LITE_VAL?`<div class="kpi"><div class="v">${fmtR(Math.round(d.receitaPer))}</div><div class="k">Receita período</div></div><div class="kpi"><div class="v">${fmtR(Math.round(d.totCusto+d.avulsasPagarR))}</div><div class="k">Custo total</div></div>`:''}</div>`:'';
+  const now=new Date(),stampD=now.toLocaleDateString('pt-BR'),stampT=now.toLocaleTimeString('pt-BR').slice(0,5),perTxt=brDate(MD_ATV_START)+' a '+brDate(MD_ATV_END),title=(LITE_REPS[tipo]||tipo)+' - '+now.toISOString().slice(0,10);
+  const css=`*{box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;margin:0;padding:26px 30px;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .hd{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #2B4C9B;padding-bottom:12px;}
+  .hd .l{display:flex;align-items:center;gap:14px;}.hd img{height:50px;width:auto;}
+  .hd .t1{font-size:19px;font-weight:800;letter-spacing:-.3px;}.hd .t2{font-size:10.5px;color:#2B4C9B;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;margin-top:2px;}
+  .hd .meta{text-align:right;font-size:10.5px;color:#64748b;line-height:1.65;}.hd .meta b{color:#0f172a;}
+  .kpis{display:flex;gap:9px;flex-wrap:wrap;margin:15px 0 4px;}
+  .kpi{flex:1;min-width:110px;border:1px solid #e8edf5;border-left:4px solid #2B4C9B;border-radius:7px;padding:8px 11px;background:#fbfcfe;}
+  .kpi .v{font-size:16px;font-weight:800;color:#2B4C9B;}.kpi .k{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin-top:1px;}
+  h2{font-size:12px;margin:18px 0 6px;color:#0f172a;display:flex;align-items:center;gap:7px;}h2::before{content:'';display:inline-block;width:5px;height:13px;background:#2B4C9B;border-radius:2px;}
+  .note{font-size:9px;color:#94a3b8;margin:-3px 0 5px;}
+  table{border-collapse:collapse;width:100%;font-size:9.5px;margin-bottom:4px;}
+  th,td{border:1px solid #e8edf5;padding:4px 7px;text-align:left;vertical-align:top;}
+  th{background:#2B4C9B;color:#fff;font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:.3px;}
+  tbody tr:nth-child(even){background:#f7f9fc;}tfoot .tot td{font-weight:800;background:#eef2f9;}
+  .ft{margin-top:20px;border-top:1px solid #e2e8f0;padding-top:8px;font-size:8.5px;color:#94a3b8;display:flex;justify-content:space-between;}
+  @media print{.noprint{display:none;}body{padding:0;}@page{margin:13mm;}}`;
+  const doc=`<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>
+  <div class="hd"><div class="l"><img src="${location.origin}/logo.png" onerror="this.style.display='none'"><div><div class="t1">Grupo Seniors</div><div class="t2">SeniorsBI · ${esc(LITE_REPS[tipo]||tipo)}</div></div></div><div class="meta"><div>Período: <b>${perTxt}</b></div><div>Extraído em <b>${stampD} ${stampT}</b></div>${LITE_VAL?'':'<div>(valores ocultos)</div>'}</div></div>
+  ${kpiStrip}${secHTML}
+  <div class="ft"><span>SeniorsBI Lite · relatório gerado automaticamente</span><span>${stampD} ${stampT}</span></div>
+  <button class="noprint" onclick="window.print()" style="position:fixed;bottom:16px;right:16px;padding:10px 18px;cursor:pointer;background:#2B4C9B;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;box-shadow:0 4px 12px rgba(0,0,0,.25);">⬇ Imprimir / Salvar PDF</button>
+  </body></html>`;
   const w=window.open('','_blank');if(!w){toast('Permita pop-ups para gerar o PDF.',false);return}
-  w.document.write(doc);w.document.close();setTimeout(()=>{try{w.focus();w.print()}catch(e){}},400);
+  w.document.write(doc);w.document.close();setTimeout(()=>{try{w.focus();w.print()}catch(e){}},500);
 };
 function rLiteAvulsas(){
   const bh=(bg,col)=>`cursor:pointer;background:${bg};color:${col};border:none;border-radius:.4rem;padding:.33rem .7rem;font-size:.68rem;font-weight:700;`;
@@ -1486,8 +1563,8 @@ function rLiteAvulsas(){
 }
 function rLiteRelatorios(){
   const card=(tipo,desc,ic,cor)=>`<div class="card" style="border-top:3px solid ${cor};"><div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;"><i data-lucide="${ic}" style="width:1rem;height:1rem;color:${cor};"></i><div style="font-size:.85rem;font-weight:800;color:#0f172a;">${LITE_REPS[tipo]}</div></div><div style="font-size:.66rem;color:#64748b;margin-bottom:.7rem;min-height:2.2rem;">${desc}</div><div style="display:flex;gap:.4rem;"><button onclick="liteReportXLS('${tipo}')" style="flex:1;cursor:pointer;background:#dcfce7;color:#166534;border:none;border-radius:.4rem;padding:.42rem;font-size:.7rem;font-weight:700;">⬇ Excel</button><button onclick="liteReportPDF('${tipo}')" style="flex:1;cursor:pointer;background:#fee2e2;color:#991b1b;border:none;border-radius:.4rem;padding:.42rem;font-size:.7rem;font-weight:700;">⬇ PDF</button></div></div>`;
-  return `<div class="card mb-4"><div style="font-size:.95rem;font-weight:800;color:#0f172a;">Relatórios</div><div style="font-size:.66rem;color:#64748b;margin-top:.25rem;">Relatórios personalizados da Lite no período selecionado (barra do topo). <b>Excel</b> baixa CSV; <b>PDF</b> abre para imprimir/salvar. Os valores em R$ só entram se estiverem revelados com a senha.</div></div>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${card('exec','Resumo por contrato: consumo vs. franquia, saldo, FTE e fora de escopo'+(LITE_VAL?', com valores.':' (sem valores).'),'file-bar-chart-2','#2B4C9B')}${card('tecnico','Horas trabalhadas por cada técnico'+(LITE_VAL?' e o valor (custo-hora × horas).':' no período.'),'users','#0891b2')}${card('fora','Todas as atividades fora do escopo contratado — técnico, chamado e descrição.','triangle-alert','#dc2626')}${card('avulsas','Horas a cobrar (fora da franquia): técnico, data, descrição e aprovação.','receipt','#7c3aed')}${card('completo','Tudo em um arquivo: contratos + técnicos + fora de escopo + avulsas.','layers','#0f766e')}</div>`;
+  return `<div class="card mb-4"><div style="font-size:.95rem;font-weight:800;color:#0f172a;">Relatórios</div><div style="font-size:.66rem;color:#64748b;margin-top:.25rem;">Relatórios profissionais da Lite no período selecionado (barra do topo), com logo, cabeçalho e data de extração. <b>Excel</b> baixa CSV; <b>PDF</b> abre para imprimir/salvar. Os valores em R$ só entram se estiverem revelados com a senha. O arquivo é nomeado com o relatório + a data.</div></div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${card('exec','Painel + Horas Avulsas do período, com comparativo dos últimos 3 meses e do ano.','file-bar-chart-2','#2B4C9B')}${card('avulsas','Horas a cobrar (fora da franquia): consolidação por cliente/técnico e detalhe com horas trabalhadas.','receipt','#7c3aed')}${card('tecnico','Horas trabalhadas por cada técnico'+(LITE_VAL?' e o valor (custo-hora × horas).':' no período.'),'users','#0891b2')}${card('contrato','Consumo por contrato com o detalhe de escopo (pilares) e chamados.','file-text','#0f766e')}${card('financeiro','Receita, custo de mão de obra, avulsas e margem — demonstrativo por contrato e resumo.'+(LITE_VAL?'':' (requer revelar valores)'),'landmark','#166534')}${card('completo','Tudo em um arquivo: executivo + técnico + contrato + financeiro + avulsas.','layers','#854d0e')}</div>`;
 }
 let LITE_CAD_AUTH=false;
 window.setLiteSub=function(s){if(s==='cadastro'&&!LITE_CAD_AUTH){const p=prompt('Cadastro (contratos e funcionários). Digite a senha:');if(p==null)return;if(p!=='123'){toast('Senha incorreta.',false);return}LITE_CAD_AUTH=true}LITE_SUB=s;renderContent()};
