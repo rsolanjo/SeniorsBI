@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v78'
+const APP_VERSION='v79'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1074,7 +1074,7 @@ function mdApprovalOf(r){
 // (tem location/CC, start/end datas, start_time/end_time, charge_hour, agent, requester). NÃO entram na franquia.
 async function mdFetchAvulsas(base){
   MD.avulsasErr='';let arr;
-  try{arr=await mdGet(`${base}/activitiesHoursToCharge`,{tries:4,timeout:30000})}// endpoint pesado: 4 tentativas + timeout maior
+  try{arr=await mdGet(`${base}/activitiesHoursToCharge`,{tries:4,timeout:90000})}// endpoint pesado (~MB, sem gzip): 4 tentativas + timeout alto
   catch(e){MD.avulsasErr='Falha ao buscar horas a cobrar: '+e.message+' (após 4 tentativas). Clique em Sincronizar para tentar de novo.';MD.avulsas=null;MD.avulsasKeys=[];throw e}
   if(arr&&arr.error){MD.avulsasErr='Milldesk retornou: '+arr.error;MD.avulsas=null;MD.avulsasKeys=[];throw new Error(arr.error)}
   if(!Array.isArray(arr)){MD.avulsasErr='Resposta inesperada do endpoint activitiesHoursToCharge.';MD.avulsas=null;MD.avulsasKeys=[];throw new Error('resposta inesperada')}
@@ -1089,30 +1089,36 @@ async function mdFetchTicketCats(base,tids){
   const need=[...new Set(tids)].filter(id=>id&&MD.tkCat[id]===undefined).slice(0,80)
   for(const id of need){try{const r=await fetch(`${base}/showTicket?id=${encodeURIComponent(id)}`).then(x=>x.json());MD.tkCat[id]=(r&&!r.error&&(r.category||r.subcategory))||''}catch(e){MD.tkCat[id]=''}}
 }
-window.mdSync=async function(){
+const MD_HEAVY_TTL=10*60*1000;// atividades/avulsas são ~12MB e IGNORAM a data → baixar 1x e reusar por 10min (força ao clicar Sincronizar)
+window.mdSync=async function(force){
   const cfg=getMD();if(!cfg.key){toast('Configure a chave da API Milldesk em Admin → Config Alertas.',false);setSection('admin');setSub('alertcfg');return}
   const[start,end]=mdPeriodRange(),base=cfg.base.replace(/\/+$/,'')+'/'+cfg.key
   MD.loading=true;MD.syncErrors=[];renderContent()
   const fail=(ep,msg,critical)=>MD.syncErrors.push({ep,msg:String(msg||'falha'),critical:!!critical});
+  const ativsFresh=!force&&MD.ativs&&MD.ativs.length&&MD.ativsHistTs&&(Date.now()-MD.ativsHistTs)<MD_HEAVY_TTL;
+  const avulsasFresh=!force&&MD.avulsas&&MD.avulsas.length&&MD.avulsasTs&&(Date.now()-MD.avulsasTs)<MD_HEAVY_TTL;
   try{
-    // 1) Chamados — base de status/contagem (crítico)
+    // 1) Chamados — leve e filtrado por data no servidor → sempre busca (crítico p/ status/contagem)
     let rawArr=[];
     try{rawArr=await mdFetchTicketsRange(base,start,end);
       MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag));
       const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});MD.backlog=Object.values(uniq).filter(t=>mdIsOpen(t.st))
     }catch(e){fail('Chamados',e.message,true)}
     if(!MES||TIME!=='picker')MES=start.slice(0,7)
-    // 2) Atividades = fonte das horas da Lite (crítico). Sem elas, não mostramos horas (evita número falso).
+    // 2) Atividades = fonte das horas da Lite (crítico). Endpoint ignora data → reusa se ainda fresco (evita rebaixar 12MB a cada troca de período).
     MD_ATV_START=start;MD_ATV_END=end
-    let ar={ativs:[]};try{ar=await fetchAtivs()}catch(e){ar={err:e.message}}
-    if(ar.err&&ar.err!=='no-key'){MD.ativs=[];try{mdApplyToD(rawArr)}catch(e){}fail('Atividades (horas)',ar.err,true)}
-    else{MD.ativs=ar.ativs||[];MD.ativsTs=Date.now();try{lsSet('sbi_md_ativs',{ts:MD.ativsTs,start,end,ativs:MD.ativs.slice(0,6000)})}catch(e){}mdApplyFromAtivs()}
+    if(ativsFresh){mdApplyFromAtivs()}
+    else{
+      let ar={ativs:[]};try{ar=await fetchAtivs()}catch(e){ar={err:e.message}}
+      if(ar.err&&ar.err!=='no-key'){MD.ativs=[];MD.ativsHistTs=0;try{mdApplyToD(rawArr)}catch(e){}fail('Atividades (horas)',ar.err,true)}
+      else{MD.ativs=ar.ativs||[];MD.ativsTs=MD.ativsHistTs=Date.now();try{lsSet('sbi_md_ativs',{ts:MD.ativsTs,start,end,ativs:MD.ativs.slice(0,6000)})}catch(e){}mdApplyFromAtivs()}
+    }
     // 3..5) complementares — não bloqueiam, mas registram se falharem
     try{MD.backlogFull=await mdFetchBacklog(base)}catch(e){MD.backlogFull=MD.backlogFull||[];fail('Backlog',e.message,false)}
     try{const tkK={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkK[t.id]=1});const ptids=(MD.ativs||[]).filter(a=>{const iso=mdActISO(a.start);return iso>=start&&iso<=end}).map(a=>a.tid).filter(id=>id&&!tkK[id]);await mdFetchTicketCats(base,ptids)}catch(e){}
     try{MD.chargeCli=await mdFetchCharge(base);mdApplyFromAtivs()}catch(e){}
-    // 6) Avulsas (horas a cobrar) — alimenta KPI/receita (crítico p/ números financeiros)
-    try{await mdFetchAvulsas(base)}catch(e){fail('Horas avulsas',MD.avulsasErr||e.message,true)}
+    // 6) Avulsas (horas a cobrar) — pesado e ignora data → reusa se fresco (crítico p/ números financeiros)
+    if(!avulsasFresh){try{await mdFetchAvulsas(base);MD.avulsasTs=Date.now()}catch(e){MD.avulsasTs=0;fail('Horas avulsas',MD.avulsasErr||e.message,true)}}
     MD.dataReliable=!MD.syncErrors.some(e=>e.critical)
     MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
     const lu=document.getElementById('lastUpdate');if(lu)lu.textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
@@ -1136,8 +1142,8 @@ async function fetchAtivs(){
   const parse=arr=>arr.map(r=>({tid:(r.id_ticket||r.ticket_id||''),atv:r.activity,tipo:r.typeofactivity,assunto:(r.ticket||''),desc:(r.activitiesdescription||r.description||''),ag:r.agent,loc:(r.location||r.local||''),start:r.start,hm:(r.start_time||''),wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour)})).filter(a=>a.ag);
   const ep='activitiesWorkedHours'; // traz location + agent + worked_hour por atividade (é o relatório do Milldesk)
   try{
-    let arr=await mdGet(`${base}/${ep}?start=${start}&end=${end}`,{timeout:30000});
-    if(arr&&arr.error)arr=await mdGet(`${base}/${ep}`,{timeout:30000});
+    let arr=await mdGet(`${base}/${ep}?start=${start}&end=${end}`,{tries:4,timeout:90000});// ~12MB sem gzip → timeout alto e mais tentativas
+    if(arr&&arr.error)arr=await mdGet(`${base}/${ep}`,{tries:4,timeout:90000});
     if(arr&&arr.error)return{err:arr.error};
     if(!Array.isArray(arr))return{err:'resposta inesperada'};
     try{MD.ativsRawN=arr.length;MD.ativsRaw=arr.slice(0,3)}catch(e){}
@@ -1158,7 +1164,7 @@ function rAtividades(){
   if((!MD.ativs||!MD.ativs.length)&&!MD.ativsLoading){const c=lsGet('sbi_md_ativs');if(c&&c.ativs){MD.ativs=c.ativs;MD.ativsTs=c.ts;if(c.start)MD_ATV_START=c.start;if(c.end)MD_ATV_END=c.end}}
   const cfg=getMD();
   const perTxt=MD_ATV_START===MD_ATV_END?brDate(MD_ATV_START):(brDate(MD_ATV_START)+' a '+brDate(MD_ATV_END));
-  const syncBtn=`<button onclick="mdSync()" class="act-btn" style="background:#2B4C9B;color:#fff;font-weight:700;">${(MD.ativsLoading||MD.loading)?'Sincronizando…':'⟳ Sincronizar'}</button>`;
+  const syncBtn=`<button onclick="mdSync(true)" class="act-btn" style="background:#2B4C9B;color:#fff;font-weight:700;">${(MD.ativsLoading||MD.loading)?'Sincronizando…':'⟳ Sincronizar'}</button>`;
   const tsTxt=MD.ativsTs?('atualizado '+new Date(MD.ativsTs).toLocaleString('pt-BR')):'';
   const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
     <span style="font-size:.92rem;font-weight:800;color:#0f172a;">Atividades ao vivo</span>
@@ -1578,7 +1584,7 @@ function liteChrome(){
   const times=[['mensal','Mensal parcial'],['diario','Hoje'],['semana','Últimos 7 dias'],['30d','Últimos 30 dias'],['anual','Anual'],['periodo','Data específica']].map(([k,l])=>`<button onclick="liteTime('${k}')" class="time-btn ${TIME===k?'active':''}">${l}</button>`).join('');
   const _r=(function(){try{return mdPeriodRange()}catch(e){return[MD_ATV_START,MD_ATV_END]}})();
   const periodoLabel=(_r&&_r[0])?`<span style="display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;color:#334155;font-weight:700;background:#eef2ff;border:1px solid #dbeafe;border-radius:.5rem;padding:.28rem .55rem;white-space:nowrap;"><i data-lucide="calendar" style="width:.78rem;height:.78rem;color:#2B4C9B;"></i>${_r[0]===_r[1]?brDate(_r[0]):brDate(_r[0])+' a '+brDate(_r[1])}</span>`:'';
-  const syncBtn=`<button onclick="mdSync()" title="Buscar novidades no Milldesk" style="cursor:pointer;border:1px solid #dbeafe;border-radius:.5rem;background:#fff;padding:.3rem .6rem;font-size:.68rem;font-weight:800;color:#2B4C9B;display:inline-flex;align-items:center;gap:.3rem;${(MD.loading||MD.ativsLoading)?'opacity:.6;pointer-events:none;':''}"><i data-lucide="refresh-cw" style="width:.8rem;height:.8rem;${(MD.loading||MD.ativsLoading)?'animation:spin .8s linear infinite;':''}"></i>${(MD.loading||MD.ativsLoading)?'Sincronizando…':'Sincronizar'}</button>`;
+  const syncBtn=`<button onclick="mdSync(true)" title="Buscar novidades no Milldesk" style="cursor:pointer;border:1px solid #dbeafe;border-radius:.5rem;background:#fff;padding:.3rem .6rem;font-size:.68rem;font-weight:800;color:#2B4C9B;display:inline-flex;align-items:center;gap:.3rem;${(MD.loading||MD.ativsLoading)?'opacity:.6;pointer-events:none;':''}"><i data-lucide="refresh-cw" style="width:.8rem;height:.8rem;${(MD.loading||MD.ativsLoading)?'animation:spin .8s linear infinite;':''}"></i>${(MD.loading||MD.ativsLoading)?'Sincronizando…':'Sincronizar'}</button>`;
   const _de=(document.getElementById('dtInicio')||{}).value||'',_ate=(document.getElementById('dtFim')||{}).value||'';
   const periodoRow=TIME==='periodo'?`<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:.5rem;background:#fff;border:1px solid #e2e8f0;border-radius:.55rem;padding:.42rem .55rem;"><span style="font-size:.66rem;color:#64748b;font-weight:700;">Criação da atividade — de</span><input type="date" id="litePDe" value="${_de}" style="font-size:.7rem;padding:.22rem .4rem;border:1px solid #e2e8f0;border-radius:.4rem;"><span style="font-size:.66rem;color:#64748b;">até</span><input type="date" id="litePAte" value="${_ate}" style="font-size:.7rem;padding:.22rem .4rem;border:1px solid #e2e8f0;border-radius:.4rem;"><button onclick="liteBuscarPeriodo()" style="cursor:pointer;border:none;border-radius:.4rem;padding:.3rem .8rem;font-size:.68rem;font-weight:800;background:#2B4C9B;color:#fff;">Buscar</button></div>`:'';
   const valBtn=`<button onclick="liteToggleVal()" style="cursor:pointer;border:none;border-radius:.5rem;padding:.34rem .7rem;font-size:.7rem;font-weight:800;background:${LITE_VAL?'#fef9c3':'#e0e7ff'};color:${LITE_VAL?'#854d0e':'#3730a3'};display:inline-flex;align-items:center;gap:.3rem;"><i data-lucide="${LITE_VAL?'eye-off':'eye'}" style="width:.8rem;height:.8rem;"></i>${LITE_VAL?'Ocultar valores':'Mostrar valores'}</button>`;
@@ -1621,7 +1627,7 @@ function rLiteContratos(){
 // Banner de confiabilidade: se algum fetch crítico falhou, avisa em destaque e NÃO deixa os números passarem por confiáveis.
 function liteRelBanner(){
   const errs=(MD.syncErrors||[]).filter(e=>e.critical);if(!errs.length)return'';
-  return `<div class="card mb-4" style="background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="wifi-off" style="width:1rem;height:1rem;color:#dc2626;"></i><div style="font-size:.76rem;font-weight:800;color:#991b1b;">Dados incompletos — números podem estar errados</div><button onclick="mdSync()" style="margin-left:auto;cursor:pointer;background:#dc2626;color:#fff;border:none;border-radius:.4rem;padding:.3rem .7rem;font-size:.68rem;font-weight:700;">⟳ Sincronizar de novo</button></div><div style="font-size:.66rem;color:#b91c1c;margin-top:.35rem;line-height:1.5;">Falha ao carregar: <b>${errs.map(e=>esc(e.ep)).join(', ')}</b>. ${esc(errs[0].msg)}<br>Enquanto isso, trate os valores abaixo como <b>parciais</b> — não use para decisão até sincronizar com sucesso.</div></div>`;
+  return `<div class="card mb-4" style="background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="wifi-off" style="width:1rem;height:1rem;color:#dc2626;"></i><div style="font-size:.76rem;font-weight:800;color:#991b1b;">Dados incompletos — números podem estar errados</div><button onclick="mdSync(true)" style="margin-left:auto;cursor:pointer;background:#dc2626;color:#fff;border:none;border-radius:.4rem;padding:.3rem .7rem;font-size:.68rem;font-weight:700;">⟳ Sincronizar de novo</button></div><div style="font-size:.66rem;color:#b91c1c;margin-top:.35rem;line-height:1.5;">Falha ao carregar: <b>${errs.map(e=>esc(e.ep)).join(', ')}</b>. ${esc(errs[0].msg)}<br>Enquanto isso, trate os valores abaixo como <b>parciais</b> — não use para decisão até sincronizar com sucesso.</div></div>`;
 }
 async function rLimitado(){
   if(!getMD().key)return `<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Conecte o Milldesk (Versão completa → Admin → Config) para ver o H.H por contrato.</div>`;
@@ -1824,7 +1830,7 @@ async function renderCompare(){
 }
 async function rFila(){
   const s=D.sla,[start,end]=mdPeriodRange(),cfg=getAlertCfg()
-  const syncBtn=`<button onclick="mdSync()" ${MD.loading?'disabled':''} style="display:inline-flex;align-items:center;gap:.34rem;padding:.36rem .8rem;background:${MD.loading?'#94a3b8':'var(--brand)'};color:white;border:none;border-radius:.43rem;font-size:.72rem;font-weight:700;cursor:${MD.loading?'wait':'pointer'};"><i data-lucide="${MD.loading?'loader':'refresh-cw'}" style="width:.74rem;height:.74rem;"></i>${MD.loading?'Sincronizando…':'Sincronizar Milldesk'}</button>`
+  const syncBtn=`<button onclick="mdSync(true)" ${MD.loading?'disabled':''} style="display:inline-flex;align-items:center;gap:.34rem;padding:.36rem .8rem;background:${MD.loading?'#94a3b8':'var(--brand)'};color:white;border:none;border-radius:.43rem;font-size:.72rem;font-weight:700;cursor:${MD.loading?'wait':'pointer'};"><i data-lucide="${MD.loading?'loader':'refresh-cw'}" style="width:.74rem;height:.74rem;"></i>${MD.loading?'Sincronizando…':'Sincronizar Milldesk'}</button>`
   const bar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;margin-bottom:.9rem;"><div style="font-size:.72rem;color:#64748b;">Período: <b>${start.split('-').reverse().join('/')}</b> a <b>${end.split('-').reverse().join('/')}</b>${MD.loaded?` · sincronizado ${new Date(MD.ts).toLocaleTimeString('pt-BR')}`:''}</div>${syncBtn}</div>`
   if(D._src==='milldesk-12m')return`${bar}<div class="card" style="padding:2rem;text-align:center;color:#64748b;line-height:1.6;">A <b>Fila de Chamados</b> é uma visão do período atual (ticket a ticket).<br>Para o detalhe, selecione <b>Diário</b>, <b>7/30 dias</b> ou um <b>mês</b>. Os 12 meses agregados aparecem em Visão Geral, Histórico e Por Técnico/Cliente.</div>`
   if(!MD.loaded){
