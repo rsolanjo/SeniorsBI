@@ -248,9 +248,9 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v71'
+const APP_VERSION='v72'
 let D={},MES=null,MESES_LIST=[]
-let COMPANY='all',TIME='30d'
+let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
 // Versão limitada: 3 contratos, só H.H (sem valores). Pilares = escopo dos contratos (para controlar trabalho fora de escopo).
 const LITE_PILARES={
@@ -285,8 +285,8 @@ const LITE_PILARES_CC={
   ],
   '71':[// Compagás — Serviço Gerenciado (proposta v4, itens 01–10)
     {nome:'01 Microsoft 365',kw:/m365|microsoft ?365|office ?365|\bo365\b|onedrive|exchange|teams|sharepoint|intune|entra|outlook|caixa postal|licen[çc]a/i},
-    {nome:'02 Antivírus',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a/i},
-    {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti\b|\bfw\b|\bvpn\b|regra de acesso/i},
+    {nome:'02 Antivírus',kw:/antiv|epdr|\bedr\b|endpoint|malware|v[íi]rus|amea[çc]a|\bcdc\b|csirt|abuse|\bioc\b|bloqueio|antispam|anti-?spam|\bspam\b|phishing/i},
+    {nome:'03 Firewall',kw:/firewall|fortigate|fortinet|forti\b|\bfw\b|\bvpn\b|regra de acesso|sd-?wan|ipsec/i},
     {nome:'04 Redes',kw:/switch|access ?point|\bap\b|wi-?fi|wireless|\bvlan\b|cabea|conectivid|\brede\b|porta/i},
     {nome:'05 Servidores',kw:/vmware|esxi|vcenter|huawei|hypervisor|virtual|\bvm\b|\bhost\b|servidor f[íi]sico|servidor/i},
     {nome:'06 Backup',kw:/backup|c[óo]pia de seguran|restore|restaura|snapshot|veeam|acronis|reten[çc]/i},
@@ -298,7 +298,9 @@ const LITE_PILARES_CC={
 }
 const LITE_TIPOS=['Sustentação','Projeto','Avulso']
 // Sinais de PROJETO/DEPLOY (novo, criação, implantação, migração…). Num contrato de Sustentação, isso é fora de escopo (pertence a Projetos).
-const LITE_DEPLOY_RE=/\bnov[oa]s?\b|cria[çc][ãa]o|\bcriar\b|\bcriad[oa]s?\b|implanta[çc]|implementa[çc]|\bdeploy\b|provisionamento|provision|rollout|migra[çc][ãa]o|migrar|reestrutura|expans[ãa]o|proxy revers|sd-?wan|assessment|pentest|instala[çc][ãa]o de (?:nov|um novo|uma nova)/i
+const LITE_DEPLOY_RE=/\bnov[oa]s?\b|cria[çc][ãa]o|\bcriar\b|\bcriad[oa]s?\b|implanta[çc]|implementa[çc]|\bdeploy\b|provisionamento|rollout|migra[çc][ãa]o|migrar|reestrutura|expans[ãa]o|assessment|pentest/i
+// Manutenção/gestão de mudança = sustentação (NÃO é deploy), mesmo que crie algo. Vence o detector de deploy.
+const LITE_MAINT_RE=/gmud|mudan[çc]a|\bajust|manuten|revis[ãa]o|reinstal|repositório|reten[çc]/i
 const LITE_SEED=[
   {id:'compagas-sg',cc:'71',nome:'Compagás — Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:47250,cor:'#166534',pilar:'susten'},
   {id:'mileto-sg',cc:'2807',nome:'Mileto — Serviço Gerenciado',tipo:'Sustentação',franquia:168,valor:45000,cor:'#2B4C9B',pilar:'susten'},
@@ -1195,9 +1197,11 @@ function liteData(){
     const isSust=/sustenta/i.test(ct.tipo||'');
     acts.forEach(a=>{const rate=liteTechRate(a.ag),val=(a.wh/60)*rate;custoUsado+=val;ctTk.add(a.tid);
       tec[a.ag]=(tec[a.ag]||0)+a.wh;(tecTk[a.ag]=tecTk[a.ag]||new Set()).add(a.tid);
-      const txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();
-      const isDeploy=isSust&&LITE_DEPLOY_RE.test(txt);// novo deploy num contrato de sustentação = projeto (fora)
-      const p=isDeploy?null:pil.find(pl=>pl.kw.test(txt));
+      const catTxt=(a.cat||'').toLowerCase(),txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();
+      const isDeploy=isSust&&!LITE_MAINT_RE.test(txt)&&LITE_DEPLOY_RE.test(txt);// deploy num contrato de sustentação = projeto (fora); manutenção/GMUD não conta
+      // A CATEGORIA do Milldesk manda; só se ela não classificar (ou vier vazia) usa assunto/atividade.
+      let p=catTxt.trim()?pil.find(pl=>pl.kw.test(catTxt)):null;
+      if(!p&&!isDeploy)p=pil.find(pl=>pl.kw.test(txt));
       if(p){pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;(pilTk[p.nome]=pilTk[p.nome]||new Set()).add(a.tid);pilVal[p.nome]=(pilVal[p.nome]||0)+val}else{fora.push(Object.assign({},a,{motivo:isDeploy?'projeto':'sem-pilar'}));foraTk.add(a.tid)}});
     const pilTkN={},pilTids={};for(const k in pilTk){pilTkN[k]=pilTk[k].size;pilTids[k]=[...pilTk[k]]}
     const tecN={},tecTids={};for(const k in tecTk){tecN[k]=tecTk[k].size;tecTids[k]=[...tecTk[k]]}
@@ -1273,17 +1277,20 @@ window.liteSaveCt=function(id){
 window.liteAddCt=()=>liteFormCt('');
 window.liteEditCt=id=>liteFormCt(id);
 window.liteDelCt=function(id){if(!confirm('Remover este contrato da Lite?'))return;setLiteCt(getLiteCt().filter(x=>x.id!==id));toast('Contrato removido.');renderContent();};
-// Editor de escopo (pilares) por contrato
+// Editor de escopo (pilares) por contrato — linhas estruturadas (nome + palavras-chave)
+const _escKws=kw=>kw.source.replace(/\\b/g,'').replace(/[()?!:]/g,'').split('|').map(s=>s.trim()).filter(Boolean).join(', ');
+const _escRow=(nome,kws)=>`<div class="esc-row" style="display:flex;gap:.45rem;align-items:center;margin-bottom:.4rem;"><input class="esc-nome" value="${esc(nome)}" placeholder="Nome do pilar" style="width:12rem;flex-shrink:0;padding:.42rem .55rem;border:1px solid #e2e8f0;border-radius:.45rem;font-size:.74rem;font-weight:700;color:#0f172a;"><span style="color:#cbd5e1;font-weight:800;">=</span><input class="esc-kw" value="${esc(kws)}" placeholder="palavra1, palavra2, ..." style="flex:1;padding:.42rem .55rem;border:1px solid #e2e8f0;border-radius:.45rem;font-size:.74rem;color:#334155;"><button onclick="this.closest('.esc-row').remove()" title="Remover pilar" style="cursor:pointer;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.4rem;color:#94a3b8;width:1.7rem;height:1.7rem;flex-shrink:0;font-size:.9rem;">×</button></div>`;
 window.liteFormEscopo=function(id){
   const c=getLiteCt().find(x=>x.id===id);if(!c)return;
-  const linhas=litePilares(c).map(p=>`${p.nome} = ${p.kw.source.replace(/\\b/g,'').replace(/[()?!:]/g,'').split('|').map(s=>s.trim()).filter(Boolean).join(', ')}`).join('\n');
+  const rows=litePilares(c).map(p=>_escRow(p.nome,_escKws(p.kw))).join('');
   const fb='cursor:pointer;border:none;border-radius:.45rem;padding:.45rem 1rem;font-weight:700;';
-  const inner=`<div style="font-size:.7rem;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.5rem;padding:.55rem .7rem;margin-bottom:.7rem;line-height:1.6;"><b>Um pilar por linha</b>, no formato:<br><code style="background:#fff;border:1px solid #e2e8f0;border-radius:.3rem;padding:.05rem .3rem;">Nome do pilar = palavra1, palavra2, palavra3</code><br>As palavras classificam as atividades (categoria/assunto) nesse pilar. Variações de acento/grafia entre colchetes, ex.: <code>licen[çc]a</code>, <code>v[íi]rus</code>. Atividades que não batem com nenhuma palavra caem em <b style="color:#dc2626;">fora de escopo</b>.</div><textarea id="escTxt" spellcheck="false" style="width:100%;height:19rem;font-family:'Consolas','Courier New',monospace;font-size:.74rem;line-height:1.7;padding:.7rem;border:1px solid #e2e8f0;border-radius:.5rem;box-sizing:border-box;color:#0f172a;">${esc(linhas)}</textarea><div style="display:flex;gap:.5rem;justify-content:space-between;margin-top:1rem;flex-wrap:wrap;"><button onclick="liteResetEscopo('${c.id}')" style="${fb}background:#f8fafc;color:#94a3b8;">Restaurar padrão</button><div style="display:flex;gap:.5rem;"><button onclick="liteCloseModal()" style="${fb}background:#f1f5f9;color:#64748b;">Cancelar</button><button onclick="liteSaveEscopo('${c.id}')" style="${fb}background:#2B4C9B;color:#fff;">Salvar escopo</button></div></div>`;
+  const inner=`<div id="escRows" style="max-height:58vh;overflow-y:auto;padding-right:.3rem;">${rows}</div><button onclick="liteEscAddRow()" style="${fb}background:#eff6ff;color:#1d4ed8;margin-top:.5rem;font-size:.72rem;">+ Adicionar pilar</button><div style="display:flex;gap:.5rem;justify-content:space-between;margin-top:1rem;flex-wrap:wrap;border-top:1px solid #f1f5f9;padding-top:.8rem;"><button onclick="liteResetEscopo('${c.id}')" style="${fb}background:#f8fafc;color:#94a3b8;">Restaurar padrão</button><div style="display:flex;gap:.5rem;"><button onclick="liteCloseModal()" style="${fb}background:#f1f5f9;color:#64748b;">Cancelar</button><button onclick="liteSaveEscopo('${c.id}')" style="${fb}background:#2B4C9B;color:#fff;">Salvar escopo</button></div></div>`;
   liteOpenModal('Escopo — '+esc(c.nome),inner);
 };
+window.liteEscAddRow=function(){const cont=document.getElementById('escRows');if(cont)cont.insertAdjacentHTML('beforeend',_escRow('',''))};
 window.liteSaveEscopo=function(id){
   const list=getLiteCt(),c=list.find(x=>x.id===id);if(!c)return;
-  const pilares=(document.getElementById('escTxt').value||'').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const i=l.indexOf('=');const nome=(i>=0?l.slice(0,i):l).trim(),kws=(i>=0?l.slice(i+1):'').split(',').map(s=>s.trim()).filter(Boolean).join('|');return{nome,kws}}).filter(p=>p.nome);
+  const pilares=[...document.querySelectorAll('#escRows .esc-row')].map(r=>({nome:(r.querySelector('.esc-nome').value||'').trim(),kws:(r.querySelector('.esc-kw').value||'').split(',').map(s=>s.trim()).filter(Boolean).join('|')})).filter(p=>p.nome);
   c.pilaresEdit=pilares;setLiteCt(list);liteCloseModal();toast('Escopo atualizado.');renderContent();
 };
 window.liteResetEscopo=function(id){const list=getLiteCt(),c=list.find(x=>x.id===id);if(!c)return;delete c.pilaresEdit;setLiteCt(list);liteCloseModal();toast('Escopo restaurado ao padrão.');renderContent()};
