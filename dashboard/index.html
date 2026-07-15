@@ -77,13 +77,13 @@ textarea.fi{resize:vertical;min-height:2.7rem}
 
 <div id="app" class="hidden min-h-screen flex flex-col">
 
-<header style="background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:40;" class="px-4 py-1.5">
+<header id="appHeader" style="background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:40;" class="px-4 py-1.5">
   <div class="flex items-center justify-between gap-3">
     <div class="flex items-center gap-2">
-      <div class="logo-pill"><img src="4sr.png" alt="4Seniors" style="height:25px;width:auto;object-fit:contain;display:block;"></div>
-      <div class="logo-pill" id="logoS4"><img src="s4sys.jpg" alt="S4SYS" style="height:25px;width:auto;object-fit:contain;display:block;"></div>
-      <div class="logo-pill" id="logoPV"><img src="portovirtual.png" alt="Porto Virtual" style="height:25px;width:auto;object-fit:contain;display:block;"></div>
-      <div style="border-left:2px solid #e2e8f0;padding-left:.68rem;"><div style="font-size:.92rem;font-weight:900;color:#1e293b;letter-spacing:-.03em;line-height:1.1">SeniorsBI</div><div style="font-size:.57rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.09em;">Painel de Operações</div></div>
+      <div class="logo-pill"><img src="4sr.png" alt="4Seniors" style="height:32px;width:auto;object-fit:contain;display:block;"></div>
+      <div class="logo-pill" id="logoS4"><img src="s4sys.jpg" alt="S4SYS" style="height:28px;width:auto;object-fit:contain;display:block;"></div>
+      <div class="logo-pill" id="logoPV"><img src="portovirtual.png" alt="Porto Virtual" style="height:28px;width:auto;object-fit:contain;display:block;"></div>
+      <div style="border-left:2px solid #e2e8f0;padding-left:.72rem;"><div style="font-size:1.12rem;font-weight:900;color:#1e293b;letter-spacing:-.035em;line-height:1.05">SeniorsBI</div><div style="font-size:.58rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.1em;">Painel de Operações</div></div>
     </div>
     <div class="flex items-center gap-2.5">
       <div id="secNav" style="display:none;gap:.16rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.52rem;padding:.16rem;">
@@ -101,7 +101,7 @@ textarea.fi{resize:vertical;min-height:2.7rem}
 
 <div style="background:white;border-bottom:1px solid #e2e8f0;padding:.26rem 1.1rem;display:flex;gap:.1rem;overflow-x:auto;" id="subTabs"></div>
 
-<div style="background:#fafbfc;border-bottom:1px solid #e2e8f0;padding:.32rem 1.1rem;">
+<div id="filterBar" style="background:#fafbfc;border-bottom:1px solid #e2e8f0;padding:.32rem 1.1rem;">
   <div class="flex items-center gap-2.5 flex-wrap">
     <div id="compBar" style="display:contents;">
     <div class="flex items-center gap-1.5">
@@ -248,7 +248,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v61'
+const APP_VERSION='v62'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='30d'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -773,16 +773,16 @@ function renderContent(){
   const el=document.getElementById('main')
   const _nav=document.getElementById('secNav'),_st=document.getElementById('subTabs')
   if(APP_MODE==='limited'){
-    if(_nav)_nav.style.display='none';if(_st)_st.style.display='none';
-    ROT_PAUSED=true;['logoS4','logoPV','compBar'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none'});const _rl=document.getElementById('rotLabel');if(_rl)_rl.textContent='4Seniors';
-    const subnav=`<div style="display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap;">${[['painel','Painel'],['avulsas','Horas Avulsas'],['relatorios','Relatório'],['cadastro','Cadastro']].map(([k,l])=>`<button onclick="setLiteSub('${k}')" class="sub-tab ${LITE_SUB===k?'active':''}">${l}</button>`).join('')}</div>`;
-    if((MD.loading||MD.ativsLoading)&&LITE_SUB!=='cadastro'){el.innerHTML=subnav+`<div class="card" style="text-align:center;color:#334155;padding:2.5rem 1rem;"><div style="width:2rem;height:2rem;border:3px solid #e2e8f0;border-top-color:#2B4C9B;border-radius:50%;margin:0 auto .8rem;animation:spin .8s linear infinite;"></div><div style="font-weight:800;">Sincronizando com o Milldesk…</div><div style="font-size:.72rem;color:#94a3b8;margin-top:.35rem;">Buscando atividades e horas a cobrar do período selecionado.</div></div>`;return}
-    if(LITE_SUB==='cadastro'){el.innerHTML=subnav+rLiteContratos()+'<div style="height:1rem;"></div>'+rLiteFunc();if(window.lucide)lucide.createIcons();return}
-    if(LITE_SUB==='avulsas'){el.innerHTML=subnav+rLiteAvulsas();if(window.lucide)lucide.createIcons();return}
-    if(LITE_SUB==='relatorios'){el.innerHTML=subnav+rLiteRelatorios();if(window.lucide)lucide.createIcons();return}
-    rLimitado().then(h=>{el.innerHTML=subnav+h;if(window.lucide)lucide.createIcons()});return}
+    if(_nav)_nav.style.display='none';if(_st)_st.style.display='none';ROT_PAUSED=true;
+    {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='none';if(_fb)_fb.style.display='none'}
+    const chrome=liteChrome();
+    if((MD.loading||MD.ativsLoading)&&LITE_SUB!=='cadastro'){el.innerHTML=chrome+`<div class="card" style="text-align:center;color:#334155;padding:2.5rem 1rem;"><div style="width:2rem;height:2rem;border:3px solid #e2e8f0;border-top-color:#2B4C9B;border-radius:50%;margin:0 auto .8rem;animation:spin .8s linear infinite;"></div><div style="font-weight:800;">Sincronizando com o Milldesk…</div><div style="font-size:.72rem;color:#94a3b8;margin-top:.35rem;">Buscando atividades e horas a cobrar do período selecionado.</div></div>`;if(window.lucide)lucide.createIcons();return}
+    if(LITE_SUB==='cadastro'){el.innerHTML=chrome+rLiteContratos()+'<div style="height:1rem;"></div>'+rLiteFunc();if(window.lucide)lucide.createIcons();return}
+    if(LITE_SUB==='avulsas'){el.innerHTML=chrome+rLiteAvulsas();if(window.lucide)lucide.createIcons();return}
+    if(LITE_SUB==='relatorios'){el.innerHTML=chrome+rLiteRelatorios();if(window.lucide)lucide.createIcons();return}
+    rLimitado().then(h=>{el.innerHTML=chrome+h;if(window.lucide)lucide.createIcons()});return}
   if(_nav)_nav.style.display='flex';if(_st)_st.style.display=''
-  {const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
+  {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display='';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
   if(TIME==='comparar'){renderCompare();return}
   const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','checklists'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
@@ -1350,6 +1350,33 @@ function rLiteRelatorios(){
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${card('exec','Resumo por contrato: consumo vs. franquia, saldo, FTE e fora de escopo'+(LITE_VAL?', com valores.':' (sem valores).'),'file-bar-chart-2','#2B4C9B')}${card('tecnico','Horas trabalhadas por cada técnico'+(LITE_VAL?' e o valor (custo-hora × horas).':' no período.'),'users','#0891b2')}${card('fora','Todas as atividades fora do escopo contratado — técnico, chamado e descrição.','triangle-alert','#dc2626')}${card('avulsas','Horas a cobrar (fora da franquia): técnico, data, descrição e aprovação.','receipt','#7c3aed')}${card('completo','Tudo em um arquivo: contratos + técnicos + fora de escopo + avulsas.','layers','#0f766e')}</div>`;
 }
 window.setLiteSub=function(s){LITE_SUB=s;renderContent()};
+window.liteExportCurrent=function(){if(LITE_SUB==='avulsas')return liteReportXLS('avulsas');if(LITE_SUB==='relatorios')return toast('Escolha um relatório na lista para exportar.',false);return liteExport()};
+// Cabeçalho próprio da Lite — marca em destaque + abas + filtro + ocultar/exportar + versão completa
+function liteChrome(){
+  const md=getMD(),live=!!md.key&&MD.loaded;
+  const tabs=[['painel','Painel'],['avulsas','Horas Avulsas'],['relatorios','Relatório'],['cadastro','Cadastro']].map(([k,l])=>`<button onclick="setLiteSub('${k}')" class="sub-tab ${LITE_SUB===k?'active':''}">${l}</button>`).join('');
+  const times=[['diario','Diário'],['semana','Semana'],['mensal','Mensal'],['anual','Anual']].map(([k,l])=>`<button onclick="setTime('${k}')" class="time-btn ${TIME===k?'active':''}">${l}</button>`).join('');
+  const valBtn=`<button onclick="liteToggleVal()" style="cursor:pointer;border:none;border-radius:.5rem;padding:.34rem .7rem;font-size:.7rem;font-weight:800;background:${LITE_VAL?'#fef9c3':'#e0e7ff'};color:${LITE_VAL?'#854d0e':'#3730a3'};">${LITE_VAL?'🙈 Ocultar valores':'👁 Mostrar valores'}</button>`;
+  const expBtn=`<button onclick="liteExportCurrent()" style="cursor:pointer;border:none;border-radius:.5rem;padding:.34rem .7rem;font-size:.7rem;font-weight:800;background:#dcfce7;color:#166534;display:inline-flex;align-items:center;gap:.3rem;"><i data-lucide="download" style="width:.8rem;height:.8rem;"></i>Exportar</button>`;
+  const modeBtn=`<button onclick="setAppMode('full')" style="padding:.34rem .72rem;border:1px solid #e2e8f0;border-radius:.55rem;background:#fff;font-size:.7rem;font-weight:800;color:#475569;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:.3rem;"><i data-lucide="lock-open" style="width:.8rem;height:.8rem;"></i>Versão completa</button>`;
+  const status=`<span style="display:inline-flex;align-items:center;gap:.35rem;font-size:.66rem;color:#64748b;font-weight:700;white-space:nowrap;"><span style="width:.5rem;height:.5rem;border-radius:50%;background:${live?'#22c55e':'#cbd5e1'};${live?'box-shadow:0 0 0 3px #22c55e22;':''}"></span>${live?'Milldesk ao vivo':'—'} · <span style="background:#eef2ff;color:#2B4C9B;border-radius:.3rem;padding:.05rem .3rem;font-weight:800;">${APP_VERSION}</span></span>`;
+  return `<div style="margin-bottom:1.1rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.9rem;">
+      <div style="display:flex;align-items:center;gap:.85rem;">
+        <div style="width:56px;height:56px;border-radius:.85rem;background:#fff;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(15,23,42,.08);flex-shrink:0;"><img src="4sr.png" alt="4Seniors" style="height:40px;width:auto;object-fit:contain;"></div>
+        <div><div style="font-size:1.7rem;font-weight:900;color:#0f172a;letter-spacing:-.045em;line-height:1;">SeniorsBI</div><div style="font-size:.66rem;color:#2B4C9B;font-weight:800;text-transform:uppercase;letter-spacing:.16em;margin-top:.2rem;">Painel de Contratos</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">${status}${modeBtn}</div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.8rem;padding:.42rem .55rem;">
+      <div style="display:flex;gap:.35rem;flex-wrap:wrap;">${tabs}</div>
+      <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;background:#fff;border:1px solid #e2e8f0;border-radius:.55rem;padding:.09rem;">${times}</div>
+        <div style="display:flex;gap:.4rem;">${valBtn}${expBtn}</div>
+      </div>
+    </div>
+  </div>`;
+}
 // Aba Contratos da Lite — cadastro/edição com centro de custo (mesmo padrão da versão completa)
 function rLiteContratos(){
   const ct=getLiteCt();
@@ -1364,11 +1391,8 @@ function rLiteContratos(){
 <div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;">O <b>Centro de Custo (CC)</b> é o número que casa a atividade do Milldesk (campo <code>location</code>) com o contrato — é por ele que as horas são somadas. Valores ficam protegidos por senha (123). Cadastros salvos só neste navegador.</div></div>`;
 }
 async function rLimitado(){
-  const valBtn=`<button onclick="liteToggleVal()" class="badge" style="cursor:pointer;background:${LITE_VAL?'#fef9c3':'#e0e7ff'};color:${LITE_VAL?'#854d0e':'#3730a3'};border:none;font-weight:700;">${LITE_VAL?'🙈 Ocultar valores':'👁 Mostrar valores'}</button>`;
-  const xlsBtn=`<button onclick="liteExport()" class="badge" style="cursor:pointer;background:#dcfce7;color:#166534;border:none;font-weight:700;">⬇ Excel</button>`;
-  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:1.05rem;font-weight:900;color:#0f172a;">Painel de Contratos</span><span style="flex:1;"></span>${valBtn}${xlsBtn}</div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Quanto de <b>homem-hora</b> cada contrato consumiu vs. as horas contratadas — com <b>saldo</b>, <b>FTE</b>, horas por técnico e distribuição por <b>pilares (escopo)</b>. Atividades fora dos pilares aparecem como <b style="color:#dc2626;">fora de escopo</b>. Alerta ao atingir <b>${LITE_ALERT_PCT}%</b> da franquia.</div></div>`;
-  if(!getMD().key)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Conecte o Milldesk para ver o H.H por contrato.</div>`;
-  if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk (barra de período no topo) para carregar as horas.</div>`;
+  if(!getMD().key)return `<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Conecte o Milldesk (Versão completa → Admin → Config) para ver o H.H por contrato.</div>`;
+  if(!MD.loaded)return `<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Use o filtro de período acima para sincronizar o Milldesk e carregar as horas.</div>`;
   const d=liteData();
   const alerta=d.contratos.filter(x=>x.uso>=LITE_ALERT_PCT);
   const alertBar=alerta.length?`<div class="card mb-4" style="background:#fffbeb;border:1px solid #fde68a;"><div style="font-size:.72rem;font-weight:800;color:#92400e;display:flex;align-items:center;gap:.4rem;"><i data-lucide="triangle-alert" style="width:.9rem;height:.9rem;"></i> ${alerta.length} contrato(s) em ${LITE_ALERT_PCT}%+ da franquia</div><div style="font-size:.66rem;color:#b45309;margin-top:.25rem;">${alerta.map(x=>`${esc(x.ct.nome.split('—')[0].trim())} <b>${x.uso}%</b>`).join(' · ')}</div></div>`:'';
@@ -1397,7 +1421,7 @@ async function rLimitado(){
   const tec=d.tecnicos,cts=d.contratos;
   const cCol=x=>`${esc(x.ct.nome.split('—')[0].trim())}<br><span style="font-weight:500;color:#94a3b8;font-size:.58rem;">CC ${esc(x.ct.cc)}</span>`;
   const techTbl=tec.length?`<div class="card overflow-x-auto" style="margin-top:1rem;"><div style="font-size:.85rem;font-weight:800;color:#0f172a;margin-bottom:.5rem;">Horas por técnico e contrato${LITE_VAL?' · valor':''}</div><table><thead><tr><th>Técnico</th><th title="Chamados atendidos (distintos)">Chamados</th>${cts.map(x=>`<th>${cCol(x)}</th>`).join('')}<th>Total</th>${LITE_VAL?'<th>Custo-hora</th><th>Valor</th>':''}</tr></thead><tbody>${tec.map(t=>`<tr><td style="font-weight:600;">${esc((t.nome||'').split(' ').slice(0,2).join(' '))}</td><td style="font-weight:700;color:#7c3aed;">${t.ch}</td>${cts.map(x=>{const m=x.tec[t.nome]||0;return `<td style="${m?'font-weight:700;color:#334155;':'color:#cbd5e1;'}">${m?minToHM(m)+'h':'-'}</td>`}).join('')}<td style="font-weight:800;color:#2B4C9B;">${minToHM(t.min)}h</td>${LITE_VAL?`<td style="color:#854d0e;white-space:nowrap;">${t.rate?fmtR2(t.rate)+'/h':'<span style="color:#cbd5e1;">sem sal.</span>'}</td><td style="color:#166534;font-weight:700;">${t.rate?fmtR(Math.round(t.valor)):'-'}</td>`:''}</tr>`).join('')}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td>Total</td><td></td>${cts.map(x=>`<td>${minToHM(x.used)}h</td>`).join('')}<td style="color:#2B4C9B;">${minToHM(d.totUsed)}h</td>${LITE_VAL?`<td></td><td style="color:#166534;">${fmtR(Math.round(d.totTecVal))}</td>`:''}</tr></tfoot></table><div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Horas de cada técnico por contrato (quem lançou a atividade).${LITE_VAL?' Valor = custo-hora (salário ÷ capacidade) × horas total.':' Cadastre salários em Cadastro → Funcionários para ver valores.'}</div></div>`:'';
-  return head+alertBar+avBanner+kpis+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`+techTbl;
+  return alertBar+avBanner+kpis+`<div class="grid grid-cols-1 md:grid-cols-3 gap-4">${cards}</div>`+techTbl;
 }
 window.mdConnect=function(){const k=(document.getElementById('mdBannerKey').value||'').trim(),zt=(document.getElementById('mdBannerZbx').value||'').trim();
   if(k)setMD({base:getMD().base,key:k})
