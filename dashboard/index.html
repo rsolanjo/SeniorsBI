@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v106'
+const APP_VERSION='v107'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1044,8 +1044,13 @@ async function mdFetchTicketsRange(base,start,end){
   const one=async(a,b)=>{const per=await mdGet(`${base}/showTicketsPerPeriod?start=${a}&end=${b}`);if(per&&per.error)throw new Error(per.error);return Array.isArray(per)?per:[]}
   const s=new Date(start+'T12:00:00'),e=new Date(end+'T12:00:00'),days=(e-s)/864e5
   if(days<=62)return one(start,end)
-  const out=[],pad=n=>String(n).padStart(2,'0');let cur=new Date(s.getFullYear(),s.getMonth(),1)
-  while(cur<=e){const y=cur.getFullYear(),m=cur.getMonth(),last=new Date(y,m+1,0).getDate();let a=`${y}-${pad(m+1)}-01`,b=`${y}-${pad(m+1)}-${pad(last)}`;if(a<start)a=start;if(b>end)b=end;try{out.push(...await one(a,b))}catch(_){}cur=new Date(y,m+1,1)}
+  const out=[],falhas=[],pad=n=>String(n).padStart(2,'0');let cur=new Date(s.getFullYear(),s.getMonth(),1)
+  while(cur<=e){const y=cur.getFullYear(),m=cur.getMonth(),last=new Date(y,m+1,0).getDate();let a=`${y}-${pad(m+1)}-01`,b=`${y}-${pad(m+1)}-${pad(last)}`;if(a<start)a=start;if(b>end)b=end;
+    // NUNCA engolir a falha em silêncio: um mês perdido faz a CONTAGEM DE CHAMADOS vir menor sem ninguém perceber.
+    // Registra o mês para o mdSync marcar o sync como incompleto (banner de dados parciais).
+    try{out.push(...await one(a,b))}catch(_){falhas.push(`${pad(m+1)}/${y}`)}
+    cur=new Date(y,m+1,1)}
+  out._failedMonths=falhas
   return out
 }
 // Backlog ABERTO completo (todas as status abertas) — base para atraso/SLA/reincidência independente do período
@@ -1107,6 +1112,9 @@ window.mdSync=async function(force){
     // 1) Chamados — leve e filtrado por data no servidor → sempre busca (crítico p/ status/contagem)
     let rawArr=[];
     try{rawArr=await mdFetchTicketsRange(base,start,end);
+      // período longo (ex.: Anual) é buscado mês a mês; se algum mês falhou, a contagem de chamados está INCOMPLETA
+      const _fm=(rawArr&&rawArr._failedMonths)||[];
+      if(_fm.length)fail('Chamados',`não foi possível carregar ${_fm.join(', ')} — a contagem de chamados do período está incompleta (as horas não são afetadas, pois vêm das atividades)`,true);
       MD.tickets=rawArr.map(mdCompact).filter(t=>!isExcludedTech(t.ag)).map(t=>({...t,ag:mdAgent(t.ag)}));
       const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});MD.backlog=Object.values(uniq).filter(t=>mdIsOpen(t.st))
     }catch(e){fail('Chamados',e.message,true)}
