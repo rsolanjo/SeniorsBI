@@ -250,7 +250,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v105'
+const APP_VERSION='v106'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -333,7 +333,7 @@ function liteTechRate(nome){const f=(typeof matchFuncByAgent==='function')?match
 window.setAppMode=function(m){
   if(m==='full'){if(!SEC_AUTH){const p=prompt('Versão completa (executiva + técnica + admin). Digite a senha:');if(p==null)return;if(p!=='456'){toast('Senha incorreta.',false);return}SEC_AUTH=true}APP_MODE='full'}
   else{APP_MODE='limited'}
-  const b=document.getElementById('modeBtn');if(b)b.textContent=APP_MODE==='limited'?'🔓 Versão completa':'▸ Versão limitada'
+  const b=document.getElementById('modeBtn');if(b)b.textContent=APP_MODE==='limited'?'🔓 Versão completa':'▸ Versão Lite'
   renderContent()
 }
 let ROT_PAUSED=false,rotTimer=null,rotSec=30,rotIdx=0
@@ -792,7 +792,7 @@ function renderContent(){
     if(LITE_SUB==='cadastro'){el.innerHTML=chrome+rLiteContratos()+'<div style="height:1rem;"></div>'+rLiteFunc();if(window.lucide)lucide.createIcons();return}
     if(LITE_SUB==='avulsas'){el.innerHTML=chrome+rLiteAvulsas();if(window.lucide)lucide.createIcons();return}
     if(LITE_SUB==='relatorios'){el.innerHTML=chrome+rLiteRelatorios();if(window.lucide)lucide.createIcons();return}
-    if(LITE_SUB==='auditor'){el.innerHTML=chrome+(LITE_AUD_AUTH?rLiteAuditor():'<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Acesso restrito — informe a senha na aba Auditor.</div>');if(window.lucide)lucide.createIcons();return}
+    if(LITE_SUB==='auditor'){el.innerHTML=chrome+rLiteAuditor();if(window.lucide)lucide.createIcons();return}
     rLimitado().then(h=>{el.innerHTML=chrome+h;if(window.lucide)lucide.createIcons()});return}
   if(_nav)_nav.style.display='flex';if(_st)_st.style.display=''
   {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display='';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
@@ -1661,7 +1661,7 @@ function rLiteAvulsas(){
 // Reaproveita liteData (período da barra do topo), liteDiag (situação do contrato) e
 // liteCompWindows/liteAggWindow (tendência dos 3 últimos meses). R$ continua seguindo o LITE_VAL.
 function rLiteAuditor(){
-  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:.95rem;font-weight:800;color:#0f172a;">Auditor — performance</span><span class="badge" style="background:#e0e7ff;color:#3730a3;font-weight:700;">ACESSO RESTRITO</span></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Desempenho de <b>técnicos</b> e <b>contratos</b> no período selecionado (barra do topo), com tendência dos últimos 3 meses. Os valores em R$ seguem o botão <b>Mostrar valores</b>.</div></div>`;
+  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:.95rem;font-weight:800;color:#0f172a;">Auditor</span></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Desempenho de <b>técnicos</b> e <b>contratos</b> no período selecionado (barra do topo), com tendência dos últimos 3 meses. Os valores em R$ seguem o botão <b>Mostrar valores</b>.</div></div>`;
   if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk para ver a auditoria.</div>`;
   const relBanner=liteRelBanner(),d=liteData();
   if(!d.tecnicos.length)return head+relBanner+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Nenhuma atividade lançada no período selecionado.</div>`;
@@ -1701,10 +1701,9 @@ function rLiteRelatorios(){
   return `<div class="card mb-4"><div style="font-size:.95rem;font-weight:800;color:#0f172a;">Relatórios</div><div style="font-size:.66rem;color:#64748b;margin-top:.25rem;">Relatórios profissionais da Lite no período selecionado (barra do topo), com logo, cabeçalho e data de extração. <b>Excel</b> baixa CSV; <b>PDF</b> abre para imprimir/salvar. Os valores em R$ só entram se estiverem revelados com a senha. O arquivo é nomeado com o relatório + a data.</div></div>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${card('exec','Painel + Horas Avulsas do período, com comparativo dos últimos 3 meses e do ano.','file-bar-chart-2','#2B4C9B')}${card('avulsas','Horas a cobrar (fora da franquia): consolidação por cliente/técnico e detalhe com horas trabalhadas.','receipt','#7c3aed')}${card('tecnico','Horas trabalhadas por cada técnico'+(LITE_VAL?' e o valor (custo-hora × horas).':' no período.'),'users','#0891b2')}${card('contrato','Consumo por contrato com o detalhe de escopo (pilares) e chamados.','file-text','#0f766e')}${card('financeiro','Receita, custo de mão de obra, avulsas e margem — demonstrativo por contrato e resumo.'+(LITE_VAL?'':' (requer revelar valores)'),'landmark','#166534')}${card('completo','Tudo em um arquivo: executivo + técnico + contrato + financeiro + avulsas.','layers','#854d0e')}</div>`;
 }
-let LITE_CAD_AUTH=false,LITE_AUD_AUTH=false;
+let LITE_CAD_AUTH=false;
 window.setLiteSub=function(s){
   if(s==='cadastro'&&!LITE_CAD_AUTH){const p=prompt('Cadastro (contratos e funcionários). Digite a senha:');if(p==null)return;if(p!=='123'){toast('Senha incorreta.',false);return}LITE_CAD_AUTH=true}
-  if(s==='auditor'&&!LITE_AUD_AUTH){const p=prompt('Auditor (performance de técnicos e contratos). Digite a senha:');if(p==null)return;if(p!=='789'){toast('Senha incorreta.',false);return}LITE_AUD_AUTH=true}
   LITE_SUB=s;renderContent()};
 window.liteExportCurrent=function(){if(LITE_SUB==='avulsas')return liteReportXLS('avulsas');if(LITE_SUB==='relatorios')return toast('Escolha um relatório na lista para exportar.',false);return liteExport()};
 window.liteTime=function(t){TIME=t;if(t==='periodo'){renderContent();return}if(getMD().key)mdSync();else renderContent()};
