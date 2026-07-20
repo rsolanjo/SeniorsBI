@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v116'
+const APP_VERSION='v117'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -929,6 +929,50 @@ const kpiCard=(val,lbl,col,icon,sub='')=>`<div class="card" style="border-left:3
 
 // ═══════ EXECUTIVA ══════════════════════════════════════════════════════════
 
+// ─── Painel de Contratos (executivo) — igual ao da Lite, mas para TODOS os clientes ───
+// Casa atividade→contrato pelo CENTRO DE CUSTO (os 34 contratos têm cc; o nome do cliente nem sempre bate).
+// Pilares: LITE_PILARES_CC para quem tem escopo próprio (71/2807/2809); os demais usam os 10 pilares genéricos.
+const _pilarKeyDe=ct=>ct.tipo_atendimento==='chamado'?'avulso':(ct.tipo_atendimento==='projeto'?'projeto':'susten');
+function rExecContratos(){
+  if(!MD.loaded)return`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Sincronize o Milldesk para ver o consumo por contrato.</div>`;
+  const mf=(typeof liteMonths==='function')?liteMonths():1;
+  const acts=(MD.ativs||[]).map(a=>({cc:String(mdCC(a.loc||'')),wh:a.wh||0,iso:mdActISO(a.start),ag:a.ag,atv:a.atv||'',assunto:a.assunto||'',tid:a.tid}))
+    .filter(a=>a.ag&&!isExcludedTech(a.ag)&&atvInRange(a.iso));
+  const byCC={};acts.forEach(a=>{if(a.cc)(byCC[a.cc]=byCC[a.cc]||[]).push(a)});
+  const rows=CONTRACTS.filter(c=>c.status!=='arquivado').map(ct=>{
+    const cc=String(ct.cc||''),A=byCC[cc]||[];
+    const used=A.reduce((s,a)=>s+a.wh,0),franqP=(ct.franquia_horas||0)*60*mf;
+    const uso=franqP?Math.round(used/franqP*100):null,saldo=franqP-used;
+    const pil=litePilares({cc,pilar:_pilarKeyDe(ct)});
+    const pilMin={};let foraMin=0;
+    A.forEach(a=>{const txt=(a.assunto+' '+a.atv).toLowerCase();const p=pil.find(pl=>pl.kw.test(txt));if(p)pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;else foraMin+=a.wh});
+    return{ct,cc,used,franqP,uso,saldo,pilMin,foraMin,nCh:new Set(A.map(a=>a.tid)).size,pilN:pil.length};
+  }).filter(r=>r.used>0).sort((a,b)=>(b.uso??-1)-(a.uso??-1)||b.used-a.used);
+  if(!rows.length)return`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhum contrato com horas no período.</div>`;
+  const estouro=rows.filter(r=>r.uso!=null&&r.uso>100).length,risco=rows.filter(r=>r.uso!=null&&r.uso>=85&&r.uso<=100).length;
+  const cards=rows.map(r=>{
+    const uc=r.uso==null?'#64748b':r.uso>100?'#dc2626':r.uso>=85?'#f59e0b':'#16a34a';
+    const foraP=r.used?Math.round(r.foraMin/r.used*100):0;
+    const tops=Object.entries(r.pilMin).sort((a,b)=>b[1]-a[1]).slice(0,4);
+    return`<div class="card" style="border-left:3px solid ${uc};">
+      <div style="display:flex;align-items:baseline;gap:.4rem;flex-wrap:wrap;margin-bottom:.35rem;">
+        <span style="font-size:.78rem;font-weight:800;color:#0f172a;">${esc(r.ct.cliente)}</span>
+        <span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">CC ${esc(r.cc)}</span>
+        <span style="margin-left:auto;font-size:1.05rem;font-weight:900;color:${uc};">${r.uso!=null?r.uso+'%':'—'}</span>
+      </div>
+      <div style="font-size:.6rem;color:#94a3b8;margin-bottom:.45rem;">${esc((r.ct.nome||'').slice(0,44))}</div>
+      <div style="display:flex;justify-content:space-between;font-size:.66rem;margin-bottom:.2rem;"><span style="color:#334155;"><b>${minToHM(r.used)}h</b>${r.franqP?' de '+minToHM(r.franqP)+'h':''}</span><span style="color:${r.saldo<0?'#dc2626':'#166534'};font-weight:700;">${r.franqP?(r.saldo<0?'estourou '+minToHM(-r.saldo)+'h':minToHM(r.saldo)+'h livre'):'sem franquia'}</span></div>
+      <div style="height:.3rem;background:#f1f5f9;border-radius:999px;overflow:hidden;margin-bottom:.45rem;"><div style="height:100%;width:${Math.max(0,Math.min(r.uso||0,100))}%;background:${uc};"></div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:.2rem;margin-bottom:.35rem;">${tops.map(([n,m])=>`<span style="background:#f1f5f9;color:#475569;border-radius:.3rem;padding:.05rem .32rem;font-size:.57rem;font-weight:700;" title="${esc(n)}">${esc(n.split(/[ ,(]/)[0])} ${minToHM(m)}h</span>`).join('')||'<span style="font-size:.58rem;color:#cbd5e1;">sem classificação</span>'}</div>
+      <div style="display:flex;justify-content:space-between;font-size:.59rem;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:.32rem;"><span>${r.nCh} chamado(s) · ${r.pilN} pilares</span><span style="color:${foraP>15?'#b45309':'#94a3b8'};font-weight:${foraP>15?'800':'400'};">fora de escopo ${minToHM(r.foraMin)}h (${foraP}%)</span></div>
+    </div>`}).join('');
+  return`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;">
+      <span style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;">Contratos — H.H e escopo (todos os clientes)</span>
+      <span style="font-size:.65rem;color:#64748b;"><b style="color:#0f172a;">${rows.length}</b> com movimento · <b style="color:#dc2626;">${estouro}</b> estourando · <b style="color:#b45309;">${risco}</b> no limite</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">${cards}</div>
+    <div style="font-size:.59rem;color:#94a3b8;margin-top:.5rem;">Franquia proporcional ao período (${mf} mês/meses). Atividade casada ao contrato pelo <b>centro de custo</b>. Pilares próprios em Compagás/Mileto; demais usam os 10 pilares padrão de sustentação.</div>`;
+}
 // ─── Painel de Riscos (executivo) — leitura de CEO: agrupa por tema, mostra o tamanho do problema e o que fazer ───
 const RISCO_TEMAS=[
   {k:'pessoas',lbl:'Pessoas',ic:'user-cog',cor:'#dc2626',cats:['FTE','Horas','Grupo'],acao:'Redistribuir carga ou reforçar o time'},
@@ -1021,6 +1065,7 @@ _times.map(o=>{const c=o.sal*_pf,p=receita>0?Math.round(c/receita*100):null,tec=
 <div class="card overflow-x-auto">${ST('Top funcionários - financeiro')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Horas</th><th title="Horas ÷ capacidade do período">FTE</th><th title="Receita rateada pelas horas do técnico">Receita atrib.</th><th>Custo</th><th>Margem</th></tr></thead><tbody>${topFunc||'<tr><td colspan="7" style="color:#94a3b8;padding:1.25rem;text-align:center;">Sem dados de equipe no período.</td></tr>'}</tbody>${(()=>{if(!_topFuncArr.length)return'';const th=_topFuncArr.reduce((s,r)=>s+(r.trab_minutos||0),0),tc=_topFuncArr.reduce((s,r)=>s+getSalario(r.nome,r.nivel)*_pf,0),tr=D.totalHoras>0?Math.round(receita*(th/D.totalHoras)):0,tm=tr?Math.round((tr-tc)/tr*100):null,tcap=_topFuncArr.reduce((s,r)=>s+(r.cap_minutos||0),0),tf=tcap?pct(th,tcap):0;return`<tfoot><tr style="font-weight:800;background:#f8fafc;border-top:2px solid #cbd5e1;"><td colspan="2">TOTAL (${_topFuncArr.length})</td><td>${minToHM(th)}h</td><td>${tf}%</td><td style="color:#166534;">${fmtR(tr)}</td><td style="color:#854d0e;">${fmtR(Math.round(tc))}</td><td style="color:${tm==null?'#94a3b8':tm<0?'#ef4444':tm<20?'#f59e0b':'#22c55e'};">${tm!=null?tm+'%':'-'}</td></tr></tfoot>`})()}</table><div style="font-size:.58rem;color:#94a3b8;margin-top:.4rem;">Receita atribuída = receita total rateada pela participação de horas do técnico.</div></div>
 <div class="card overflow-x-auto">${ST('Top clientes - financeiro')}<table><thead><tr><th>Cliente</th><th>Empresa</th><th>Horas</th><th>Franquia</th><th>Receita</th><th>Custo</th><th>Margem</th></tr></thead><tbody>${topCli||'<tr><td colspan="7" style="color:#94a3b8;padding:1.25rem;text-align:center;">Configure receitas em Admin → Contratos</td></tr>'}</tbody>${(()=>{if(!_topCliArr.length)return'';const th=_topCliArr.reduce((s,c)=>s+(c.horas_minutos||0),0),trec=_topCliArr.reduce((s,c)=>s+cliValor(c.nome),0),tcus=_topCliArr.reduce((s,c)=>s+(D.totalHoras>0?Math.round(c.horas_minutos/D.totalHoras*totalCusto):0),0),tfr=_topCliArr.reduce((s,c)=>s+cliFranquia(c.nome),0),tuso=tfr?pct(Math.round(th/60),tfr):null,tm=trec&&tcus?Math.round((trec-tcus)/trec*100):null;return`<tfoot><tr style="font-weight:800;background:#f8fafc;border-top:2px solid #cbd5e1;"><td colspan="2">TOTAL (${_topCliArr.length})</td><td>${minToHM(th)}h</td><td style="color:${tuso==null?'#64748b':tuso>100?'#ef4444':tuso>85?'#f59e0b':'#22c55e'};">${tuso!=null?tuso+'%':'-'}</td><td style="color:#166534;">${fmtR(trec)}</td><td style="color:#854d0e;">${fmtR(tcus)}</td><td style="color:${tm==null?'#94a3b8':tm<0?'#ef4444':tm<20?'#f59e0b':'#22c55e'};">${tm!=null?tm+'%':'-'}</td></tr></tfoot>`})()}</table></div></div>
 ${rExecRiscos(auto)}
+<div style="margin-top:1.1rem;">${rExecContratos()}</div>
 <div style="margin-top:1.1rem;">${rExecCustoHora()}</div>`
 }
 
@@ -1073,7 +1118,7 @@ function rExecCustoHora(){
     const mC=r.margemP==null?'#94a3b8':r.margemP<0?'#ef4444':r.margemP<20?'#f59e0b':'#22c55e';
     return`<tr><td>${empBadge(r.emp)}</td><td style="font-weight:600;">${cliDisp(r.c.nome)}</td><td style="font-weight:700;">${minToHM(r.c.horas_minutos)}h</td><td style="color:#64748b;white-space:nowrap;">${r.franq>0
       ?`<span title="Franquia contratada: ${r.franqBase}h/mês. Aqui aparece proporcional ao período selecionado (${Math.round(pm*100)}% do mês).">${Math.round(r.franq)}h <span style="color:#cbd5e1;font-size:.57rem;">de ${r.franqBase}h/mês</span></span>`
-      :(r.nCtr>0?'<span style="color:#6d28d9;font-size:.6rem;" title="Contrato por chamado — não tem franquia de horas.">por chamado</span>':'<span style="color:#dc2626;font-size:.6rem;font-weight:700;" title="Este cliente tem horas lançadas mas NENHUM contrato cadastrado em Admin → Contratos.">sem contrato</span>')}</td><td style="color:${usoC};font-weight:700;">${r.uso!=null?r.uso+'%':'-'}</td><td style="color:#854d0e;font-weight:700;">${r.custoH>0?fmtR(r.custoH):'-'}</td><td style="color:#166534;">${r.valor>0?fmtR(r.valor):'-'}</td><td style="color:#64748b;">${r.rhEf!=null?fmtR(r.rhEf)+'/h':'-'}</td><td style="color:${mC};font-weight:800;">${r.margem!=null?fmtR(r.margem)+(r.margemP!=null?' ('+r.margemP+'%)':''):'-'}</td><td>${r.temContrato?sitBadge(r.sit):'<span style="color:#94a3b8;font-size:.62rem;">sem contrato</span>'}</td></tr>`;
+      :(r.nCtr>0?'<span style="color:#6d28d9;font-size:.6rem;" title="Contrato por chamado — não tem franquia de horas.">por chamado</span>':'<span style="color:#b45309;font-size:.6rem;" title="Não achei contrato pelo NOME deste cliente. Todos os centros de custo com horas TÊM contrato cadastrado — normalmente é diferença de nomenclatura entre Milldesk e cadastro. O painel de contratos (que casa por CC) mostra o correto.">nome sem match</span>')}</td><td style="color:${usoC};font-weight:700;">${r.uso!=null?r.uso+'%':'-'}</td><td style="color:#854d0e;font-weight:700;">${r.custoH>0?fmtR(r.custoH):'-'}</td><td style="color:#166534;">${r.valor>0?fmtR(r.valor):'-'}</td><td style="color:#64748b;">${r.rhEf!=null?fmtR(r.rhEf)+'/h':'-'}</td><td style="color:${mC};font-weight:800;">${r.margem!=null?fmtR(r.margem)+(r.margemP!=null?' ('+r.margemP+'%)':''):'-'}</td><td>${r.temContrato?sitBadge(r.sit):'<span style="color:#94a3b8;font-size:.62rem;">sem contrato</span>'}</td></tr>`;
   }).join('')||`<tr><td colspan="10" style="color:#94a3b8;padding:1.25rem;text-align:center;">Sincronize o Milldesk (Fila de Chamados) para ver as horas ao vivo.</td></tr>`;
   return`<div class="card mb-4">
     <div style="display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;margin-bottom:.28rem;">
