@@ -121,12 +121,14 @@ textarea.fi{resize:vertical;min-height:2.7rem}
     </div>
     <div style="width:1px;height:1.05rem;background:#e2e8f0;flex-shrink:0;"></div>
     </div>
+    <span id="periodoChip" style="display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;color:#334155;font-weight:700;background:#eef2ff;border:1px solid #dbeafe;border-radius:.5rem;padding:.24rem .55rem;white-space:nowrap;"></span>
     <div style="display:flex;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.4rem;padding:.07rem;">
-      <button class="time-btn" onclick="setTime('diario')" id="t-diario">Diário</button>
-      <button class="time-btn" onclick="setTime('semana')" id="t-semana">Semana</button>
-      <button class="time-btn active" onclick="setTime('mensal')" id="t-mensal">Mensal</button>
+      <button class="time-btn active" onclick="setTime('mensal')" id="t-mensal">Mensal parcial</button>
+      <button class="time-btn" onclick="setTime('diario')" id="t-diario">Hoje</button>
+      <button class="time-btn" onclick="setTime('semana')" id="t-semana">Semana corrente</button>
+      <button class="time-btn" onclick="setTime('mesant')" id="t-mesant">Mês anterior</button>
       <button class="time-btn" onclick="setTime('anual')" id="t-anual">Anual</button>
-      <button class="time-btn" onclick="setTime('periodo')" id="t-periodo">Período</button>
+      <button class="time-btn" onclick="setTime('periodo')" id="t-periodo">Data específica</button>
       <button class="time-btn" onclick="setTime('comparar')" id="t-comparar">Comparar</button>
     </div>
     <select id="selMes" class="hidden fi" style="width:auto;padding:.2rem .52rem;font-size:.72rem;"></select>
@@ -250,7 +252,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v107'
+const APP_VERSION='v108'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -753,10 +755,21 @@ function toggleRot(){ROT_PAUSED=!ROT_PAUSED;document.getElementById('rotIcon').s
 
 function ensureDateDefaults(){const i=document.getElementById('dtInicio'),f=document.getElementById('dtFim'),t=new Date().toISOString().slice(0,10);if(i&&!i.value)i.value=t;if(f&&!f.value)f.value=t}
 function ensureCmpDefaults(){const a=document.getElementById('cmpA'),b=document.getElementById('cmpB'),d=new Date(),cur=d.toISOString().slice(0,7),prev=new Date(d.getFullYear(),d.getMonth()-1,1).toISOString().slice(0,7);if(a&&!a.value)a.value=prev;if(b&&!b.value)b.value=cur}
-window.onDateRange=function(){if(getMD().key)mdSync();else renderContent()}
+window.onDateRange=function(){updPeriodoChip();if(getMD().key)mdSync();else renderContent()}
+// Chip de data da barra do completo — espelha o período da Lite (mesma engine mdPeriodRange)
+function updPeriodoChip(){
+  const el=document.getElementById('periodoChip');if(!el)return;
+  if(TIME==='comparar'){el.style.display='none';return}
+  el.style.display='inline-flex';
+  let r;try{r=mdPeriodRange()}catch(e){r=null}
+  const lbl=(r&&r[0])?(r[0]===r[1]?brDate(r[0]):brDate(r[0])+' a '+brDate(r[1])):'—';
+  el.innerHTML=`<i data-lucide="calendar" style="width:.78rem;height:.78rem;color:#2B4C9B;"></i>${lbl}`;
+  if(window.lucide)lucide.createIcons();
+}
 function setTime(t){
   TIME=t
   document.querySelectorAll('.time-btn').forEach(b=>b.classList.remove('active'));document.getElementById('t-'+t)?.classList.add('active')
+  updPeriodoChip()
   document.getElementById('selMes').classList.add('hidden')
   document.getElementById('dateRange').classList.toggle('hidden',t!=='periodo')
   document.getElementById('cmpBox').classList.toggle('hidden',t!=='comparar')
@@ -1140,7 +1153,7 @@ window.mdSync=async function(force){
     // 6) Avulsas (horas a cobrar) — pesado e ignora data → reusa se fresco (crítico p/ números financeiros)
     if(!avulsasFresh){try{await mdFetchAvulsas(base);MD.avulsasTs=Date.now()}catch(e){MD.avulsasTs=0;fail('Horas avulsas',MD.avulsasErr||e.message,true)}}
     MD.dataReliable=!MD.syncErrors.some(e=>e.critical)
-    MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false
+    MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false;updPeriodoChip()
     const lu=document.getElementById('lastUpdate');if(lu)lu.textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
     const _ld=document.getElementById('liveDot'),_ls=document.getElementById('liveStatus');if(_ld)_ld.style.background=MD.dataReliable?'#22c55e':'#dc2626';if(_ls)_ls.textContent=MD.dataReliable?'Milldesk':'Milldesk (falha)'
     if(MD.dataReliable)toast(`Milldesk: ${MD.tickets.length} chamados · ${MD.ativs.length} atividades · ${minToHM(D.totalHoras)}h.`)
