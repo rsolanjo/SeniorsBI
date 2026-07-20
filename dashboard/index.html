@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v121'
+const APP_VERSION='v122'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -757,6 +757,26 @@ function seedLocalData(){
   if(!FUNCS.length){FUNCS=BASE_FUNCS.map(f=>({...f,id:'func_'+normName(f.nome).replace(/[^a-z0-9]+/g,'')}));setFuncs(FUNCS)}
   if(!CONTRACTS.length){CONTRACTS=BASE_CONTRACTS.map(c=>({...c}));setContracts(CONTRACTS)}
   dedupeContractIds()
+  addExtraContracts()
+}
+// Contratos dos locais que tinham horas mas nenhum contrato (apareciam como "não atribuídas" no painel).
+// Migração ADITIVA: só insere o que falta, nunca sobrescreve o que já existe. Roda 1x (flag no localStorage).
+const EXTRA_CTR_V=1;
+function addExtraContracts(){
+  try{if(+(localStorage.getItem('sbi_extra_ctr')||0)>=EXTRA_CTR_V)return 0}catch(e){}
+  const NOTA='Criado para atribuir horas que estavam sem contrato. VALOR PROVISÓRIO — confirmar o correto.';
+  const novos=[
+    _bc('xx','MITSUI Projetos Avulsos','Projetos Avulsos','4Seniors',168,1000,'mensal'),
+    _bc('xx','COMPAGÁS Projetos Avulsos','Projetos Avulsos','4Seniors',168,1000,'mensal'),
+    _bc('xx','CASA SHOPPING Projetos Avulsos','Projetos Avulsos','4Seniors',168,1000,'mensal'),
+    _bc('xx','OAK','Chamados avulsos','4Seniors',0,0,'chamado'),
+    _bc('N/A','MILETO BLINCAST','BLINCAST','4Seniors',168,1000,'mensal')
+  ];
+  const ids={};CONTRACTS.forEach(c=>ids[c.id]=1);
+  let add=0;novos.forEach(n=>{if(!ids[n.id]){n.resumo=NOTA;CONTRACTS.push(n);add++}});
+  if(add)setContracts(CONTRACTS);
+  try{localStorage.setItem('sbi_extra_ctr',String(EXTRA_CTR_V))}catch(e){}
+  return add;
 }
 // Repara IDs de contrato duplicados vindos do seed antigo (cc+nome colidia).
 // ID repetido fazia editar/salvar escopo agir no contrato errado e somava as horas dos dois no painel.
