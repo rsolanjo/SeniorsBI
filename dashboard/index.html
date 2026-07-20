@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v119'
+const APP_VERSION='v120'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -477,7 +477,8 @@ const CONTRACT_KB={
 const SEED_VERSION='2026-07-base4'
 const TODAY_ISO='2026-07-08'
 // _bc(centro custo, cliente, nome/identificador, empresa, franquia h, valor mensal, tipo, kb)
-const _bc=(cc,cliente,nome,empresa,fr,val,tipo,kb)=>({id:'seed_'+cc+'_'+normName(nome).replace(/[^a-z0-9]+/g,'').slice(0,10),cc:String(cc),cliente,nome,empresa,franquia_horas:tipo==='chamado'?0:(fr||0),valor_mensal:tipo==='interno'?0:tipo==='chamado'?0:(val??19000),tipo_cobranca:tipo||'mensal',valor_chamado:tipo==='chamado'?100:0,kb:kb||'',resumo:(kb&&CONTRACT_KB[kb])?CONTRACT_KB[kb].resumo:'',tecnologias:(kb&&CONTRACT_KB[kb])?CONTRACT_KB[kb].tec.slice():[],sla_atend_h:4,sla_resol_h:24,assinatura:TODAY_ISO,status:'ativo'})
+// id inclui o CLIENTE: só cc+nome colidia (4Seniors e S4SYS, ambos CC 9 e "Centro de Custo Interno…" → mesmo id)
+const _bc=(cc,cliente,nome,empresa,fr,val,tipo,kb)=>({id:'seed_'+cc+'_'+normName(cliente).replace(/[^a-z0-9]+/g,'').slice(0,8)+'_'+normName(nome).replace(/[^a-z0-9]+/g,'').slice(0,10),cc:String(cc),cliente,nome,empresa,franquia_horas:tipo==='chamado'?0:(fr||0),valor_mensal:tipo==='interno'?0:tipo==='chamado'?0:(val??19000),tipo_cobranca:tipo||'mensal',valor_chamado:tipo==='chamado'?100:0,kb:kb||'',resumo:(kb&&CONTRACT_KB[kb])?CONTRACT_KB[kb].resumo:'',tecnologias:(kb&&CONTRACT_KB[kb])?CONTRACT_KB[kb].tec.slice():[],sla_atend_h:4,sla_resol_h:24,assinatura:TODAY_ISO,status:'ativo'})
 const BASE_CONTRACTS=[
   _bc(9,'4Seniors Brasil','Centro de Custo Interno (GERAL)','4Seniors',168,0,'interno'),
   _bc(2445,'CASA SHOPPING','Suporte','4Seniors',5,500,'mensal'),
@@ -755,6 +756,20 @@ function seedLocalData(){
   if(!getSkillsLS())setSkillsLS(BASE_SKILLS.map(s=>({...s})))
   if(!FUNCS.length){FUNCS=BASE_FUNCS.map(f=>({...f,id:'func_'+normName(f.nome).replace(/[^a-z0-9]+/g,'')}));setFuncs(FUNCS)}
   if(!CONTRACTS.length){CONTRACTS=BASE_CONTRACTS.map(c=>({...c}));setContracts(CONTRACTS)}
+  dedupeContractIds()
+}
+// Repara IDs de contrato duplicados vindos do seed antigo (cc+nome colidia).
+// ID repetido fazia editar/salvar escopo agir no contrato errado e somava as horas dos dois no painel.
+function dedupeContractIds(){
+  const vis={};let fix=0;
+  CONTRACTS.forEach((c,i)=>{
+    let id=c.id||('ctr_'+i);
+    if(vis[id]){let base=id+'_'+(normName(c.cliente).replace(/[^a-z0-9]+/g,'').slice(0,8)||i),n=base,k=2;
+      while(vis[n])n=base+'_'+(k++);
+      c.id=n;fix++;id=n}
+    vis[id]=1});
+  if(fix)setContracts(CONTRACTS);
+  return fix;
 }
 
 let _tt=null
