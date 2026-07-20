@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v115'
+const APP_VERSION='v116'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -423,7 +423,7 @@ const ALERT_GRP={FTE:'profissional',Horas:'profissional',Grupo:'profissional',Fr
 const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Chamado',ic:'ticket',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
-  exec:[['geral','Visão Geral'],['custohora','Custo-Hora'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Alertas']],
+  exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Alertas']],
   tech:[['chamados','Chamados & Atividades'],['parados','Chamados Parados'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['matriz','Matriz'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
 }
@@ -929,6 +929,40 @@ const kpiCard=(val,lbl,col,icon,sub='')=>`<div class="card" style="border-left:3
 
 // ═══════ EXECUTIVA ══════════════════════════════════════════════════════════
 
+// ─── Painel de Riscos (executivo) — leitura de CEO: agrupa por tema, mostra o tamanho do problema e o que fazer ───
+const RISCO_TEMAS=[
+  {k:'pessoas',lbl:'Pessoas',ic:'user-cog',cor:'#dc2626',cats:['FTE','Horas','Grupo'],acao:'Redistribuir carga ou reforçar o time'},
+  {k:'contrato',lbl:'Contratos & Franquia',ic:'file-text',cor:'#b45309',cats:['Franquia','Contrato','Mensal','Custo','Margem'],acao:'Renegociar franquia ou cobrar excedente'},
+  {k:'entrega',lbl:'Entrega & SLA',ic:'timer',cor:'#2B4C9B',cats:['SLA','Sem update','CSAT','Reincidência','Checklist'],acao:'Atacar a fila e o retrabalho'}
+];
+function rExecRiscos(auto){
+  const crit=auto.filter(a=>a.lv==='critica').length;
+  const temaDe=a=>(RISCO_TEMAS.find(t=>t.cats.includes(a.cat))||{k:'entrega'}).k;
+  const grupos=RISCO_TEMAS.map(t=>{const its=auto.filter(a=>temaDe(a)===t.k);return{...t,its,n:its.length,nc:its.filter(a=>a.lv==='critica').length}});
+  const sev=crit>=5?{t:'Ação imediata',c:'#dc2626',b:'#fee2e2'}:crit>0?{t:'Atenção',c:'#b45309',b:'#fef9c3'}:auto.length?{t:'Sob controle',c:'#166534',b:'#dcfce7'}:{t:'Tudo limpo',c:'#166534',b:'#dcfce7'};
+  const topCards=grupos.map(g=>{
+    const top=g.its.slice(0,3);
+    return`<div class="card" style="border-top:3px solid ${g.cor};${g.n?'':'opacity:.6;'}">
+      <div style="display:flex;align-items:center;gap:.45rem;margin-bottom:.5rem;">
+        <div style="background:${g.cor}18;color:${g.cor};border-radius:.42rem;padding:.3rem;display:flex;"><i data-lucide="${g.ic}" style="width:.85rem;height:.85rem;"></i></div>
+        <div style="font-size:.76rem;font-weight:800;color:#0f172a;">${g.lbl}</div>
+        <span style="margin-left:auto;font-size:1.35rem;font-weight:900;color:${g.n?g.cor:'#cbd5e1'};">${g.n}</span>
+      </div>
+      ${g.nc?`<div style="font-size:.6rem;font-weight:800;color:#991b1b;background:#fee2e2;border-radius:.3rem;padding:.1rem .35rem;display:inline-block;margin-bottom:.4rem;">${g.nc} crítico${g.nc>1?'s':''}</div>`:''}
+      <div style="display:flex;flex-direction:column;gap:.22rem;">${top.map(a=>`<div style="font-size:.65rem;color:#334155;line-height:1.35;display:flex;gap:.3rem;"><span style="color:${a.lv==='critica'?'#dc2626':'#f59e0b'};font-weight:900;">•</span><span>${esc(a.msg)}</span></div>`).join('')||'<div style="font-size:.65rem;color:#94a3b8;">Nenhum risco neste tema.</div>'}</div>
+      ${g.n>3?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.35rem;">+${g.n-3} outro(s)</div>`:''}
+      ${g.n?`<div style="font-size:.6rem;color:${g.cor};font-weight:700;margin-top:.5rem;border-top:1px solid #f1f5f9;padding-top:.4rem;">→ ${g.acao}</div>`:''}
+    </div>`}).join('');
+  return`<div style="margin-top:1.1rem;">
+    <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;">
+      <span style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;">Painel de riscos</span>
+      <span style="background:${sev.b};color:${sev.c};font-size:.66rem;font-weight:900;border-radius:.4rem;padding:.15rem .55rem;">${sev.t}</span>
+      <span style="font-size:.65rem;color:#64748b;"><b style="color:#0f172a;">${auto.length}</b> alertas · <b style="color:#dc2626;">${crit}</b> críticos</span>
+      <button onclick="setSub('alertas')" style="margin-left:auto;font-size:.66rem;color:var(--brand);background:none;border:1px solid #dbeafe;border-radius:.4rem;padding:.22rem .6rem;cursor:pointer;font-weight:800;">Ver todos os ${auto.length} →</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">${topCards}</div>
+  </div>`;
+}
 function rExecGeral(){
   const g=companyStats('all'),auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
   const nAtiv=mdEnrichedAtivs().filter(a=>COMPANY==='all'||getClientEmpresa(a.cliente)===COMPANY).length
@@ -938,7 +972,8 @@ function rExecGeral(){
     const usoh=D.totalHoras>0?pct(d.horas,D.totalHoras):0
     return`<div class="card" style="border-top:3px solid ${ec};"><div style="font-size:.64rem;font-weight:800;color:${ec};text-transform:uppercase;letter-spacing:.08em;margin-bottom:.68rem;">${emp}</div><div class="grid grid-cols-2 gap-2 mb-2.5"><div><div class="kpi-lbl">Receita</div><div style="font-size:.95rem;font-weight:800;color:#166534;">${d.receita?fmtR(d.receita):'<span style="color:#94a3b8;font-size:.8rem;">(a def.)</span>'}</div></div><div><div class="kpi-lbl">Custo (est.)</div><div style="font-size:.95rem;font-weight:800;color:#854d0e;">${fmtR(d.custo)}</div></div></div><div style="margin-bottom:.58rem;"><div style="display:flex;justify-content:space-between;font-size:.65rem;margin-bottom:.18rem;"><span style="font-weight:700;color:${mC};">Margem ${d.margem!=null?d.margem+'%':'-'}</span><span style="color:#64748b;">${minToHM(d.horas)}h · ${fmt(d.chamados)} ch.</span></div><div style="height:.28rem;background:#f1f5f9;border-radius:9999px;overflow:hidden;">${d.margem!=null?`<div style="height:100%;width:${Math.max(0,Math.min(d.margem,100))}%;background:${mC};transition:width .6s;"></div>`:''}</div></div><div style="display:flex;gap:.9rem;font-size:.65rem;color:#64748b;border-top:1px solid #f1f5f9;padding-top:.42rem;"><span><strong style="color:#1e293b;">${d.numClientes}</strong> cli</span><span><strong style="color:#1e293b;">${d.numContratos}</strong> contratos</span><span><strong style="color:#1e293b;">${usoh}%</strong> horas</span></div></div>`
   }).join('')
-  const topCli=[...D.clientes].sort((a,b)=>cliValor(b.nome)-cliValor(a.nome)).slice(0,7).map(c=>{
+  const _topCliArr=[...D.clientes].sort((a,b)=>cliValor(b.nome)-cliValor(a.nome)).slice(0,7)
+  const topCli=_topCliArr.map(c=>{
     const rec=cliValor(c.nome),fran=cliFranquia(c.nome),uso=fran?pct(Math.round(c.horas_minutos/60),fran):null,custo=D.totalHoras>0?Math.round(c.horas_minutos/D.totalHoras*totalCusto):0,mg=rec&&custo?Math.round((rec-custo)/rec*100):null,mC=mg==null?'#94a3b8':mg<0?'#ef4444':mg<20?'#f59e0b':'#22c55e',usC=uso==null?'#64748b':uso>100?'#ef4444':uso>85?'#f59e0b':'#22c55e'
     return`<tr><td style="font-weight:600;">${cliDisp(c.nome)}</td><td>${empBadge(getClientEmpresa(c.nome))}</td><td>${minToHM(c.horas_minutos)}h</td><td style="color:${usC};font-weight:700;">${uso!=null?uso+'%':'-'}</td><td style="color:#166534;font-weight:700;">${rec?fmtR(rec):'-'}</td><td style="color:#854d0e;">${fmtR(custo)}</td><td style="color:${mC};font-weight:800;">${mg!=null?mg+'%':'-'}</td></tr>`
   }).join('')
@@ -955,7 +990,8 @@ function rExecGeral(){
   const custoOutros=folhaOut+custosGerais,custoEmp=folhaTec+custoOutros
   const mgTec=receita>0?Math.round((receita-folhaTec)/receita*100):null,mgEmp=receita>0?Math.round((receita-custoEmp)/receita*100):null,mc=v=>v==null?'#94a3b8':v<0?'#ef4444':v<20?'#f59e0b':'#22c55e'
   // Top funcionários - financeiro: receita ATRIBUÍDA por rateio de horas (mesma lógica do custo em Top clientes)
-  const topFunc=[...(D.recursos||[])].sort((a,b)=>b.trab_minutos-a.trab_minutos).slice(0,7).map(r=>{
+  const _topFuncArr=[...(D.recursos||[])].sort((a,b)=>b.trab_minutos-a.trab_minutos).slice(0,7)
+  const topFunc=_topFuncArr.map(r=>{
     const horas=r.trab_minutos||0,custo=getSalario(r.nome,r.nivel)*_pf,
       recAtb=D.totalHoras>0?Math.round(receita*(horas/D.totalHoras)):0,
       mg=recAtb?Math.round((recAtb-custo)/recAtb*100):null,
@@ -982,13 +1018,14 @@ _times.map(o=>{const c=o.sal*_pf,p=receita>0?Math.round(c/receita*100):null,tec=
 ||'<tr><td colspan="6" style="color:#94a3b8;padding:1rem;text-align:center;">Nenhum time cadastrado.</td></tr>'}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td colspan="4" style="text-align:right;">TOTAL</td><td style="color:#854d0e;">${fmtR(Math.round(custoEmp))}</td><td>${receita>0?Math.round(custoEmp/receita*100)+'%':'-'}</td></tr></tfoot></table></div>
 <div id="demo-empresas" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">${empCards}</div>
 <div id="demo-bottom" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-<div class="card overflow-x-auto">${ST('Top funcionários - financeiro')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Horas</th><th title="Horas ÷ capacidade do período">FTE</th><th title="Receita rateada pelas horas do técnico">Receita atrib.</th><th>Custo</th><th>Margem</th></tr></thead><tbody>${topFunc||'<tr><td colspan="7" style="color:#94a3b8;padding:1.25rem;text-align:center;">Sem dados de equipe no período.</td></tr>'}</tbody></table><div style="font-size:.58rem;color:#94a3b8;margin-top:.4rem;">Receita atribuída = receita total rateada pela participação de horas do técnico.</div></div>
-<div class="card overflow-x-auto">${ST('Top clientes - financeiro')}<table><thead><tr><th>Cliente</th><th>Empresa</th><th>Horas</th><th>Franquia</th><th>Receita</th><th>Custo</th><th>Margem</th></tr></thead><tbody>${topCli||'<tr><td colspan="7" style="color:#94a3b8;padding:1.25rem;text-align:center;">Configure receitas em Admin → Contratos</td></tr>'}</tbody></table></div></div>
-<div class="card" style="margin-top:1rem;">${ST('Alertas ativos ('+auto.length+')')}<div style="display:flex;flex-direction:column;gap:.28rem;">${auto.slice(0,5).map(alertCard).join('')||'<div style="color:#94a3b8;font-size:.74rem;padding:.7rem;text-align:center;">Sem alertas ativos</div>'}</div>${auto.length>5?`<div style="text-align:center;margin-top:.42rem;"><button onclick="setSub('alertas')" style="font-size:.68rem;color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Ver todos (${auto.length}) →</button></div>`:''}</div>`
+<div class="card overflow-x-auto">${ST('Top funcionários - financeiro')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Horas</th><th title="Horas ÷ capacidade do período">FTE</th><th title="Receita rateada pelas horas do técnico">Receita atrib.</th><th>Custo</th><th>Margem</th></tr></thead><tbody>${topFunc||'<tr><td colspan="7" style="color:#94a3b8;padding:1.25rem;text-align:center;">Sem dados de equipe no período.</td></tr>'}</tbody>${(()=>{if(!_topFuncArr.length)return'';const th=_topFuncArr.reduce((s,r)=>s+(r.trab_minutos||0),0),tc=_topFuncArr.reduce((s,r)=>s+getSalario(r.nome,r.nivel)*_pf,0),tr=D.totalHoras>0?Math.round(receita*(th/D.totalHoras)):0,tm=tr?Math.round((tr-tc)/tr*100):null,tcap=_topFuncArr.reduce((s,r)=>s+(r.cap_minutos||0),0),tf=tcap?pct(th,tcap):0;return`<tfoot><tr style="font-weight:800;background:#f8fafc;border-top:2px solid #cbd5e1;"><td colspan="2">TOTAL (${_topFuncArr.length})</td><td>${minToHM(th)}h</td><td>${tf}%</td><td style="color:#166534;">${fmtR(tr)}</td><td style="color:#854d0e;">${fmtR(Math.round(tc))}</td><td style="color:${tm==null?'#94a3b8':tm<0?'#ef4444':tm<20?'#f59e0b':'#22c55e'};">${tm!=null?tm+'%':'-'}</td></tr></tfoot>`})()}</table><div style="font-size:.58rem;color:#94a3b8;margin-top:.4rem;">Receita atribuída = receita total rateada pela participação de horas do técnico.</div></div>
+<div class="card overflow-x-auto">${ST('Top clientes - financeiro')}<table><thead><tr><th>Cliente</th><th>Empresa</th><th>Horas</th><th>Franquia</th><th>Receita</th><th>Custo</th><th>Margem</th></tr></thead><tbody>${topCli||'<tr><td colspan="7" style="color:#94a3b8;padding:1.25rem;text-align:center;">Configure receitas em Admin → Contratos</td></tr>'}</tbody>${(()=>{if(!_topCliArr.length)return'';const th=_topCliArr.reduce((s,c)=>s+(c.horas_minutos||0),0),trec=_topCliArr.reduce((s,c)=>s+cliValor(c.nome),0),tcus=_topCliArr.reduce((s,c)=>s+(D.totalHoras>0?Math.round(c.horas_minutos/D.totalHoras*totalCusto):0),0),tfr=_topCliArr.reduce((s,c)=>s+cliFranquia(c.nome),0),tuso=tfr?pct(Math.round(th/60),tfr):null,tm=trec&&tcus?Math.round((trec-tcus)/trec*100):null;return`<tfoot><tr style="font-weight:800;background:#f8fafc;border-top:2px solid #cbd5e1;"><td colspan="2">TOTAL (${_topCliArr.length})</td><td>${minToHM(th)}h</td><td style="color:${tuso==null?'#64748b':tuso>100?'#ef4444':tuso>85?'#f59e0b':'#22c55e'};">${tuso!=null?tuso+'%':'-'}</td><td style="color:#166534;">${fmtR(trec)}</td><td style="color:#854d0e;">${fmtR(tcus)}</td><td style="color:${tm==null?'#94a3b8':tm<0?'#ef4444':tm<20?'#f59e0b':'#22c55e'};">${tm!=null?tm+'%':'-'}</td></tr></tfoot>`})()}</table></div></div>
+${rExecRiscos(auto)}
+<div style="margin-top:1.1rem;">${rExecCustoHora()}</div>`
 }
 
 // Colunas opcionais do "Por Clientes" (ocultáveis) — o usuário pode enxugar a tabela
-let CLI_COLS={contrato:1,atend:1,tec:1,sla:1,acoes:1};
+let CLI_COLS={contrato:0,atend:0,tec:0,sla:0,acoes:0};// começam OCULTAS (tabela enxuta); o usuário liga o que quiser
 window.toggleCliCol=function(k){CLI_COLS[k]=CLI_COLS[k]?0:1;if(SECTION==='exec'&&EXEC_SUB==='clientes')renderContent()};
 function rExecClientes(){
   const totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
@@ -1024,17 +1061,19 @@ function rExecCustoHora(){
     const uso=franq>0?Math.round(horas/franq*100):null;
     const rhEf=(valor>0&&horas>0)?valor/horas:null;
     const margem=valor>0?valor-custoH:null, margemP=valor>0?Math.round((valor-custoH)/valor*100):null;
-    const temContrato=valorBase>0||franqBase>0;
+    const nCtr=getClientContracts(c.nome).length,temContrato=valorBase>0||franqBase>0||nCtr>0;
     let sit='ok';
     if(temContrato){ if((uso!=null&&uso>100)||(valor>0&&custoH>valor))sit='critico'; else if((uso!=null&&uso>=80)||(valor>0&&custoH>=valor*0.8))sit='atencao'; }
-    return{c,emp:getClientEmpresa(c.nome),horas,valor,franq,custoH,uso,rhEf,margem,margemP,temContrato,sit};
+    return{c,emp:getClientEmpresa(c.nome),horas,valor,franq,franqBase,nCtr,custoH,uso,rhEf,margem,margemP,temContrato,sit};
   }).sort((a,b)=>{const rk={critico:0,atencao:1,ok:2};if(rk[a.sit]!==rk[b.sit])return rk[a.sit]-rk[b.sit];return(b.uso||0)-(a.uso||0)});
   const totHoras=rows.reduce((s,r)=>s+r.horas,0), totCusto=rows.reduce((s,r)=>s+r.custoH,0), nEstouro=rows.filter(r=>r.sit==='critico').length;
   const sitBadge=s=>{const m={critico:['ESTOURANDO','#991b1b','#fee2e2'],atencao:['ATENÇÃO','#854d0e','#fef9c3'],ok:['SAUDÁVEL','#166534','#dcfce7']}[s];return`<span class="badge" style="background:${m[2]};color:${m[1]};font-weight:800;">${m[0]}</span>`};
   const body=rows.map(r=>{
     const usoC=r.uso==null?'#64748b':r.uso>100?'#ef4444':r.uso>=80?'#f59e0b':'#22c55e';
     const mC=r.margemP==null?'#94a3b8':r.margemP<0?'#ef4444':r.margemP<20?'#f59e0b':'#22c55e';
-    return`<tr><td>${empBadge(r.emp)}</td><td style="font-weight:600;">${cliDisp(r.c.nome)}</td><td style="font-weight:700;">${minToHM(r.c.horas_minutos)}h</td><td style="color:#64748b;">${r.franq>0?Math.round(r.franq)+'h':'-'}</td><td style="color:${usoC};font-weight:700;">${r.uso!=null?r.uso+'%':'-'}</td><td style="color:#854d0e;font-weight:700;">${r.custoH>0?fmtR(r.custoH):'-'}</td><td style="color:#166534;">${r.valor>0?fmtR(r.valor):'-'}</td><td style="color:#64748b;">${r.rhEf!=null?fmtR(r.rhEf)+'/h':'-'}</td><td style="color:${mC};font-weight:800;">${r.margem!=null?fmtR(r.margem)+(r.margemP!=null?' ('+r.margemP+'%)':''):'-'}</td><td>${r.temContrato?sitBadge(r.sit):'<span style="color:#94a3b8;font-size:.62rem;">sem contrato</span>'}</td></tr>`;
+    return`<tr><td>${empBadge(r.emp)}</td><td style="font-weight:600;">${cliDisp(r.c.nome)}</td><td style="font-weight:700;">${minToHM(r.c.horas_minutos)}h</td><td style="color:#64748b;white-space:nowrap;">${r.franq>0
+      ?`<span title="Franquia contratada: ${r.franqBase}h/mês. Aqui aparece proporcional ao período selecionado (${Math.round(pm*100)}% do mês).">${Math.round(r.franq)}h <span style="color:#cbd5e1;font-size:.57rem;">de ${r.franqBase}h/mês</span></span>`
+      :(r.nCtr>0?'<span style="color:#6d28d9;font-size:.6rem;" title="Contrato por chamado — não tem franquia de horas.">por chamado</span>':'<span style="color:#dc2626;font-size:.6rem;font-weight:700;" title="Este cliente tem horas lançadas mas NENHUM contrato cadastrado em Admin → Contratos.">sem contrato</span>')}</td><td style="color:${usoC};font-weight:700;">${r.uso!=null?r.uso+'%':'-'}</td><td style="color:#854d0e;font-weight:700;">${r.custoH>0?fmtR(r.custoH):'-'}</td><td style="color:#166534;">${r.valor>0?fmtR(r.valor):'-'}</td><td style="color:#64748b;">${r.rhEf!=null?fmtR(r.rhEf)+'/h':'-'}</td><td style="color:${mC};font-weight:800;">${r.margem!=null?fmtR(r.margem)+(r.margemP!=null?' ('+r.margemP+'%)':''):'-'}</td><td>${r.temContrato?sitBadge(r.sit):'<span style="color:#94a3b8;font-size:.62rem;">sem contrato</span>'}</td></tr>`;
   }).join('')||`<tr><td colspan="10" style="color:#94a3b8;padding:1.25rem;text-align:center;">Sincronize o Milldesk (Fila de Chamados) para ver as horas ao vivo.</td></tr>`;
   return`<div class="card mb-4">
     <div style="display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;margin-bottom:.28rem;">
