@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v126'
+const APP_VERSION='v127'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -423,7 +423,7 @@ const ALERT_GRP={FTE:'profissional',Horas:'profissional',Grupo:'profissional',Fr
 const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Chamado',ic:'ticket',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
-  exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Alertas']],
+  exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Riscos']],
   tech:[['chamados','Chamados & Atividades'],['parados','Chamados Parados'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['matriz','Matriz'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
 }
@@ -927,7 +927,7 @@ function renderContent(){
   const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','parados','checklists'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
   if(SECTION==='exec'){
-    const sync={geral:rExecGeral,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecAlertas}
+    const sync={geral:rExecGeral,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecRiscosFull}
     MONEY_MASK=!EXEC_VAL;// oculta R$ só enquanto renderiza o executivo
     try{el.innerHTML=(sync[EXEC_SUB]||rExecGeral)()}finally{MONEY_MASK=false}
     lucide.createIcons()
@@ -1253,6 +1253,41 @@ function rExecTecnico(){
 <div style="text-align:right;margin-top:.38rem;"><button onclick="setSection('admin');setSub('funcionarios')" style="font-size:.68rem;color:var(--brand);background:none;border:none;cursor:pointer;font-weight:700;">Informar salários reais em Admin →</button></div></div>`
 }
 
+// Aba "Riscos" do executivo: mesma leitura por tema do resumo da Visão Geral, porém com a LISTA COMPLETA.
+// Substitui a antiga lista solta de alertas (empilhado de linhas, sem prioridade nem ação sugerida).
+function rExecRiscosFull(){
+  const auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts());
+  const ord={critica:0,alta:1,media:2,baixa:3};auto.sort((a,b)=>(ord[a.lv]==null?9:ord[a.lv])-(ord[b.lv]==null?9:ord[b.lv]));
+  const crit=auto.filter(a=>a.lv==='critica').length,altos=auto.filter(a=>a.lv==='alta').length;
+  const treat=getIncid(),incAll=MD.loaded?mdInconsistencias():[],incPend=incAll.filter(x=>(treat[x.key]&&treat[x.key].status)!=='resolvido').length;
+  const franqExtrap=(D.clientes||[]).filter(c=>{const fr=cliFranquia(c.nome);return fr&&Math.round(c.horas_minutos/60)>fr}).length;
+  const g=companyStats('all');
+  const sev=crit>=5?{t:'Ação imediata',c:'#dc2626',b:'#fee2e2'}:crit>0?{t:'Atenção',c:'#b45309',b:'#fef9c3'}:auto.length?{t:'Sob controle',c:'#166534',b:'#dcfce7'}:{t:'Tudo limpo',c:'#166534',b:'#dcfce7'};
+  const temaDe=a=>(RISCO_TEMAS.find(t=>t.cats.includes(a.cat))||{k:'entrega'}).k;
+  const lvCor=l=>l==='critica'?'#dc2626':l==='alta'?'#ea580c':l==='media'?'#b45309':'#64748b';
+  const CAP=40;
+  const cols=RISCO_TEMAS.map(t=>{const its=auto.filter(a=>temaDe(a)===t.k),nc=its.filter(a=>a.lv==='critica').length;
+    return`<div class="card" style="border-top:3px solid ${t.cor};${its.length?'':'opacity:.6;'}">
+      <div style="display:flex;align-items:center;gap:.45rem;margin-bottom:.5rem;">
+        <div style="background:${t.cor}18;color:${t.cor};border-radius:.42rem;padding:.3rem;display:flex;"><i data-lucide="${t.ic}" style="width:.85rem;height:.85rem;"></i></div>
+        <div style="font-size:.78rem;font-weight:800;color:#0f172a;">${t.lbl}</div>
+        <span style="margin-left:auto;font-size:1.35rem;font-weight:900;color:${its.length?t.cor:'#cbd5e1'};">${its.length}</span>
+      </div>
+      ${nc?`<div style="font-size:.6rem;font-weight:800;color:#991b1b;background:#fee2e2;border-radius:.3rem;padding:.1rem .35rem;display:inline-block;margin-bottom:.45rem;">${nc} crítico${nc>1?'s':''}</div>`:''}
+      <div style="display:flex;flex-direction:column;gap:.3rem;max-height:26rem;overflow-y:auto;padding-right:.2rem;">
+        ${its.slice(0,CAP).map(a=>`<div style="border-left:2px solid ${lvCor(a.lv)};background:${a.lv==='critica'?'#fef2f2':'#f8fafc'};border-radius:.3rem;padding:.3rem .45rem;"><div style="font-size:.66rem;font-weight:700;color:#0f172a;line-height:1.3;">${esc(a.msg)}</div>${a.det?`<div style="font-size:.59rem;color:#64748b;margin-top:.1rem;line-height:1.35;">${esc(a.det)}</div>`:''}</div>`).join('')||'<div style="font-size:.66rem;color:#94a3b8;padding:.6rem;text-align:center;">Nenhum risco neste tema.</div>'}
+      </div>
+      ${its.length>CAP?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.35rem;">Mostrando ${CAP} de ${its.length}.</div>`:''}
+      ${its.length?`<div style="font-size:.61rem;color:${t.cor};font-weight:700;margin-top:.5rem;border-top:1px solid #f1f5f9;padding-top:.42rem;">→ ${t.acao}</div>`:''}
+    </div>`}).join('');
+  return`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.8rem;">
+      <span style="font-size:1.05rem;font-weight:900;color:#0f172a;">Painel de riscos</span>
+      <span style="background:${sev.b};color:${sev.c};font-size:.7rem;font-weight:900;border-radius:.4rem;padding:.18rem .6rem;">${sev.t}</span>
+      <span style="font-size:.68rem;color:#94a3b8;">o que precisa de decisão, agrupado por tema</span>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(fmt(crit),'Alertas críticos',crit?'#dc2626':'#16a34a','triangle-alert',altos+' altos · '+auto.length+' no total')}${kpiCard(fmt(incPend),'Inconsistências abertas',incPend?'#b45309':'#16a34a','search','apontamentos a revisar')}${kpiCard(fmt(franqExtrap),'Franquias estouradas',franqExtrap?'#dc2626':'#16a34a','file-text','clientes acima do contratado')}${kpiCard(g.margem!=null?g.margem+'%':'-','Margem global',g.margem==null?'#94a3b8':g.margem<0?'#dc2626':g.margem<20?'#b45309':'#16a34a','trending-up','receita − custo')}</div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">${cols}</div>`;
+}
 function rExecAlertas(){
   const auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts())
   const ord={critica:0,alta:1,media:2,baixa:3};auto.sort((a,b)=>ord[a.lv]-ord[b.lv])
