@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v123'
+const APP_VERSION='v124'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -967,7 +967,10 @@ const kpiCard=(val,lbl,col,icon,sub='')=>`<div class="card" style="border-left:3
 // ─── Painel de Contratos (executivo) — igual ao da Lite, mas para TODOS os clientes ───
 // Casa atividade→contrato pelo CENTRO DE CUSTO (os 34 contratos têm cc; o nome do cliente nem sempre bate).
 // Pilares: LITE_PILARES_CC para quem tem escopo próprio (71/2807/2809); os demais usam os 10 pilares genéricos.
-const _pilarKeyDe=ct=>ct.tipo_atendimento==='chamado'?'avulso':(ct.tipo_atendimento==='projeto'?'projeto':'susten');
+// Contrato POR CHAMADO não tem escopo: tudo é demanda avulsa, então "fora de escopo" não se aplica a ele.
+// Olha tipo_cobranca E tipo_atendimento — contratos criados via _bc só preenchem o primeiro.
+const _porChamado=ct=>ct.tipo_cobranca==='chamado'||ct.tipo_atendimento==='chamado';
+const _pilarKeyDe=ct=>_porChamado(ct)?'avulso':(ct.tipo_atendimento==='projeto'?'projeto':'susten');
 // Sugestão de escopo derivada do que JÁ ESTÁ no cadastro do contrato (tecnologias + nome + tipo).
 // Não inventa escopo: só propõe um ponto de partida melhor que os 10 pilares técnicos genéricos —
 // que não servem para contratos de consultoria/visita (era o caso do Mitsui On-site com 94% "fora de escopo").
@@ -1036,7 +1039,8 @@ function rExecContratos(){
     const pilMin={};let foraMin=0;
     A.forEach(a=>{const txt=(a.assunto+' '+a.atv).toLowerCase();const p=pil.find(pl=>pl.kw.test(txt));if(p)pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;else foraMin+=a.wh});
     const escopoProprio=!!((ct.pilaresEdit&&ct.pilaresEdit.length)||LITE_PILARES_CC[cc]);
-    return{ct,cc,used,franqP,uso,saldo,pilMin,foraMin,nCh:new Set(A.map(a=>a.tid)).size,pilN:pil.length,escopoProprio};
+    const semEscopo=_porChamado(ct)&&!(ct.pilaresEdit&&ct.pilaresEdit.length);// por chamado = sem escopo a violar
+    return{ct,cc,used,franqP,uso,saldo,pilMin,foraMin:semEscopo?0:foraMin,nCh:new Set(A.map(a=>a.tid)).size,pilN:pil.length,escopoProprio,semEscopo};
   }).filter(r=>r.used>0).sort((a,b)=>(b.uso??-1)-(a.uso??-1)||b.used-a.used);
   if(!rows.length)return`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhum contrato com horas no período.</div>`;
   const estouro=rows.filter(r=>r.uso!=null&&r.uso>100).length,risco=rows.filter(r=>r.uso!=null&&r.uso>=85&&r.uso<=100).length;
@@ -1053,8 +1057,10 @@ function rExecContratos(){
       <div style="font-size:.6rem;color:#94a3b8;margin-bottom:.45rem;">${esc((r.ct.nome||'').slice(0,44))}</div>
       <div style="display:flex;justify-content:space-between;font-size:.66rem;margin-bottom:.2rem;"><span style="color:#334155;"><b>${minToHM(r.used)}h</b>${r.franqP?' de '+minToHM(r.franqP)+'h':''}</span><span style="color:${r.saldo<0?'#dc2626':'#166534'};font-weight:700;">${r.franqP?(r.saldo<0?'estourou '+minToHM(-r.saldo)+'h':minToHM(r.saldo)+'h livre'):'sem franquia'}</span></div>
       <div style="height:.3rem;background:#f1f5f9;border-radius:999px;overflow:hidden;margin-bottom:.45rem;"><div style="height:100%;width:${Math.max(0,Math.min(r.uso||0,100))}%;background:${uc};"></div></div>
-      <div style="display:flex;flex-wrap:wrap;gap:.2rem;margin-bottom:.35rem;">${tops.map(([n,m])=>`<span style="background:#f1f5f9;color:#475569;border-radius:.3rem;padding:.05rem .32rem;font-size:.57rem;font-weight:700;" title="${esc(n)}">${esc(n.split(/[ ,(]/)[0])} ${minToHM(m)}h</span>`).join('')||'<span style="font-size:.58rem;color:#cbd5e1;">sem classificação</span>'}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:.59rem;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:.32rem;gap:.4rem;"><span>${r.nCh} ch. · ${r.pilN} pilares ${r.escopoProprio?'<span title="Escopo próprio deste contrato" style="color:#166534;font-weight:800;">✓</span>':'<span title="Usando pilares genéricos — o fora de escopo pode inflar" style="color:#b45309;font-weight:800;">~</span>'}</span><span style="color:${foraP>15?'#b45309':'#94a3b8'};font-weight:${foraP>15?'800':'400'};">fora ${minToHM(r.foraMin)}h (${foraP}%)</span><button onclick="ctxFormEscopo('${r.ct.id}')" title="Definir os pilares de escopo deste contrato" style="cursor:pointer;background:#eff6ff;border:1px solid #dbeafe;border-radius:.3rem;color:#1d4ed8;font-size:.55rem;font-weight:800;padding:.1rem .35rem;white-space:nowrap;">escopo</button></div>
+      <div style="display:flex;flex-wrap:wrap;gap:.2rem;margin-bottom:.35rem;">${r.semEscopo?'<span style="background:#f5f3ff;color:#6d28d9;border-radius:.3rem;padding:.05rem .32rem;font-size:.57rem;font-weight:700;">Demanda avulsa '+minToHM(r.used)+'h</span>':(tops.map(([n,m])=>`<span style="background:#f1f5f9;color:#475569;border-radius:.3rem;padding:.05rem .32rem;font-size:.57rem;font-weight:700;" title="${esc(n)}">${esc(n.split(/[ ,(]/)[0])} ${minToHM(m)}h</span>`).join('')||'<span style="font-size:.58rem;color:#cbd5e1;">sem classificação</span>')}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:.59rem;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:.32rem;gap:.4rem;"><span>${r.nCh} ch.${r.semEscopo?'':' · '+r.pilN+' pilares '+(r.escopoProprio?'<span title="Escopo próprio deste contrato" style="color:#166534;font-weight:800;">✓</span>':'<span title="Usando pilares genéricos — o fora de escopo pode inflar" style="color:#b45309;font-weight:800;">~</span>')}</span>${r.semEscopo
+        ?'<span style="color:#6d28d9;font-weight:700;" title="Contrato por chamado: tudo é demanda avulsa, não existe escopo para ficar fora dele.">por chamado — sem escopo</span>'
+        :`<span style="color:${foraP>15?'#b45309':'#94a3b8'};font-weight:${foraP>15?'800':'400'};">fora ${minToHM(r.foraMin)}h (${foraP}%)</span><button onclick="ctxFormEscopo('${r.ct.id}')" title="Definir os pilares de escopo deste contrato" style="cursor:pointer;background:#eff6ff;border:1px solid #dbeafe;border-radius:.3rem;color:#1d4ed8;font-size:.55rem;font-weight:800;padding:.1rem .35rem;white-space:nowrap;">escopo</button>`}</div>
     </div>`}).join('');
   return`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;">
       <span style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;">Contratos — H.H e escopo (todos os clientes)</span>
