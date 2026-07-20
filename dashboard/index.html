@@ -265,7 +265,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v109'
+const APP_VERSION='v110'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -423,7 +423,7 @@ const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Chamado',ic:'ticket',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
   exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['custohora','Custo-Hora'],['tecnico','Por Técnico'],['alertas','Alertas']],
-  tech:[['chamados','Chamados & Atividades'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências'],['checklists','Checklists']],
+  tech:[['chamados','Chamados & Atividades'],['parados','Chamados Parados'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['matriz','Matriz'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
 }
 
@@ -883,7 +883,7 @@ function renderContent(){
   if(_nav)_nav.style.display=(roleAreas().length>1)?'flex':'none';if(_st)_st.style.display=''
   {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display='';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
   if(TIME==='comparar'){renderCompare();return}
-  const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','checklists'].includes(TECH_SUB))
+  const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','parados','checklists'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
   if(SECTION==='exec'){
     const sync={geral:rExecGeral,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecAlertas}
@@ -892,6 +892,7 @@ function renderContent(){
     const sync={checklists:rChecklists}
     if(TECH_SUB==='equipe')rEquipeEntrega().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else if(TECH_SUB==='chamados')rChamadosAtiv().then(h=>{el.innerHTML=h;lucide.createIcons()})
+    else if(TECH_SUB==='parados'){el.innerHTML=rChamadosParados();lucide.createIcons()}
     else if(TECH_SUB==='alertas')rAlertasInc().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else{el.innerHTML=(sync[TECH_SUB]||rProd)();lucide.createIcons()}
   }else{
@@ -1093,6 +1094,34 @@ window.zbxSync=async function(){const z=getZbx();if(!z.url){toast('Configure a U
 
 // ═══════ TÉCNICA ═══════════════════════════════════════════════════════════
 
+// ─── Chamados Parados (Técnica): backlog aberto sem atividade recente, por técnico e por cliente + nunca trabalhados ───
+let PARADO_DIAS=3;
+window.setParadoDias=function(n){PARADO_DIAS=+n||3;if(SECTION==='tech'&&TECH_SUB==='parados')renderContent()};
+function rChamadosParados(){
+  const bk=(MD.backlogFull||[]);
+  if(!bk.length)return `<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk na <b>Fila de Chamados</b> para carregar o backlog aberto.</div>`;
+  const hoje=isoLocal(new Date());
+  const last={};(MD.ativs||[]).forEach(a=>{const d=mdActISO(a.start);if(d&&(!last[a.tid]||d>last[a.tid]))last[a.tid]=d});// última atividade TRABALHADA por chamado
+  const dd=a=>a?Math.round((new Date(hoje+'T00:00:00')-new Date(a+'T00:00:00'))/864e5):null;
+  const N=PARADO_DIAS;
+  const rows=bk.map(t=>{const la=last[t.id]||null;return{id:t.id,assunto:t.t||'',cli:mdLocCliente(t.loc),tec:(t.ag||'').trim()||'— sem responsável',st:t.st||'',abertura:mdActISO(t.start),la,d:dd(la)}});
+  const nunca=rows.filter(r=>!r.la);
+  const com=rows.filter(r=>r.la);
+  const parados=com.filter(r=>r.d>N).sort((a,b)=>b.d-a.d);
+  const recentes=com.filter(r=>r.d<=N).length;
+  const prob=parados.concat(nunca);// "problema" = parados + nunca trabalhados
+  const byKey=keyfn=>{const m={};prob.forEach(r=>{const k=keyfn(r);const o=m[k]=m[k]||{k,parado:0,nunca:0,maxd:0};if(r.la){o.parado++;if(r.d>o.maxd)o.maxd=r.d}else o.nunca++});return Object.values(m).sort((a,b)=>(b.parado+b.nunca)-(a.parado+a.nunca))};
+  const porTec=byKey(r=>r.tec),porCli=byKey(r=>r.cli);
+  const kpi=(v,l,c,sub)=>`<div class="card" style="border-top:3px solid ${c};"><div style="font-size:1.5rem;font-weight:900;color:${c};line-height:1;">${v}</div><div style="font-size:.66rem;font-weight:800;color:#0f172a;margin-top:.2rem;">${l}</div><div style="font-size:.59rem;color:#94a3b8;margin-top:.1rem;">${sub}</div></div>`;
+  const kpis=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpi(fmt(bk.length),'Abertos na fila','#2B4C9B','backlog atual')}${kpi(fmt(parados.length),'Parados','#dc2626','sem atividade há > '+N+'d')}${kpi(fmt(recentes),'Atividade recente','#166534','trabalhados nos últimos '+N+'d')}${kpi(fmt(nunca.length),'Nunca trabalhados','#b45309','abertos, sem apontamento')}</div>`;
+  const tbtn=n=>`<button onclick="setParadoDias(${n})" style="cursor:pointer;border:none;border-radius:.32rem;padding:.22rem .6rem;font-size:.68rem;font-weight:800;background:${N===n?'#2B4C9B':'transparent'};color:${N===n?'#fff':'#475569'};">${n} dias</button>`;
+  const filtro=`<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;font-size:.7rem;color:#64748b;flex-wrap:wrap;"><span style="font-weight:700;">"Parado" = sem atividade trabalhada há mais de:</span><div style="display:flex;gap:.15rem;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.4rem;padding:.1rem;">${tbtn(3)}${tbtn(7)}${tbtn(15)}</div></div>`;
+  const agg=(title,arr,c1)=>`<div class="card overflow-x-auto">${ST(title)}<table><thead><tr><th>${c1}</th><th title="Abertos com atividade, mas parada há > ${N}d">Parados</th><th title="Abertos sem nenhum apontamento">Nunca</th><th>Total</th><th title="Maior tempo parado">Mais antigo</th></tr></thead><tbody>${arr.map(o=>`<tr><td style="font-weight:600;">${esc(o.k)}</td><td style="color:#dc2626;font-weight:700;">${o.parado||'<span style=\"color:#cbd5e1\">-</span>'}</td><td style="color:#b45309;font-weight:700;">${o.nunca||'<span style=\"color:#cbd5e1\">-</span>'}</td><td style="font-weight:800;">${o.parado+o.nunca}</td><td style="color:#64748b;">${o.maxd?o.maxd+'d':'-'}</td></tr>`).join('')||'<tr><td colspan="5" style="color:#94a3b8;padding:1rem;text-align:center;">Nada parado.</td></tr>'}</tbody></table></div>`;
+  const dcor=d=>d>30?'#dc2626':d>7?'#b45309':'#64748b';
+  const det=`<div class="card overflow-x-auto" style="margin-top:1rem;">${ST('Chamados parados ('+parados.length+') — ordenado por tempo sem atividade')}<table><thead><tr><th>Chamado</th><th>Cliente</th><th>Técnico</th><th>Status</th><th>Aberto</th><th>Últ. atividade</th><th>Parado há</th><th>Assunto</th></tr></thead><tbody>${parados.map(r=>`<tr><td style="font-weight:700;">${esc(r.id)}</td><td style="font-size:.66rem;">${esc(r.cli)}</td><td style="font-size:.66rem;">${esc((r.tec||'').split(' ').slice(0,2).join(' '))}</td><td style="font-size:.63rem;">${esc(r.st)}</td><td style="white-space:nowrap;font-size:.64rem;">${r.abertura?brDate(r.abertura):'-'}</td><td style="white-space:nowrap;font-size:.64rem;">${brDate(r.la)}</td><td style="font-weight:800;white-space:nowrap;color:${dcor(r.d)};">${r.d}d</td><td style="font-size:.63rem;color:#334155;">${esc(r.assunto.slice(0,55))}</td></tr>`).join('')||'<tr><td colspan="8" style="color:#94a3b8;padding:1rem;text-align:center;">Nenhum parado além de '+N+' dias.</td></tr>'}</tbody></table></div>`;
+  const nun=`<div class="card overflow-x-auto" style="margin-top:1rem;">${ST('Nunca trabalhados ('+nunca.length+') — abertos, sem nenhum apontamento de trabalho')}<table><thead><tr><th>Chamado</th><th>Cliente</th><th>Técnico</th><th>Status</th><th>Aberto há</th><th>Assunto</th></tr></thead><tbody>${nunca.sort((a,b)=>(dd(a.abertura)<dd(b.abertura)?1:-1)).map(r=>`<tr><td style="font-weight:700;">${esc(r.id)}</td><td style="font-size:.66rem;">${esc(r.cli)}</td><td style="font-size:.66rem;">${esc((r.tec||'').split(' ').slice(0,2).join(' '))}</td><td style="font-size:.63rem;">${esc(r.st)}</td><td style="white-space:nowrap;font-weight:700;color:${dcor(dd(r.abertura)||0)};">${r.abertura?dd(r.abertura)+'d':'-'}</td><td style="font-size:.63rem;color:#334155;">${esc(r.assunto.slice(0,55))}</td></tr>`).join('')||'<tr><td colspan="6" style="color:#94a3b8;padding:1rem;text-align:center;">Todos os abertos já tiveram ao menos um apontamento.</td></tr>'}</tbody></table></div>`;
+  return kpis+filtro+`<div class="grid grid-cols-1 md:grid-cols-2 gap-4">${agg('Por técnico (responsável)',porTec,'Técnico')}${agg('Por cliente',porCli,'Cliente')}</div>`+det+nun;
+}
 function rProd(){const rows=fRec().map(r=>{const fte=pct(r.trab_minutos,r.cap_minutos),c=fte<60?'#ef4444':fte<80?'#f59e0b':'#22c55e';return`<tr><td style="font-weight:600;">${techDisp(r.nome)}</td><td><span class="tag">${r.nivel}</span></td><td style="color:#64748b;">${esc(r.equipe||'-')}</td><td>${minToHM(r.trab_minutos)}h</td><td style="color:#94a3b8;">${minToHM(r.avulsa_minutos)}h</td><td><div style="display:flex;align-items:center;gap:.43rem;"><div style="flex:1;height:.28rem;background:#f1f5f9;border-radius:9999px;min-width:3.5rem;overflow:hidden;"><div style="height:100%;width:${Math.min(fte,100)}%;background:${c};"></div></div><span style="font-size:.72rem;font-weight:800;color:${c};min-width:2.1rem;">${fte}%</span></div></td></tr>`}).join('');return`<div class="card overflow-x-auto">${ST('Produtividade por Técnico')}<table><thead><tr><th>Técnico</th><th>Nível</th><th>Equipe</th><th>H. Trabalhadas</th><th>H. Avulsas</th><th>FTE %</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="color:#94a3b8;padding:1.5rem;text-align:center;">Sem dados.</td></tr>'}</tbody></table></div>`}
 
 function mdPeriodRange(){
