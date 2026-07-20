@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v118'
+const APP_VERSION='v119'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -976,11 +976,18 @@ window.ctxResetEscopo=function(id){const c=CONTRACTS.find(x=>x.id===id);if(!c)re
 function rExecContratos(){
   if(!MD.loaded)return`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Sincronize o Milldesk para ver o consumo por contrato.</div>`;
   const mf=(typeof liteMonths==='function')?liteMonths():1;
-  const acts=(MD.ativs||[]).map(a=>({cc:String(mdCC(a.loc||'')),wh:a.wh||0,iso:mdActISO(a.start),ag:a.ag,atv:a.atv||'',assunto:a.assunto||'',tid:a.tid}))
+  const acts=(MD.ativs||[]).map(a=>({cc:String(mdCC(a.loc||'')),loc:a.loc||'',wh:a.wh||0,iso:mdActISO(a.start),ag:a.ag,atv:a.atv||'',assunto:a.assunto||'',tid:a.tid}))
     .filter(a=>a.ag&&!isExcludedTech(a.ag)&&atvInRange(a.iso));
-  const byCC={};acts.forEach(a=>{if(a.cc)(byCC[a.cc]=byCC[a.cc]||[]).push(a)});
-  const rows=CONTRACTS.filter(c=>c.status!=='arquivado').map(ct=>{
-    const cc=String(ct.cc||''),A=byCC[cc]||[];
+  // O CC NÃO identifica o cliente sozinho: no Milldesk o CC 9 serve 4Seniors E S4SYS, e "xx" é curinga de vários
+  // clientes (Dominos Pulse, OAK, Compagás Avulsos…). Quando o CC é compartilhado, desempata pelo NOME no local.
+  const ctsAtivos=CONTRACTS.filter(c=>c.status!=='arquivado');
+  const porCC={};ctsAtivos.forEach(c=>{(porCC[String(c.cc)]=porCC[String(c.cc)]||[]).push(c)});
+  const contratoDe=a=>{const lista=porCC[a.cc]||[];if(!lista.length)return null;if(lista.length===1)return lista[0];
+    const nl=normName(String(a.loc).split('|')[0]);if(!nl)return null;
+    return lista.find(c=>{const n=normName(c.cliente);return n&&(n===nl||n.includes(nl)||nl.includes(n))})||null};
+  const byCtr={};acts.forEach(a=>{const c=contratoDe(a);if(c)(byCtr[c.id]=byCtr[c.id]||[]).push(a)});
+  const rows=ctsAtivos.map(ct=>{
+    const cc=String(ct.cc||''),A=byCtr[ct.id]||[];
     const used=A.reduce((s,a)=>s+a.wh,0),franqP=(ct.franquia_horas||0)*60*mf;
     const uso=franqP?Math.round(used/franqP*100):null,saldo=franqP-used;
     const pil=litePilares(Object.assign({},ct,{cc,pilar:_pilarKeyDe(ct)}));// passa o contrato inteiro p/ respeitar pilaresEdit
