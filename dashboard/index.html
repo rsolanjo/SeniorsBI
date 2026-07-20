@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v124'
+const APP_VERSION='v125'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1447,7 +1447,8 @@ async function mdFetchAvulsas(base){
 async function mdFetchTicketCats(base,tids){
   MD.tkCat=MD.tkCat||{}
   const need=[...new Set(tids)].filter(id=>id&&MD.tkCat[id]===undefined).slice(0,80)
-  for(const id of need){try{const r=await fetch(`${base}/showTicket?id=${encodeURIComponent(id)}`).then(x=>x.json());MD.tkCat[id]=(r&&!r.error&&(r.category||r.subcategory))||''}catch(e){MD.tkCat[id]=''}}
+  // pausa curta entre as chamadas: em rajada o Milldesk derruba a conexão e contamina os fetches seguintes
+  for(const id of need){try{const r=await fetch(`${base}/showTicket?id=${encodeURIComponent(id)}`).then(x=>x.json());MD.tkCat[id]=(r&&!r.error&&(r.category||r.subcategory))||''}catch(e){MD.tkCat[id]=''}await new Promise(res=>setTimeout(res,60))}
 }
 const MD_HEAVY_TTL=10*60*1000;// atividades/avulsas são ~12MB e IGNORAM a data → baixar 1x e reusar por 10min (força ao clicar Sincronizar)
 window.mdSync=async function(force){
@@ -1482,12 +1483,14 @@ window.mdSync=async function(force){
       }
       else{MD.ativs=ar.ativs||[];MD.ativsTs=MD.ativsHistTs=Date.now();try{lsSet('sbi_md_ativs',{ts:MD.ativsTs,start,end,ativs:MD.ativs.slice(0,6000)})}catch(e){}mdApplyFromAtivs()}
     }
-    // 3..5) complementares — não bloqueiam, mas registram se falharem
+    // 3) Avulsas (horas a cobrar) — CEDO de propósito. O endpoint é leve (~30KB, 0,4s), mas o Milldesk derruba a
+    // conexão depois de muitas requisições: se buscar por último (após os meses de chamados, os 12MB de atividades,
+    // 8 status de backlog e até 80 showTicket de categoria) ele falhava as 4 tentativas com "Failed to fetch".
+    if(!avulsasFresh){try{await mdFetchAvulsas(base);MD.avulsasTs=Date.now()}catch(e){MD.avulsasTs=0;fail('Horas avulsas',MD.avulsasErr||e.message,true)}}
+    // 4..6) complementares — não bloqueiam, mas registram se falharem
     try{MD.backlogFull=await mdFetchBacklog(base)}catch(e){MD.backlogFull=MD.backlogFull||[];fail('Backlog',e.message,false)}
     try{const tkK={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkK[t.id]=1});const ptids=(MD.ativs||[]).filter(a=>{const iso=mdActISO(a.start);return iso>=start&&iso<=end}).map(a=>a.tid).filter(id=>id&&!tkK[id]);await mdFetchTicketCats(base,ptids)}catch(e){}
     try{MD.chargeCli=await mdFetchCharge(base);mdApplyFromAtivs()}catch(e){}
-    // 6) Avulsas (horas a cobrar) — pesado e ignora data → reusa se fresco (crítico p/ números financeiros)
-    if(!avulsasFresh){try{await mdFetchAvulsas(base);MD.avulsasTs=Date.now()}catch(e){MD.avulsasTs=0;fail('Horas avulsas',MD.avulsasErr||e.message,true)}}
     MD.dataReliable=!MD.syncErrors.some(e=>e.critical)
     MD.loaded=true;MD.periodo=start+' a '+end;MD.ts=Date.now();MD.loading=false;updPeriodoChip()
     const lu=document.getElementById('lastUpdate');if(lu)lu.textContent='Milldesk ao vivo · '+new Date().toLocaleString('pt-BR')
