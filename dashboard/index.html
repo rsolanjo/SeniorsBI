@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v120'
+const APP_VERSION='v121'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -993,14 +993,20 @@ function rExecContratos(){
   const mf=(typeof liteMonths==='function')?liteMonths():1;
   const acts=(MD.ativs||[]).map(a=>({cc:String(mdCC(a.loc||'')),loc:a.loc||'',wh:a.wh||0,iso:mdActISO(a.start),ag:a.ag,atv:a.atv||'',assunto:a.assunto||'',tid:a.tid}))
     .filter(a=>a.ag&&!isExcludedTech(a.ag)&&atvInRange(a.iso));
-  // O CC NÃO identifica o cliente sozinho: no Milldesk o CC 9 serve 4Seniors E S4SYS, e "xx" é curinga de vários
-  // clientes (Dominos Pulse, OAK, Compagás Avulsos…). Quando o CC é compartilhado, desempata pelo NOME no local.
+  // O CC é numerado POR EMPRESA, não globalmente — CC repetido entre empresas diferentes é NORMAL
+  // (4Seniors e S4SYS têm, cada uma, o seu CC 9). O Milldesk só traz "CLIENTE | CC" no local, então a empresa
+  // é inferida pelo nome do cliente. CC único casa direto; CC compartilhado desempata por cliente e depois empresa.
   const ctsAtivos=CONTRACTS.filter(c=>c.status!=='arquivado');
   const porCC={};ctsAtivos.forEach(c=>{(porCC[String(c.cc)]=porCC[String(c.cc)]||[]).push(c)});
   const contratoDe=a=>{const lista=porCC[a.cc]||[];if(!lista.length)return null;if(lista.length===1)return lista[0];
     const nl=normName(String(a.loc).split('|')[0]);if(!nl)return null;
-    return lista.find(c=>{const n=normName(c.cliente);return n&&(n===nl||n.includes(nl)||nl.includes(n))})||null};
-  const byCtr={};acts.forEach(a=>{const c=contratoDe(a);if(c)(byCtr[c.id]=byCtr[c.id]||[]).push(a)});
+    const bate=v=>{const n=normName(v||'');return !!(n&&(n===nl||n.includes(nl)||nl.includes(n)))};
+    return lista.find(c=>bate(c.cliente))||lista.find(c=>bate(c.empresa))||null};
+  // Nada é descartado em silêncio: o que não casar é somado e mostrado no rodapé do painel.
+  const byCtr={};let naoCasouMin=0;const naoCasouLoc={};
+  acts.forEach(a=>{const c=contratoDe(a);
+    if(c){(byCtr[c.id]=byCtr[c.id]||[]).push(a)}
+    else if(a.cc){naoCasouMin+=a.wh;const L=String(a.loc).trim();naoCasouLoc[L]=(naoCasouLoc[L]||0)+a.wh}});
   const rows=ctsAtivos.map(ct=>{
     const cc=String(ct.cc||''),A=byCtr[ct.id]||[];
     const used=A.reduce((s,a)=>s+a.wh,0),franqP=(ct.franquia_horas||0)*60*mf;
@@ -1034,7 +1040,8 @@ function rExecContratos(){
       <span style="font-size:.65rem;color:#64748b;"><b style="color:#0f172a;">${rows.length}</b> com movimento · <b style="color:#dc2626;">${estouro}</b> estourando · <b style="color:#b45309;">${risco}</b> no limite</span>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">${cards}</div>
-    <div style="font-size:.59rem;color:#94a3b8;margin-top:.5rem;">Franquia proporcional ao período (${mf} mês/meses). Atividade casada ao contrato pelo <b>centro de custo</b>. Pilares próprios em Compagás/Mileto; demais usam os 10 pilares padrão de sustentação.</div>`;
+    <div style="font-size:.59rem;color:#94a3b8;margin-top:.5rem;">Franquia proporcional ao período (${mf} mês/meses). Atividade casada ao contrato por <b>centro de custo</b> — como o CC é numerado por empresa, CC repetido entre empresas é normal e o desempate usa o nome do cliente/empresa no local. <b>✓</b> = escopo próprio do contrato · <b>~</b> = pilares genéricos (o "fora de escopo" pode inflar).</div>
+    ${naoCasouMin>0?`<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:.5rem;padding:.55rem .7rem;font-size:.62rem;color:#78716c;line-height:1.5;margin-top:.6rem;"><b style="color:#92400e;">${minToHM(naoCasouMin)}h não atribuídas a nenhum contrato</b> — o local do apontamento não casou com nenhum contrato do mesmo CC. Locais: ${Object.entries(naoCasouLoc).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([l,m])=>esc(l)+' ('+minToHM(m)+'h)').join(' · ')}. Cadastre o contrato ou ajuste o nome do cliente em <b>Admin → Contratos</b>.</div>`:''}`;
 }
 // ─── Painel de Riscos (executivo) — leitura de CEO: agrupa por tema, mostra o tamanho do problema e o que fazer ───
 const RISCO_TEMAS=[
