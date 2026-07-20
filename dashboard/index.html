@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v122'
+const APP_VERSION='v123'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1011,13 +1011,14 @@ window.ctxResetEscopo=function(id){const c=CONTRACTS.find(x=>x.id===id);if(!c)re
 function rExecContratos(){
   if(!MD.loaded)return`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Sincronize o Milldesk para ver o consumo por contrato.</div>`;
   const mf=(typeof liteMonths==='function')?liteMonths():1;
-  const acts=(MD.ativs||[]).map(a=>({cc:String(mdCC(a.loc||'')),loc:a.loc||'',wh:a.wh||0,iso:mdActISO(a.start),ag:a.ag,atv:a.atv||'',assunto:a.assunto||'',tid:a.tid}))
+  // CC comparado em MINÚSCULAS: quando não é numérico o Milldesk varia a caixa ("MITSUI | XX" vs "OAK | xx")
+  const acts=(MD.ativs||[]).map(a=>({cc:String(mdCC(a.loc||'')).toLowerCase(),loc:a.loc||'',wh:a.wh||0,iso:mdActISO(a.start),ag:a.ag,atv:a.atv||'',assunto:a.assunto||'',tid:a.tid}))
     .filter(a=>a.ag&&!isExcludedTech(a.ag)&&atvInRange(a.iso));
   // O CC é numerado POR EMPRESA, não globalmente — CC repetido entre empresas diferentes é NORMAL
   // (4Seniors e S4SYS têm, cada uma, o seu CC 9). O Milldesk só traz "CLIENTE | CC" no local, então a empresa
   // é inferida pelo nome do cliente. CC único casa direto; CC compartilhado desempata por cliente e depois empresa.
   const ctsAtivos=CONTRACTS.filter(c=>c.status!=='arquivado');
-  const porCC={};ctsAtivos.forEach(c=>{(porCC[String(c.cc)]=porCC[String(c.cc)]||[]).push(c)});
+  const porCC={};ctsAtivos.forEach(c=>{const k=String(c.cc||'').toLowerCase();(porCC[k]=porCC[k]||[]).push(c)});
   const contratoDe=a=>{const lista=porCC[a.cc]||[];if(!lista.length)return null;if(lista.length===1)return lista[0];
     const nl=normName(String(a.loc).split('|')[0]);if(!nl)return null;
     const bate=v=>{const n=normName(v||'');return !!(n&&(n===nl||n.includes(nl)||nl.includes(n)))};
