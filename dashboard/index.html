@@ -77,6 +77,23 @@ textarea.fi{resize:vertical;min-height:2.7rem}
 <body>
 <div id="loading"><svg width="48" height="36" viewBox="0 0 80 56" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="28" rx="38" ry="24" fill="#2B4C9B" stroke="#E04622" stroke-width="3"/><text x="40" y="27" text-anchor="middle" font-size="19" font-weight="900" fill="#fff" font-family="Arial Black,Arial">4</text><text x="40" y="40" text-anchor="middle" font-size="9" font-weight="700" fill="#93c5fd" font-family="Arial">SENIORS</text></svg><div class="spinner"></div></div>
 
+<div id="loginScreen" class="hidden" style="position:fixed;inset:0;z-index:100;background:linear-gradient(135deg,#1e293b,#2B4C9B);display:flex;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:#fff;border-radius:1rem;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:2rem 2rem 1.5rem;width:100%;max-width:21rem;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:.35rem;margin-bottom:1.15rem;">
+      <img src="4sr.png" alt="4Seniors" style="height:42px;width:auto;object-fit:contain;">
+      <div style="font-size:1.3rem;font-weight:900;color:#0f172a;letter-spacing:-.03em;">SeniorsBI</div>
+      <div style="font-size:.62rem;color:#2B4C9B;font-weight:800;text-transform:uppercase;letter-spacing:.14em;">Painel de Dados</div>
+    </div>
+    <label style="font-size:.66rem;font-weight:700;color:#475569;">Usuário</label>
+    <input id="loginUser" type="text" autocomplete="username" style="width:100%;box-sizing:border-box;margin:.2rem 0 .65rem;padding:.55rem .7rem;border:1px solid #e2e8f0;border-radius:.5rem;font-size:.85rem;" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+    <label style="font-size:.66rem;font-weight:700;color:#475569;">Senha</label>
+    <input id="loginPass" type="password" autocomplete="current-password" style="width:100%;box-sizing:border-box;margin:.2rem 0 .3rem;padding:.55rem .7rem;border:1px solid #e2e8f0;border-radius:.5rem;font-size:.85rem;" onkeydown="if(event.key==='Enter')doLogin()">
+    <div id="loginErr" style="min-height:1.05rem;font-size:.7rem;color:#dc2626;font-weight:700;margin-bottom:.35rem;"></div>
+    <button onclick="doLogin()" style="width:100%;padding:.6rem;background:#2B4C9B;color:#fff;border:none;border-radius:.5rem;font-size:.85rem;font-weight:800;cursor:pointer;">Entrar</button>
+    <div style="font-size:.57rem;color:#94a3b8;margin-top:.85rem;line-height:1.45;text-align:center;">Acesso restrito 4 Seniors. O que você vê depende do seu perfil de acesso.</div>
+  </div>
+</div>
+
 <div id="app" class="hidden min-h-screen flex flex-col">
 
 <header id="appHeader" style="background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:40;" class="px-4 py-1.5">
@@ -88,12 +105,8 @@ textarea.fi{resize:vertical;min-height:2.7rem}
       <div style="border-left:2px solid #e2e8f0;padding-left:.72rem;"><div style="font-size:1.12rem;font-weight:900;color:#1e293b;letter-spacing:-.035em;line-height:1.05">SeniorsBI</div><div style="font-size:.58rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.1em;">Painel de Operações</div></div>
     </div>
     <div class="flex items-center gap-2.5">
-      <div id="secNav" style="display:none;gap:.16rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.52rem;padding:.16rem;">
-        <button class="sec-btn active" onclick="setSection('tech')" id="sb-tech">Técnica</button>
-        <button class="sec-btn" onclick="setSection('exec')" id="sb-exec">Executiva 🔒</button>
-        <button class="sec-btn" onclick="setSection('admin')" id="sb-admin">Admin 🔒</button>
-      </div>
-      <button id="modeBtn" onclick="setAppMode(APP_MODE==='limited'?'full':'limited')" style="padding:.28rem .62rem;border:1px solid #e2e8f0;border-radius:.45rem;background:#fff;font-size:.68rem;font-weight:800;color:#475569;cursor:pointer;white-space:nowrap;">🔓 Versão completa</button>
+      <div id="secNav" style="display:none;gap:.16rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.52rem;padding:.16rem;"></div>
+      <div id="userBadge" style="display:flex;align-items:center;gap:.45rem;"></div>
       <div style="width:1px;height:1.25rem;background:#e2e8f0;"></div>
       <div id="demo-live" class="flex items-center gap-1.5"><div class="pulse" id="liveDot"></div><span style="font-size:.68rem;color:#64748b;" id="liveStatus">…</span><span id="zbxStatus" style="font-size:.62rem;font-weight:700;"></span><span id="appVersion" style="font-size:.62rem;font-weight:800;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;padding:.05rem .32rem;border-radius:.3rem;"></span></div>
       <span style="font-size:.58rem;color:#94a3b8;" id="lastUpdate"></span>
@@ -252,7 +265,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v108'
+const APP_VERSION='v109'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -337,6 +350,64 @@ window.setAppMode=function(m){
   else{APP_MODE='limited'}
   const b=document.getElementById('modeBtn');if(b)b.textContent=APP_MODE==='limited'?'🔓 Versão completa':'▸ Versão Lite'
   renderContent()
+}
+// ===== LOGIN / PERFIS (client-side — NÃO é segurança forte: repo público, tudo roda no browser. Serve p/ organizar acesso) =====
+const SBI_ROLES={
+  admin:     {lbl:'Administrador', areas:['lite','exec','tech','adm'], val:true},
+  gestao:    {lbl:'Gestão',        areas:['lite','exec'],              val:true},
+  financeiro:{lbl:'Financeiro',    areas:['lite'],                     val:true},
+  tecnico:   {lbl:'Técnico',       areas:['tech'],                     val:false}
+};
+const SBI_AREAS={lite:{lbl:'Lite',mode:'limited'},exec:{lbl:'Executiva',mode:'full',section:'exec'},tech:{lbl:'Técnica',mode:'full',section:'tech'},adm:{lbl:'Admin',mode:'full',section:'admin'}};
+// senhas guardadas só como hash SHA-256 (a senha literal não fica no código)
+const SBI_USERS=[
+  {user:'raphael', role:'admin',      hash:'9152cc13894f4d4489f0ed7587e27e0039198283ccf2f1bc4be0b7045678eb71'},
+  {user:'admin',   role:'admin',      hash:'9152cc13894f4d4489f0ed7587e27e0039198283ccf2f1bc4be0b7045678eb71'},
+  {user:'bianca',  role:'financeiro', hash:'0f20de9fc99512ba5a6b71eac4653fcec41ffe225b6d45da321463bb54da0da9'},
+  {user:'gestao',  role:'gestao',     hash:'c3fa3f8ea614178e69eb849c511738b88032acf147cd29f7244bbcfe08183e33'},
+  {user:'cristina',role:'tecnico',    hash:'34f3392f9b9a736522563eafeb1a430751b124fdb4d415a53eeea35ce24d6d05'}
+];
+let AUTH=null, CUR_AREA='lite';
+function normUser(s){return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')}
+async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+function roleAreas(){return AUTH?((SBI_ROLES[AUTH.role]||{}).areas||[]):[]}
+function canVal(){return !!(AUTH&&(SBI_ROLES[AUTH.role]||{}).val)}
+window.doLogin=async function(){
+  const u=normUser(document.getElementById('loginUser').value), p=document.getElementById('loginPass').value||'', err=document.getElementById('loginErr');
+  const rec=SBI_USERS.find(x=>x.user===u);
+  let h=''; try{ if(rec) h=await sha256hex(p) }catch(e){ err.textContent='Navegador sem suporte a criptografia (use HTTPS).'; return }
+  if(!rec||h!==rec.hash){err.textContent='Usuário ou senha inválidos.';return}
+  AUTH={user:u,role:rec.role}; try{sessionStorage.setItem('sbi_auth',JSON.stringify(AUTH))}catch(e){}
+  err.textContent=''; document.getElementById('loginPass').value='';
+  applyAuth();
+};
+window.doLogout=function(){AUTH=null;LITE_VAL=false;try{sessionStorage.removeItem('sbi_auth')}catch(e){}
+  const ls=document.getElementById('loginScreen');if(ls)ls.classList.remove('hidden');
+  const ap=document.getElementById('app');if(ap)ap.classList.add('hidden');
+  const lu=document.getElementById('loginUser');if(lu)lu.value='';
+};
+function applyAuth(){
+  const ls=document.getElementById('loginScreen');if(ls)ls.classList.add('hidden');
+  const ap=document.getElementById('app');if(ap)ap.classList.remove('hidden');
+  GO_AREA(roleAreas()[0]||'lite');
+}
+window.GO_AREA=function(k){
+  const areas=roleAreas(); if(!areas.includes(k))k=areas[0]; if(!k)return;
+  CUR_AREA=k; const a=SBI_AREAS[k]; APP_MODE=a.mode;
+  if(a.section){SEC_AUTH=true;SECTION=a.section;renderSubTabs()}
+  renderContent();
+};
+// Botões de área (só os permitidos) + badge do usuário — nav único por perfil
+function roleAreaBtns(){const areas=roleAreas();if(areas.length<=1)return '';
+  return `<div style="display:flex;gap:.14rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.5rem;padding:.14rem;">`+areas.map(k=>`<button onclick="GO_AREA('${k}')" style="padding:.26rem .6rem;border:none;border-radius:.38rem;font-size:.68rem;font-weight:800;cursor:pointer;white-space:nowrap;background:${CUR_AREA===k?'#2B4C9B':'transparent'};color:${CUR_AREA===k?'#fff':'#475569'};">${SBI_AREAS[k].lbl}</button>`).join('')+`</div>`;
+}
+function roleUserBadge(){if(!AUTH)return '';const r=SBI_ROLES[AUTH.role]||{};
+  return `<span style="font-size:.66rem;color:#64748b;font-weight:700;white-space:nowrap;"><b style="color:#0f172a;text-transform:capitalize;">${esc(AUTH.user)}</b> · ${esc(r.lbl||'')}</span><button onclick="doLogout()" title="Encerrar sessão" style="padding:.24rem .55rem;border:1px solid #fecaca;border-radius:.4rem;background:#fef2f2;color:#b91c1c;font-size:.66rem;font-weight:800;cursor:pointer;white-space:nowrap;">Sair</button>`;
+}
+function syncHeaderNav(){
+  const nav=document.getElementById('secNav');
+  if(nav){const areas=roleAreas();nav.innerHTML=areas.map(k=>`<button class="sec-btn ${CUR_AREA===k?'active':''}" onclick="GO_AREA('${k}')">${SBI_AREAS[k].lbl}</button>`).join('');nav.style.display=(APP_MODE==='full'&&areas.length>1)?'flex':'none';}
+  const ub=document.getElementById('userBadge');if(ub)ub.innerHTML=roleUserBadge();
 }
 let ROT_PAUSED=false,rotTimer=null,rotSec=30,rotIdx=0
 let FUNCS=[],CONTRACTS=[]
@@ -795,6 +866,8 @@ try{const _srtMO=new MutationObserver(()=>{clearTimeout(window._srtT);window._sr
 window.setSub=function(s){if(SECTION==='exec')EXEC_SUB=s;else if(SECTION==='tech')TECH_SUB=s;else ADMIN_SUB=s;renderSubTabs();renderContent()}
 function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:ADMIN_SUB;document.getElementById('subTabs').innerHTML=SECTION_SUBS[SECTION].map(([k,l])=>`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}</button>`).join('')}
 function renderContent(){
+  if(!AUTH){const ls=document.getElementById('loginScreen');if(ls)ls.classList.remove('hidden');const ap=document.getElementById('app');if(ap)ap.classList.add('hidden');return}
+  syncHeaderNav();
   const el=document.getElementById('main')
   const _nav=document.getElementById('secNav'),_st=document.getElementById('subTabs')
   if(APP_MODE==='limited'){
@@ -807,7 +880,7 @@ function renderContent(){
     if(LITE_SUB==='relatorios'){el.innerHTML=chrome+rLiteRelatorios();if(window.lucide)lucide.createIcons();return}
     if(LITE_SUB==='auditor'){el.innerHTML=chrome+rLiteAuditor();if(window.lucide)lucide.createIcons();return}
     rLimitado().then(h=>{el.innerHTML=chrome+h;if(window.lucide)lucide.createIcons()});return}
-  if(_nav)_nav.style.display='flex';if(_st)_st.style.display=''
+  if(_nav)_nav.style.display=(roleAreas().length>1)?'flex':'none';if(_st)_st.style.display=''
   {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display='';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
   if(TIME==='comparar'){renderCompare();return}
   const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','checklists'].includes(TECH_SUB))
@@ -1749,14 +1822,14 @@ function liteChrome(){
         <img src="logo.png" alt="4 Seniors Brasil" style="height:80px;width:auto;object-fit:contain;flex-shrink:0;">
         <div style="border-left:2px solid #e2e8f0;padding-left:.85rem;"><div style="font-size:1.75rem;font-weight:900;color:#0f172a;letter-spacing:-.045em;line-height:1;">SeniorsBI</div><div style="font-size:.66rem;color:#2B4C9B;font-weight:800;text-transform:uppercase;letter-spacing:.16em;margin-top:.2rem;">Painel de Dados [ Lite ]</div></div>
       </div>
-      <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">${status}${syncBtn}${modeBtn}</div>
+      <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">${status}${syncBtn}${roleAreaBtns()}${roleUserBadge()}</div>
     </div>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:.8rem;padding:.42rem .55rem;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;"><div style="display:flex;gap:.35rem;flex-wrap:wrap;">${tabs}</div>${periodoLabel}</div>
         <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
           <div style="display:flex;align-items:center;background:#fff;border:1px solid #e2e8f0;border-radius:.55rem;padding:.09rem;flex-wrap:wrap;">${times}</div>
-          <div style="display:flex;gap:.4rem;">${valBtn}</div>
+          <div style="display:flex;gap:.4rem;">${canVal()?valBtn:''}</div>
         </div>
       </div>
       ${periodoRow}
@@ -2169,7 +2242,7 @@ function rMatriz(){
   return matriz
 }
 // Aba unificada: Produtividade + Clientes (horas/franquia/a cobrar) + Histórico
-async function rEquipeEntrega(){let hist='';try{hist=await rTrend()}catch(e){hist='<div class="card" style="color:#94a3b8;padding:1rem;text-align:center;">Histórico indisponível.</div>'}return rEquipe()+rCli()+'<div style="height:.1rem;"></div>'+hist}
+async function rEquipeEntrega(){if(!canVal())return rEquipe()+rCli();let hist='';try{hist=await rTrend()}catch(e){hist='<div class="card" style="color:#94a3b8;padding:1rem;text-align:center;">Histórico indisponível.</div>'}return rEquipe()+rCli()+'<div style="height:.1rem;"></div>'+hist}
 window.cycleSkill=function(tec,skill){let SK=getSkillsLS()||BASE_SKILLS.map(s=>({...s}));const e=SK.find(s=>s.tecnico===tec&&s.skill===skill);const nv=e?((e.nivel+1)%4):1;if(e){if(nv===0)SK=SK.filter(s=>!(s.tecnico===tec&&s.skill===skill));else e.nivel=nv}else SK.push({tecnico:tec,skill,nivel:1});setSkillsLS(SK);if(SECTION==='admin'&&ADMIN_SUB==='matriz')renderContent()}
 window.addSkill=function(){const nome=prompt('Nome da nova skill/tecnologia:');if(!nome||!nome.trim())return;const SK=getSkillsLS()||BASE_SKILLS.map(s=>({...s}));const t0=[...new Set(SK.map(s=>s.tecnico))][0]||(FUNCS[0]&&FUNCS[0].nome);if(t0)SK.push({tecnico:t0,skill:nome.trim(),nivel:1});setSkillsLS(SK);renderContent()}
 window.delSkill=function(skill){confirmAction('Remover a skill "'+skill+'" da matriz?',()=>{const SK=(getSkillsLS()||[]).filter(s=>s.skill!==skill);setSkillsLS(SK);renderContent()})}
@@ -2338,7 +2411,13 @@ async function boot(){
     if(noMd){if(MES)await loadMonth(MES);else document.getElementById('main').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:14rem;gap:.62rem;color:#94a3b8;font-size:.875rem;text-align:center;">Conecte ao Milldesk na barra acima para carregar chamados e horas ao vivo.<br>Contratos e funcionários já estão disponíveis em <b>Admin</b>.</div>`}
     initRealtime();startRot()}
   catch(e){document.getElementById('main').innerHTML=`<div class="card" style="border-left:3px solid #ef4444;color:#ef4444;padding:1.25rem;font-size:.875rem;">Erro: ${esc(e.message)}</div>`}
-  finally{document.getElementById('appVersion').textContent=APP_VERSION;document.getElementById('loading').style.display='none';document.getElementById('app').classList.remove('hidden');lucide.createIcons()}
+  finally{
+    document.getElementById('appVersion').textContent=APP_VERSION;document.getElementById('loading').style.display='none';
+    try{const a=JSON.parse(sessionStorage.getItem('sbi_auth'));if(a&&a.user&&SBI_ROLES[a.role])AUTH=a}catch(e){}
+    if(AUTH){applyAuth()}
+    else{document.getElementById('app').classList.add('hidden');document.getElementById('loginScreen').classList.remove('hidden');const lu=document.getElementById('loginUser');if(lu)setTimeout(()=>lu.focus(),50)}
+    lucide.createIcons()
+  }
 }
 document.getElementById('selMes').addEventListener('change',e=>{if(e.target.value)loadMonth(e.target.value)})
 boot()
