@@ -265,7 +265,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v112'
+const APP_VERSION='v113'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1160,7 +1160,9 @@ async function mdGet(url,opt){
   throw lastErr||new Error('falha desconhecida');
 }
 async function mdFetchTicketsRange(base,start,end){
-  const one=async(a,b)=>{const per=await mdGet(`${base}/showTicketsPerPeriod?start=${a}&end=${b}`);if(per&&per.error)throw new Error(per.error);return Array.isArray(per)?per:[]}
+  // showTicketsPerPeriod devolve ~13MB por MÊS (medido: 40MB/trimestre). Com o timeout padrão (25s) um mês estoura
+  // em conexão mais lenta e o período fica incompleto (banner de dados incompletos) → timeout longo + mais tentativas.
+  const one=async(a,b)=>{const per=await mdGet(`${base}/showTicketsPerPeriod?start=${a}&end=${b}`,{timeout:90000,tries:4});if(per&&per.error)throw new Error(per.error);return Array.isArray(per)?per:[]}
   const s=new Date(start+'T12:00:00'),e=new Date(end+'T12:00:00'),days=(e-s)/864e5
   if(days<=62)return one(start,end)
   const out=[],falhas=[],pad=n=>String(n).padStart(2,'0');let cur=new Date(s.getFullYear(),s.getMonth(),1)
@@ -2228,6 +2230,10 @@ function rIncApont(){
   const A=(MD.ativs||[]).filter(a=>{const i=mdActISO(a.start);return i&&atvInRange(i)&&a.ag&&!isExcludedTech(a.ag)});
   if(!A.length)return `<div class="card" style="margin-top:1rem;color:#94a3b8;text-align:center;padding:1.5rem;">Sem atividades no período para auditar.</div>`;
   const dtxt=a=>stripHtml(a.desc||''),atxt=a=>stripHtml(a.atv||'');
+  // Descrição repetida em série pelo MESMO técnico (copy-paste): mesmo texto ≥3× no período.
+  // Só considera descrição com 8+ caracteres — vazia/rasa já é sinalizada pelos detectores acima.
+  const rkey=a=>(a.ag||'')+''+dtxt(a).toLowerCase().replace(/\s+/g,' ').trim();
+  const rep={};A.forEach(a=>{if(dtxt(a).length>=8){const k=rkey(a);const o=rep[k]=rep[k]||{n:0,ag:a.ag,d:dtxt(a),h:0,tids:new Set()};o.n++;o.h+=(a.wh||0);o.tids.add(a.tid)}});
   const find=[];
   A.forEach(a=>{
     const d=dtxt(a),n=d.length,h=a.wh||0,p=[];
@@ -2236,8 +2242,10 @@ function rIncApont(){
     else if(d.toLowerCase()===atxt(a).toLowerCase())p.push({t:'descrição = título',c:'#b45309'});
     if(h>=120&&n<40)p.push({t:'tempo alto s/ detalhe',c:'#dc2626'});
     if(h>=60&&(APONT_TRIVIAL_RE.test(stripHtml(a.assunto||''))||APONT_TRIVIAL_RE.test(atxt(a))))p.push({t:'tempo alto p/ tarefa simples',c:'#b45309'});
+    const rc=(rep[rkey(a)]||{}).n||0;if(rc>=3)p.push({t:'descrição repetida ('+rc+'×)',c:'#7c3aed'});
     if(p.length)find.push({a,d,n,h,p});
   });
+  const repArr=Object.values(rep).filter(r=>r.n>=3).sort((x,y)=>y.n-x.n);
   // chamados cujas atividades são TODAS rotina (nenhum trabalho de resolução)
   const byTk={};A.forEach(a=>{(byTk[a.tid]=byTk[a.tid]||[]).push(a)});
   const soRot=Object.entries(byTk).filter(([,arr])=>arr.length>=2&&arr.every(a=>LITE_NONWORK_RE.test(a.atv||'')))
@@ -2247,7 +2255,7 @@ function rIncApont(){
   const semDesc=find.filter(f=>f.p.some(x=>/sem descrição|rasa|= título/.test(x.t))).length;
   const tempoAlto=find.filter(f=>f.p.some(x=>/tempo alto/.test(x.t))).length;
   const kpi=(v,l,c,s)=>`<div class="card" style="border-top:3px solid ${c};"><div style="font-size:1.5rem;font-weight:900;color:${c};line-height:1;">${v}</div><div style="font-size:.66rem;font-weight:800;color:#0f172a;margin-top:.2rem;">${l}</div><div style="font-size:.59rem;color:#94a3b8;margin-top:.1rem;">${s}</div></div>`;
-  const kpis=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">${kpi(fmt(A.length),'Apontamentos auditados','#2B4C9B','no período')}${kpi(fmt(semDesc),'Descrição pobre','#b45309','vazia, rasa ou = título')}${kpi(fmt(tempoAlto),'Tempo alto s/ justificar','#dc2626','≥2h com pouca/nenhuma descrição')}${kpi(fmt(soRot.length),'Chamados só rotina','#7c3aed','só reunião/agendamento/update')}</div>`;
+  const kpis=`<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">${kpi(fmt(A.length),'Apontamentos auditados','#2B4C9B','no período')}${kpi(fmt(semDesc),'Descrição pobre','#b45309','vazia, rasa ou = título')}${kpi(fmt(tempoAlto),'Tempo alto s/ justificar','#dc2626','≥2h com pouca/nenhuma descrição')}${kpi(fmt(repArr.length),'Descrições repetidas','#7c3aed','mesmo técnico, mesmo texto 3×+')}${kpi(fmt(soRot.length),'Chamados só rotina','#0891b2','só reunião/agendamento/update')}</div>`;
   // por técnico
   const tec={};find.forEach(f=>{const k=f.a.ag||'-';(tec[k]=tec[k]||{k,n:0,semD:0,alto:0});tec[k].n++;if(f.p.some(x=>/sem descrição|rasa|= título/.test(x.t)))tec[k].semD++;if(f.p.some(x=>/tempo alto/.test(x.t)))tec[k].alto++});
   const tecArr=Object.values(tec).sort((a,b)=>b.n-a.n);
@@ -2255,8 +2263,9 @@ function rIncApont(){
   const rotTbl=`<div class="card overflow-x-auto">${ST('Chamados só com rotina ('+soRot.length+') — atividade, mas nenhum trabalho de resolução')}<table><thead><tr><th>Chamado</th><th>Cliente</th><th>Técnico</th><th>Ativs</th><th>Horas</th><th>Tipos</th><th>Agendamento</th></tr></thead><tbody>${soRot.slice(0,25).map(r=>`<tr><td style="font-weight:700;">#${esc(r.tid)}</td><td style="font-size:.66rem;">${esc(r.cli)}</td><td style="font-size:.66rem;">${esc((r.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="font-weight:700;">${r.n}</td><td style="font-weight:800;color:${r.h>=240?'#dc2626':'#334155'};white-space:nowrap;">${minToHM(r.h)}h</td><td style="font-size:.62rem;color:#475569;">${esc(r.tipos.join(' / '))}</td><td>${r.agend?'<span style="color:#166534;font-size:.62rem;font-weight:700;">tem</span>':'<span style="background:#fef2f2;color:#991b1b;border-radius:.3rem;padding:.05rem .3rem;font-size:.58rem;font-weight:800;">sem agendamento</span>'}</td></tr>`).join('')||'<tr><td colspan="7" style="color:#94a3b8;padding:1rem;text-align:center;">Nenhum.</td></tr>'}</tbody></table>${soRot.length>25?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Mostrando 25 de ${soRot.length}.</div>`:''}</div>`;
   const CAP=40,ord=find.slice().sort((x,y)=>y.h-x.h);
   const detTbl=`<div class="card overflow-x-auto" style="margin-top:1rem;">${ST('Apontamentos com problema ('+find.length+') — maiores tempos primeiro')}<table><thead><tr><th>Chamado</th><th>Data</th><th>Técnico</th><th>Atividade</th><th>Horas</th><th>Problema</th><th>Descrição</th></tr></thead><tbody>${ord.slice(0,CAP).map(f=>`<tr><td style="font-weight:700;">#${esc(f.a.tid)}</td><td style="white-space:nowrap;font-size:.63rem;">${esc(brDate(mdActISO(f.a.start)))}</td><td style="font-size:.65rem;">${esc((f.a.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="font-size:.63rem;color:#475569;">${esc(atxt(f.a).slice(0,34))}</td><td style="font-weight:800;white-space:nowrap;color:${f.h>=120?'#dc2626':'#334155'};">${minToHM(f.h)}h</td><td style="white-space:nowrap;">${f.p.map(x=>`<span style="background:${x.c}1a;color:${x.c};border-radius:.3rem;padding:.05rem .3rem;font-size:.57rem;font-weight:800;margin-right:.15rem;">${x.t}</span>`).join('')}</td><td style="font-size:.62rem;color:#334155;">${f.n?esc(f.d.slice(0,55)):'<span style="color:#dc2626;font-weight:700;">(em branco)</span>'}</td></tr>`).join('')||'<tr><td colspan="7" style="color:#94a3b8;padding:1rem;text-align:center;">Nenhum apontamento com problema.</td></tr>'}</tbody></table>${find.length>CAP?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Mostrando ${CAP} de ${find.length} (ordenado por horas).</div>`:''}</div>`;
-  const nota=`<div class="card" style="margin-top:1rem;font-size:.62rem;color:#64748b;line-height:1.6;"><b style="color:#0f172a;">Como é detectado:</b> <b>sem descrição</b> = campo em branco · <b>rasa</b> = ≤15 caracteres · <b>= título</b> = a descrição só repete o nome da atividade · <b>tempo alto s/ detalhe</b> = ≥2h com menos de 40 caracteres de descrição · <b>tarefa simples</b> = ≥1h em mouse/teclado/monitor/senha/toner · <b>só rotina</b> = o chamado tem 2+ apontamentos e <u>todos</u> são reunião/agendamento/atualização/monitoramento, sem trabalho de resolução. <span style="color:#94a3b8;">Obs.: não sinalizamos "sem horário" porque 61% dos apontamentos não têm hora de início no Milldesk — seria ruído, não exceção.</span></div>`;
-  return `<div style="margin-top:1.1rem;">${ST('Qualidade dos apontamentos')}${kpis}<div class="grid grid-cols-1 md:grid-cols-2 gap-4">${tecTbl}${rotTbl}</div>${detTbl}${nota}</div>`;
+  const nota=`<div class="card" style="margin-top:1rem;font-size:.62rem;color:#64748b;line-height:1.6;"><b style="color:#0f172a;">Como é detectado:</b> <b>sem descrição</b> = campo em branco · <b>rasa</b> = ≤15 caracteres · <b>= título</b> = a descrição só repete o nome da atividade · <b>tempo alto s/ detalhe</b> = ≥2h com menos de 40 caracteres de descrição · <b>tarefa simples</b> = ≥1h em mouse/teclado/monitor/senha/toner · <b>descrição repetida</b> = o mesmo técnico usou o mesmo texto (8+ caracteres) em 3 ou mais apontamentos no período — indício de copiar-colar · <b>só rotina</b> = o chamado tem 2+ apontamentos e <u>todos</u> são reunião/agendamento/atualização/monitoramento, sem trabalho de resolução. <span style="color:#94a3b8;">Obs.: não sinalizamos "sem horário" porque 61% dos apontamentos não têm hora de início no Milldesk — seria ruído, não exceção.</span></div>`;
+  const repTbl=`<div class="card overflow-x-auto" style="margin-top:1rem;">${ST('Descrições repetidas em série ('+repArr.length+') — mesmo técnico colando o mesmo texto 3×+')}<table><thead><tr><th>Técnico</th><th>Vezes</th><th title="Em quantos chamados distintos">Chamados</th><th>Horas</th><th>Descrição repetida</th></tr></thead><tbody>${repArr.slice(0,20).map(r=>`<tr><td style="font-weight:600;">${esc((r.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="font-weight:800;color:#7c3aed;">${r.n}×</td><td style="font-weight:700;">${r.tids.size}</td><td style="white-space:nowrap;font-weight:800;color:${r.h>=480?'#dc2626':'#334155'};">${minToHM(r.h)}h</td><td style="font-size:.62rem;color:#334155;">${esc(r.d.slice(0,72))}</td></tr>`).join('')||'<tr><td colspan="5" style="color:#94a3b8;padding:1rem;text-align:center;">Nenhuma repetição em série.</td></tr>'}</tbody></table>${repArr.length>20?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Mostrando 20 de ${repArr.length} (ordenado por repetições).</div>`:''}</div>`;
+  return `<div style="margin-top:1.1rem;">${ST('Qualidade dos apontamentos')}${kpis}<div class="grid grid-cols-1 md:grid-cols-2 gap-4">${tecTbl}${rotTbl}</div>${repTbl}${detTbl}${nota}</div>`;
 }
 function rIncidencias(){
   if(D._src==='milldesk-12m')return`<div class="card" style="color:#64748b;text-align:center;padding:2rem;">As inconsistências são analisadas por período (ticket a ticket). Selecione <b>Diário</b>, <b>7/30 dias</b> ou um <b>mês</b>.</div>`
