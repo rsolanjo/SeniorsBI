@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v125'
+const APP_VERSION='v126'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -1469,7 +1469,11 @@ window.mdSync=async function(force){
       const uniq={};MD.tickets.forEach(t=>{if(!uniq[t.id])uniq[t.id]=t});MD.backlog=Object.values(uniq).filter(t=>mdIsOpen(t.st))
     }catch(e){fail('Chamados',e.message,true)}
     if(!MES||TIME!=='picker')MES=start.slice(0,7)
-    // 2) Atividades = fonte das horas da Lite (crítico). Endpoint ignora data → reusa se ainda fresco (evita rebaixar 12MB a cada troca de período).
+    // 2) Avulsas ANTES do download de 12MB. O endpoint é leve (~30KB, 0,4s) e isolado responde 200 na hora, mas
+    // depois da transferência gigante das atividades a conexão fica saturada e ele falhava as 4 tentativas
+    // com "Failed to fetch" — era a causa do banner "Falha ao carregar: Horas avulsas".
+    if(!avulsasFresh){try{await mdFetchAvulsas(base);MD.avulsasTs=Date.now()}catch(e){MD.avulsasTs=0;fail('Horas avulsas',MD.avulsasErr||e.message,true)}}
+    // 3) Atividades = fonte das horas da Lite (crítico). Endpoint ignora data → reusa se ainda fresco (evita rebaixar 12MB a cada troca de período).
     MD_ATV_START=start;MD_ATV_END=end
     if(ativsFresh){mdApplyFromAtivs()}
     else{
@@ -1483,10 +1487,6 @@ window.mdSync=async function(force){
       }
       else{MD.ativs=ar.ativs||[];MD.ativsTs=MD.ativsHistTs=Date.now();try{lsSet('sbi_md_ativs',{ts:MD.ativsTs,start,end,ativs:MD.ativs.slice(0,6000)})}catch(e){}mdApplyFromAtivs()}
     }
-    // 3) Avulsas (horas a cobrar) — CEDO de propósito. O endpoint é leve (~30KB, 0,4s), mas o Milldesk derruba a
-    // conexão depois de muitas requisições: se buscar por último (após os meses de chamados, os 12MB de atividades,
-    // 8 status de backlog e até 80 showTicket de categoria) ele falhava as 4 tentativas com "Failed to fetch".
-    if(!avulsasFresh){try{await mdFetchAvulsas(base);MD.avulsasTs=Date.now()}catch(e){MD.avulsasTs=0;fail('Horas avulsas',MD.avulsasErr||e.message,true)}}
     // 4..6) complementares — não bloqueiam, mas registram se falharem
     try{MD.backlogFull=await mdFetchBacklog(base)}catch(e){MD.backlogFull=MD.backlogFull||[];fail('Backlog',e.message,false)}
     try{const tkK={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{tkK[t.id]=1});const ptids=(MD.ativs||[]).filter(a=>{const iso=mdActISO(a.start);return iso>=start&&iso<=end}).map(a=>a.tid).filter(id=>id&&!tkK[id]);await mdFetchTicketCats(base,ptids)}catch(e){}
