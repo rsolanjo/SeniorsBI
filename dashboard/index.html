@@ -267,7 +267,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v130'
+const APP_VERSION='v131'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1091,7 +1091,7 @@ function rExecContratos(){
     const uc=r.uso==null?'#64748b':r.uso>100?'#dc2626':r.uso>=85?'#f59e0b':'#16a34a';
     const foraP=r.used?Math.round(r.foraMin/r.used*100):0;
     const tops=Object.entries(r.pilMin).sort((a,b)=>b[1]-a[1]).slice(0,4);
-    return`<div class="card" style="border-left:3px solid ${uc};">
+    return`<div class="card" onclick="ctxDetalhe('${r.ct.id}')" title="Ver detalhe do contrato" style="border-left:3px solid ${uc};cursor:pointer;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 16px rgba(43,76,155,.14)'" onmouseout="this.style.boxShadow=''">
       <div style="display:flex;align-items:baseline;gap:.4rem;flex-wrap:wrap;margin-bottom:.35rem;">
         <span style="font-size:.78rem;font-weight:800;color:#0f172a;">${esc(r.ct.cliente)}</span>
         <span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">CC ${esc(r.cc)}</span>
@@ -1103,7 +1103,7 @@ function rExecContratos(){
       <div style="display:flex;flex-wrap:wrap;gap:.2rem;margin-bottom:.35rem;">${r.semEscopo?'<span style="background:#f5f3ff;color:#6d28d9;border-radius:.3rem;padding:.05rem .32rem;font-size:.57rem;font-weight:700;">Demanda avulsa '+minToHM(r.used)+'h</span>':(tops.map(([n,m])=>`<span style="background:#f1f5f9;color:#475569;border-radius:.3rem;padding:.05rem .32rem;font-size:.57rem;font-weight:700;" title="${esc(n)}">${esc(n.split(/[ ,(]/)[0])} ${minToHM(m)}h</span>`).join('')||'<span style="font-size:.58rem;color:#cbd5e1;">sem classificação</span>')}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:.59rem;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:.32rem;gap:.4rem;"><span>${r.nCh} ch.${r.semEscopo?'':' · '+r.pilN+' pilares '+(r.escopoProprio?'<span title="Escopo próprio deste contrato" style="color:#166534;font-weight:800;">✓</span>':'<span title="Usando pilares genéricos — o fora de escopo pode inflar" style="color:#b45309;font-weight:800;">~</span>')}</span>${r.semEscopo
         ?'<span style="color:#6d28d9;font-weight:700;" title="Contrato por chamado: tudo é demanda avulsa, não existe escopo para ficar fora dele.">por chamado — sem escopo</span>'
-        :`<span style="color:${foraP>15?'#b45309':'#94a3b8'};font-weight:${foraP>15?'800':'400'};">fora ${minToHM(r.foraMin)}h (${foraP}%)</span><button onclick="ctxFormEscopo('${r.ct.id}')" title="Definir os pilares de escopo deste contrato" style="cursor:pointer;background:#eff6ff;border:1px solid #dbeafe;border-radius:.3rem;color:#1d4ed8;font-size:.55rem;font-weight:800;padding:.1rem .35rem;white-space:nowrap;">escopo</button>`}</div>
+        :`<span style="color:${foraP>15?'#b45309':'#94a3b8'};font-weight:${foraP>15?'800':'400'};">fora ${minToHM(r.foraMin)}h (${foraP}%)</span><button onclick="event.stopPropagation();ctxFormEscopo('${r.ct.id}')" title="Definir os pilares de escopo deste contrato" style="cursor:pointer;background:#eff6ff;border:1px solid #dbeafe;border-radius:.3rem;color:#1d4ed8;font-size:.55rem;font-weight:800;padding:.1rem .35rem;white-space:nowrap;">escopo</button>`}</div>
     </div>`}).join('');
   return`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;">
       <span style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;">Contratos — H.H e escopo (todos os clientes)</span>
@@ -1147,6 +1147,45 @@ function rExecRiscos(auto){
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">${topCards}</div>
   </div>`;
 }
+// dados de UM contrato (mesma lógica de casamento do painel) — usado pelo modal de detalhe e pelo CSV
+function ctxContratoData(ct){
+  const cc=String(ct.cc||'').toLowerCase();
+  const same=CONTRACTS.filter(c=>c.status!=='arquivado'&&String(c.cc||'').toLowerCase()===cc);
+  const meu=(loc)=>{if(same.length<=1)return true;const nl=normName(String(loc).split('|')[0]);const b=v=>{const n=normName(v||'');return !!(n&&(n===nl||n.includes(nl)||nl.includes(n)))};const pick=same.find(x=>b(x.cliente))||same.find(x=>b(x.empresa));return pick&&pick.id===ct.id};
+  const mine=(MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)&&atvInRange(mdActISO(a.start))&&String(mdCC(a.loc||'')).toLowerCase()===cc&&meu(a.loc||''));
+  const mf=(typeof liteMonths==='function')?liteMonths():1,pil=litePilares(Object.assign({},ct,{cc,pilar:_pilarKeyDe(ct)}));
+  const pilMin={},pilTk={},fora=[];
+  mine.forEach(a=>{const txt=((a.assunto||'')+' '+(a.atv||'')).toLowerCase();const p=pil.find(pl=>pl.kw.test(txt));if(p){pilMin[p.nome]=(pilMin[p.nome]||0)+(a.wh||0);(pilTk[p.nome]=pilTk[p.nome]||new Set()).add(a.tid)}else fora.push(a)});
+  const used=mine.reduce((s,a)=>s+(a.wh||0),0),franqP=(ct.franquia_horas||0)*60*mf;
+  return {ct,cc,mine,pil,pilMin,pilTk,fora,used,franqP,semEscopo:_porChamado(ct)&&!(ct.pilaresEdit&&ct.pilaresEdit.length),nCh:new Set(mine.map(a=>a.tid)).size,mf};
+}
+window.ctxDetalhe=function(id){
+  const ct=CONTRACTS.find(c=>c.id===id);if(!ct)return;
+  if(!MD.loaded){liteOpenModal('Detalhe',`<div style="padding:1rem;color:#94a3b8;">Sincronize o Milldesk.</div>`);return}
+  const d=ctxContratoData(ct),uso=d.franqP?Math.round(d.used/d.franqP*100):null,saldo=d.franqP-d.used;
+  const uc=uso==null?'#64748b':uso>100?'#dc2626':uso>=85?'#f59e0b':'#16a34a';
+  const av=(MD.avulsas||[]).filter(a=>String(a.cc||'').toLowerCase()===d.cc),avMin=av.reduce((s,a)=>s+(a.ch||0),0);
+  const pilRows=Object.entries(d.pilMin).sort((a,b)=>b[1]-a[1]).map(([n,m])=>`<tr><td style="font-weight:600;">${esc(n)}</td><td>${minToHM(m)}h</td><td>${d.used?Math.round(m/d.used*100):0}%</td><td>${(d.pilTk[n]||new Set()).size}</td></tr>`).join('')||'<tr><td colspan="4" style="color:#94a3b8;text-align:center;padding:.6rem;">—</td></tr>';
+  const foraMin=d.fora.reduce((s,a)=>s+(a.wh||0),0),foraP=d.used?Math.round(foraMin/d.used*100):0;
+  const foraRows=d.fora.slice().sort((a,b)=>b.wh-a.wh).slice(0,25).map(a=>`<tr><td style="white-space:nowrap;">#${esc(a.tid)}</td><td style="white-space:nowrap;">${esc(brDate(mdActISO(a.start)))}</td><td style="font-size:.62rem;">${esc((a.ag||'').split(' ').slice(0,2).join(' '))}</td><td style="white-space:nowrap;">${minToHM(a.wh)}h</td><td style="font-size:.62rem;color:#334155;">${esc((a.atv||'').slice(0,42))}</td></tr>`).join('');
+  const kpi=(l,v)=>`<div class="card" style="padding:.5rem;"><div class="kpi-lbl">${l}</div><div style="font-size:.95rem;font-weight:800;color:#0f172a;">${v}</div></div>`;
+  const html=`<div style="display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem;"><span class="badge" style="background:#eff6ff;color:#1d4ed8;">CC ${esc(d.cc)}</span><span style="font-size:.66rem;color:#64748b;">${esc(ct.nome||'')}</span><span style="margin-left:auto;font-size:1.2rem;font-weight:900;color:${uc};">${uso!=null?uso+'%':'por chamado'}</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(6.5rem,1fr));gap:.5rem;margin-bottom:.8rem;">${kpi('H.H consumido',minToHM(d.used)+'h')}${kpi('Franquia',d.franqP?minToHM(d.franqP)+'h':'—')}${kpi('Saldo',d.franqP?((saldo<0?'-'+minToHM(-saldo):minToHM(saldo))+'h'):'—')}${kpi('Chamados',fmt(d.nCh))}${kpi('Avulsas',minToHM(avMin)+'h')}</div>
+    <div style="font-size:.72rem;font-weight:800;margin:.3rem 0;">Pilares de escopo (${d.pil.length})</div>
+    <table style="width:100%;font-size:.7rem;border-collapse:collapse;"><thead><tr style="color:#94a3b8;text-align:left;"><th>Pilar</th><th>Horas</th><th>%</th><th>Ch.</th></tr></thead><tbody>${pilRows}</tbody></table>
+    ${d.semEscopo?'<div style="font-size:.64rem;color:#6d28d9;margin-top:.6rem;">Contrato por chamado — tudo é demanda avulsa, não há escopo a violar.</div>':(d.fora.length?`<div style="font-size:.72rem;font-weight:800;margin:.8rem 0 .3rem;color:#b45309;">Fora de escopo — ${minToHM(foraMin)}h (${foraP}%)</div><div style="max-height:13rem;overflow:auto;"><table style="width:100%;font-size:.66rem;border-collapse:collapse;"><thead><tr style="color:#94a3b8;text-align:left;"><th>Chamado</th><th>Data</th><th>Técnico</th><th>Horas</th><th>Atividade</th></tr></thead><tbody>${foraRows}</tbody></table></div>`:'<div style="font-size:.64rem;color:#166534;margin-top:.6rem;">Nenhuma hora fora de escopo. 👍</div>')}
+    <div style="display:flex;gap:.5rem;margin-top:1rem;border-top:1px solid #f1f5f9;padding-top:.7rem;flex-wrap:wrap;"><button onclick="ctxExportCSV('${ct.id}')" style="cursor:pointer;background:#dcfce7;color:#166534;border:none;border-radius:.4rem;padding:.42rem .9rem;font-size:.72rem;font-weight:800;">⬇ Relatório (CSV)</button><button onclick="ctxFormEscopo('${ct.id}')" style="cursor:pointer;background:#eef2ff;color:#2B4C9B;border:none;border-radius:.4rem;padding:.42rem .9rem;font-size:.72rem;font-weight:800;">Editar escopo</button></div>`;
+  liteOpenModal('Detalhe — '+esc(ct.cliente),html);
+};
+window.ctxExportCSV=function(id){
+  const ct=CONTRACTS.find(c=>c.id===id);if(!ct)return;const d=ctxContratoData(ct);
+  const pilDe=a=>{if(d.semEscopo)return'Demanda avulsa';const txt=((a.assunto||'')+' '+(a.atv||'')).toLowerCase();const p=d.pil.find(pl=>pl.kw.test(txt));return p?p.nome:'FORA DE ESCOPO'};
+  const rows=[['Chamado','Data','Tecnico','Atividade','Horas','Classificacao']];
+  d.mine.slice().sort((a,b)=>mdActISO(a.start).localeCompare(mdActISO(b.start))).forEach(a=>rows.push([a.tid,mdActISO(a.start),a.ag||'',(a.atv||'').replace(/[\r\n;]/g,' '),minToHM(a.wh)+'h',pilDe(a)]));
+  const csv=rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='contrato_'+String(ct.cliente||'').replace(/[^\w]+/g,'_')+'_'+(MD_ATV_END||'')+'.csv';a.click();URL.revokeObjectURL(url);toast('Relatório do contrato baixado.');
+};
 // ─── Área FINANCEIRO: painel estilo Lite, porém com TODOS os contratos (reusa o painel de contratos por CC) ───
 function rFinanceiro(){
   const head=`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;"><span style="font-size:1.1rem;font-weight:900;color:#0f172a;">Financeiro — contratos</span><span style="font-size:.68rem;color:#94a3b8;">todos os clientes · H.H, franquia, escopo e fora de escopo</span></div>`;
