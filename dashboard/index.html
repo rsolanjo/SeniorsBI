@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v128'
+const APP_VERSION='v129'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -391,6 +391,10 @@ window.doLogin=async function(){
   if(!ok){err.textContent='Login ok, mas sem perfil ativo. Fale com o administrador.';await sb.auth.signOut();return}
   err.textContent='';document.getElementById('loginPass').value='';
   applyAuth();
+  // com RLS, o loadMeses do boot (anon) volta vazio; agora autenticado, recarrega e re-renderiza
+  try{await loadMeses()}catch(e){}
+  if(getMD().key){if(!MD.loaded)mdSync()}else if(MES){try{await loadMonth(MES)}catch(e){}}
+  renderContent();
 };
 window.doLogout=async function(){try{await sb.auth.signOut()}catch(e){}AUTH=null;LITE_VAL=false;
   const ls=document.getElementById('loginScreen');if(ls)ls.classList.remove('hidden');
