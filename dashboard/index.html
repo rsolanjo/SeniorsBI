@@ -267,7 +267,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v131'
+const APP_VERSION='v132'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -356,7 +356,7 @@ window.setAppMode=function(m){
 }
 // ===== LOGIN / PERFIS via Supabase Auth (login no servidor; perfil no banco público.profiles; admin gerencia pela função admin-users) =====
 const SBI_ROLES={
-  admin:     {lbl:'Administrador', areas:['lite','fin','exec','tech','adm'], val:true, manage:true},
+  admin:     {lbl:'Administrador', areas:['exec','fin','tech','adm'], val:true, manage:true},// Lite virou sub-aba "Sustentação" dentro da Executiva
   executivo: {lbl:'Executivo',     areas:['exec'],                            val:true},
   financeiro:{lbl:'Financeiro',    areas:['fin'],                             val:true},
   tecnico:   {lbl:'Técnico',       areas:['tech'],                            val:false}
@@ -439,7 +439,7 @@ const ALERT_GRP={FTE:'profissional',Horas:'profissional',Grupo:'profissional',Fr
 const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Chamado',ic:'ticket',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
-  exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Riscos']],
+  exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Riscos'],['sustentacao','Sustentação']],
   tech:[['chamados','Chamados & Atividades'],['parados','Chamados Parados'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['usuarios','Usuários'],['matriz','Matriz'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']],
   fin:[]
@@ -925,7 +925,7 @@ function _cellKey(td){if(!td)return{s:''};const t=(td.innerText||'').trim();cons
 function enableTableSort(){document.querySelectorAll('#main table').forEach(tb=>{const ths=tb.querySelectorAll('thead th');ths.forEach((th,i)=>{if(th._srt)return;th._srt=1;th.style.cursor='pointer';if(!/↕/.test(th.textContent))th.insertAdjacentHTML('beforeend',' <span style="opacity:.35;font-size:.7em;">↕</span>');th.addEventListener('click',()=>{const body=tb.querySelector('tbody');if(!body)return;const rows=[...body.children].filter(r=>r.children.length>i&&!r.querySelector('[colspan]'));const dir=th._d=(th._d===1?-1:1);ths.forEach(o=>{if(o!==th)o._d=0});rows.sort((a,b)=>{const ka=_cellKey(a.children[i]),kb=_cellKey(b.children[i]);if('n'in ka&&'n'in kb)return(ka.n-kb.n)*dir;return String('s'in ka?ka.s:ka.n).localeCompare(String('s'in kb?kb.s:kb.n),'pt')*dir});rows.forEach(r=>body.appendChild(r))})})})}
 try{const _srtMO=new MutationObserver(()=>{clearTimeout(window._srtT);window._srtT=setTimeout(enableTableSort,80)});const _m=document.getElementById('main');if(_m)_srtMO.observe(_m,{childList:true,subtree:true})}catch(e){}
 window.setSub=function(s){if(SECTION==='exec')EXEC_SUB=s;else if(SECTION==='tech')TECH_SUB=s;else ADMIN_SUB=s;renderSubTabs();renderContent()}
-function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:ADMIN_SUB;document.getElementById('subTabs').innerHTML=SECTION_SUBS[SECTION].map(([k,l])=>`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}</button>`).join('')}
+function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:ADMIN_SUB;const subs=(SECTION_SUBS[SECTION]||[]).filter(([k])=>!(k==='sustentacao'&&!isAdminUser()));document.getElementById('subTabs').innerHTML=subs.map(([k,l])=>`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}</button>`).join('')}
 function renderContent(){
   if(!AUTH){const ls=document.getElementById('loginScreen');if(ls)ls.classList.remove('hidden');const ap=document.getElementById('app');if(ap)ap.classList.add('hidden');return}
   syncHeaderNav();
@@ -946,10 +946,11 @@ function renderContent(){
   {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display='';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
   renderCliFilter();
   if(TIME==='comparar'){renderCompare();return}
-  const standalone=SECTION==='admin'||SECTION==='fin'||(SECTION==='tech'&&['chamados','parados','checklists'].includes(TECH_SUB))
+  const standalone=SECTION==='admin'||SECTION==='fin'||(SECTION==='exec'&&EXEC_SUB==='sustentacao')||(SECTION==='tech'&&['chamados','parados','checklists'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
   if(SECTION==='fin'){el.innerHTML=rFinanceiro();lucide.createIcons()}
   else if(SECTION==='exec'){
+    if(EXEC_SUB==='sustentacao'){renderSustentacao(el);return}
     const sync={geral:rExecGeral,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecRiscosFull}
     MONEY_MASK=!EXEC_VAL;// oculta R$ só enquanto renderiza o executivo
     try{el.innerHTML=(sync[EXEC_SUB]||rExecGeral)()}finally{MONEY_MASK=false}
@@ -1146,6 +1147,22 @@ function rExecRiscos(auto){
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">${topCards}</div>
   </div>`;
+}
+// ─── Sustentação (antigo Lite) — agora sub-aba da Executiva; nav interna reusa as views da Lite ───
+function sustNav(){
+  const tabs=[['painel','Painel'],['avulsas','Horas Avulsas'],['relatorios','Relatórios'],['auditor','Auditor'],['cadastro','Cadastro']];
+  const btns=tabs.map(([k,l])=>`<button onclick="setLiteSub('${k}')" style="cursor:pointer;border:none;border-radius:.4rem;padding:.3rem .7rem;font-size:.7rem;font-weight:800;background:${LITE_SUB===k?'#2B4C9B':'#f1f5f9'};color:${LITE_SUB===k?'#fff':'#475569'};">${l}</button>`).join('');
+  const valBtn=canVal()?`<button onclick="liteToggleVal()" style="cursor:pointer;border:none;border-radius:.4rem;padding:.3rem .7rem;font-size:.7rem;font-weight:800;background:${LITE_VAL?'#fef9c3':'#e0e7ff'};color:${LITE_VAL?'#854d0e':'#3730a3'};">${LITE_VAL?'Ocultar valores':'Mostrar valores'}</button>`:'';
+  return `<div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem;"><span style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-right:.3rem;">Sustentação · 3 contratos gerenciados</span>${btns}<span style="margin-left:auto;">${valBtn}</span></div>`;
+}
+function renderSustentacao(el){
+  const nav=sustNav(),put=b=>{el.innerHTML=nav+b;if(window.lucide)lucide.createIcons()};
+  if(!MD.loaded){put(`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk (barra acima) para ver a Sustentação.</div>`);return}
+  if(LITE_SUB==='avulsas')put(rLiteAvulsas());
+  else if(LITE_SUB==='relatorios')put(rLiteRelatorios());
+  else if(LITE_SUB==='auditor')put(rLiteAuditor());
+  else if(LITE_SUB==='cadastro')put(rLiteContratos()+'<div style="height:1rem;"></div>'+rLiteFunc());
+  else rLimitado().then(put);
 }
 // dados de UM contrato (mesma lógica de casamento do painel) — usado pelo modal de detalhe e pelo CSV
 function ctxContratoData(ct){
