@@ -134,6 +134,7 @@ textarea.fi{resize:vertical;min-height:2.7rem}
     </div>
     <div style="width:1px;height:1.05rem;background:#e2e8f0;flex-shrink:0;"></div>
     </div>
+    <span id="cliFilterWrap" style="position:relative;display:inline-flex;"></span>
     <span id="periodoChip" style="display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;color:#334155;font-weight:700;background:#eef2ff;border:1px solid #dbeafe;border-radius:.5rem;padding:.24rem .55rem;white-space:nowrap;"></span>
     <span id="execValBtn"></span>
     <div style="display:flex;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.4rem;padding:.07rem;">
@@ -266,9 +267,10 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v129'
+const APP_VERSION='v130'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
+let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
 // Versão limitada: 3 contratos, só H.H (sem valores). Pilares = escopo dos contratos (para controlar trabalho fora de escopo).
 const LITE_PILARES={
@@ -571,7 +573,11 @@ function getClientEmpresa(nome){
   if(n.includes('projetos avulsos'))return'4Seniors'
   return'-'
 }
-function cliMatchFilter(nome){if(COMPANY==='all')return true;return getClientEmpresa(nome)===COMPANY}
+function cliMatchFilter(nome){
+  if(COMPANY!=='all'&&getClientEmpresa(nome)!==COMPANY)return false;
+  if(CLI_SEL.size&&!CLI_SEL.has(nome))return false;
+  return true;
+}
 function empBadge(e){if(e==='4Seniors')return`<span class="emp-4s">4Seniors</span>`;if(e==='S4SYS')return`<span class="emp-s4">S4SYS</span>`;if(e==='Porto Virtual')return`<span class="emp-pv">Porto Virtual</span>`;return`<span style="color:#94a3b8;font-size:.66rem;">-</span>`}
 function companyStats(empresa){
   const clis=empresa==='all'?D.clientes:D.clientes.filter(c=>getClientEmpresa(c.nome)===empresa)
@@ -938,6 +944,7 @@ function renderContent(){
   if(_nav)_nav.style.display=(roleAreas().length>1)?'flex':'none';if(_st)_st.style.display=''
   {const _evb=document.getElementById('execValBtn');if(_evb)_evb.innerHTML=(SECTION==='exec')?`<button onclick="toggleExecVal()" style="cursor:pointer;border:none;border-radius:.42rem;padding:.24rem .6rem;font-size:.68rem;font-weight:800;background:${EXEC_VAL?'#fef9c3':'#e0e7ff'};color:${EXEC_VAL?'#854d0e':'#3730a3'};white-space:nowrap;">${EXEC_VAL?'👁 Ocultar valores':'👁 Mostrar valores'}</button>`:''}
   {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display='';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
+  renderCliFilter();
   if(TIME==='comparar'){renderCompare();return}
   const standalone=SECTION==='admin'||SECTION==='fin'||(SECTION==='tech'&&['chamados','parados','checklists'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
@@ -975,7 +982,26 @@ async function loadMonth(slug){
   document.getElementById('lastUpdate').textContent=lastUp?('Dados atualizados em '+new Date(lastUp).toLocaleString('pt-BR')):''
   seedLocalData();renderContent()
 }
-const fCli=()=>COMPANY==='all'?D.clientes:D.clientes.filter(c=>cliMatchFilter(c.nome))
+const fCli=()=>(COMPANY==='all'&&!CLI_SEL.size)?D.clientes:D.clientes.filter(c=>cliMatchFilter(c.nome))
+// opções e UI do filtro de clientes (multi) — herdado por todas as abas via cliMatchFilter/fCli
+function cliFilterOpts(){const s=new Set();(D.clientes||[]).forEach(c=>{if(c.nome&&c.nome!=='-')s.add(c.nome)});CONTRACTS.filter(c=>c.status!=='arquivado'&&c.tipo_cobranca!=='interno').forEach(c=>{if(c.cliente)s.add(c.cliente)});return [...s].sort((a,b)=>a.localeCompare(b,'pt'))}
+window.cliFilterToggle=function(){CLI_OPEN=!CLI_OPEN;renderCliFilter()};
+window.cliFilterSet=function(el){if(el.checked)CLI_SEL.add(el.value);else CLI_SEL.delete(el.value);renderCliFilter();renderContent()};
+window.cliFilterAll=function(){CLI_SEL=new Set();renderCliFilter();renderContent()};
+window.cliFilterSearch=function(v){const q=(v||'').toLowerCase().trim();document.querySelectorAll('#cliFilterList .cli-opt').forEach(el=>{el.style.display=(!q||el.dataset.n.indexOf(q)>=0)?'flex':'none'})};
+function renderCliFilter(){
+  const w=document.getElementById('cliFilterWrap');if(!w)return;
+  const n=CLI_SEL.size,opts=cliFilterOpts();
+  const lbl=n===0?'Todos os clientes':(n===1?[...CLI_SEL][0]:n+' clientes');
+  const btn=`<button onclick="cliFilterToggle()" title="Filtrar por cliente" style="cursor:pointer;border:1px solid ${n?'#2B4C9B':'#e2e8f0'};border-radius:.4rem;padding:.24rem .55rem;font-size:.68rem;font-weight:800;background:${n?'#eef2ff':'#fff'};color:${n?'#2B4C9B':'#475569'};white-space:nowrap;max-width:12rem;overflow:hidden;text-overflow:ellipsis;display:inline-flex;align-items:center;gap:.3rem;"><i data-lucide="users" style="width:.78rem;height:.78rem;"></i>${esc(lbl)} ▾</button>`;
+  const panel=CLI_OPEN?`<div style="position:absolute;top:112%;left:0;z-index:60;background:#fff;border:1px solid #e2e8f0;border-radius:.55rem;box-shadow:0 12px 34px rgba(0,0,0,.18);padding:.55rem;width:16.5rem;">
+    <input placeholder="Buscar cliente…" oninput="cliFilterSearch(this.value)" style="width:100%;box-sizing:border-box;padding:.38rem .55rem;border:1px solid #e2e8f0;border-radius:.4rem;font-size:.72rem;margin-bottom:.45rem;">
+    <div style="display:flex;gap:.35rem;margin-bottom:.45rem;"><button onclick="cliFilterAll()" style="flex:1;cursor:pointer;border:none;border-radius:.35rem;padding:.28rem;font-size:.66rem;font-weight:800;background:#eef2ff;color:#2B4C9B;">Todos (limpar)</button><button onclick="cliFilterToggle()" style="flex:1;cursor:pointer;border:none;border-radius:.35rem;padding:.28rem;font-size:.66rem;font-weight:800;background:#f1f5f9;color:#64748b;">Fechar</button></div>
+    <div id="cliFilterList" style="max-height:15rem;overflow-y:auto;">${opts.map(o=>`<label class="cli-opt" data-n="${esc(o.toLowerCase())}" style="display:flex;align-items:center;gap:.4rem;padding:.2rem .25rem;font-size:.7rem;cursor:pointer;border-radius:.3rem;"><input type="checkbox" value="${esc(o)}" ${CLI_SEL.has(o)?'checked':''} onchange="cliFilterSet(this)" style="accent-color:#2B4C9B;"><span>${esc(o)}</span></label>`).join('')}</div>
+    <div style="font-size:.58rem;color:#94a3b8;margin-top:.4rem;">${n?n+' selecionado(s)':'nenhum = mostra todos'}</div>
+  </div>`:'';
+  w.innerHTML=btn+panel;if(window.lucide)lucide.createIcons();
+}
 const fRec=()=>COMPANY==='all'?D.recursos:D.recursos.filter(r=>{const f=getFunc(r.nome);return!f||f.alocacao_tipo==='todos'||f.alocacao_clientes.some(c=>cliMatchFilter(c))})
 const kpiCard=(val,lbl,col,icon,sub='')=>`<div class="card" style="border-left:3px solid ${col};"><div style="display:flex;align-items:flex-start;justify-content:space-between;"><div><div class="kpi-lbl">${lbl}</div><div class="kpi-big" style="color:${col};margin-top:.08rem;">${val}</div>${sub?`<div style="font-size:.62rem;color:#94a3b8;margin-top:.1rem;">${sub}</div>`:''}</div><div style="background:${col}18;border-radius:.42rem;padding:.3rem;color:${col};flex-shrink:0;"><i data-lucide="${icon}" style="width:.82rem;height:.82rem;"></i></div></div></div>`
 
@@ -1058,7 +1084,7 @@ function rExecContratos(){
     const escopoProprio=!!((ct.pilaresEdit&&ct.pilaresEdit.length)||LITE_PILARES_CC[cc]);
     const semEscopo=_porChamado(ct)&&!(ct.pilaresEdit&&ct.pilaresEdit.length);// por chamado = sem escopo a violar
     return{ct,cc,used,franqP,uso,saldo,pilMin,foraMin:semEscopo?0:foraMin,nCh:new Set(A.map(a=>a.tid)).size,pilN:pil.length,escopoProprio,semEscopo};
-  }).filter(r=>r.used>0).sort((a,b)=>(b.uso??-1)-(a.uso??-1)||b.used-a.used);
+  }).filter(r=>r.used>0&&cliMatchFilter(r.ct.cliente)).sort((a,b)=>(b.uso??-1)-(a.uso??-1)||b.used-a.used);
   if(!rows.length)return`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhum contrato com horas no período.</div>`;
   const estouro=rows.filter(r=>r.uso!=null&&r.uso>100).length,risco=rows.filter(r=>r.uso!=null&&r.uso>=85&&r.uso<=100).length;
   const cards=rows.map(r=>{
@@ -1172,14 +1198,14 @@ window.usrPass=function(id,email){const p=prompt('Nova senha para '+email+' (mí
 window.usrDel=function(id,email){confirmAction('Excluir o usuário '+email+'? A conta e o acesso serão removidos permanentemente.',()=>{fnUsers('delete',{id}).then(()=>{toast('Usuário excluído.');carregarUsuarios()}).catch(e=>toast('Erro: '+e.message,false))})};
 function rExecGeral(){
   const g=companyStats('all'),auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
-  const nAtiv=mdEnrichedAtivs().filter(a=>COMPANY==='all'||getClientEmpresa(a.cliente)===COMPANY).length
+  const nAtiv=mdEnrichedAtivs().filter(a=>cliMatchFilter(a.cliente)).length
   const fteC=D.fte<60?'#ef4444':D.fte<80?'#f59e0b':'#22c55e',mgC=g.margem==null?'#94a3b8':g.margem<0?'#ef4444':g.margem<20?'#f59e0b':'#22c55e',alerC=auto.some(a=>a.lv==='critica')?'#ef4444':auto.length?'#f59e0b':'#22c55e'
   const empCards=['4Seniors','S4SYS','Porto Virtual'].map(emp=>{
     const d=companyStats(emp),ec=emp==='4Seniors'?'#2B4C9B':emp==='S4SYS'?'#7c3aed':'#166534',mC=d.margem==null?'#94a3b8':d.margem<0?'#ef4444':d.margem<20?'#f59e0b':'#22c55e'
     const usoh=D.totalHoras>0?pct(d.horas,D.totalHoras):0
     return`<div class="card" style="border-top:3px solid ${ec};"><div style="font-size:.64rem;font-weight:800;color:${ec};text-transform:uppercase;letter-spacing:.08em;margin-bottom:.68rem;">${emp}</div><div class="grid grid-cols-2 gap-2 mb-2.5"><div><div class="kpi-lbl">Receita</div><div style="font-size:.95rem;font-weight:800;color:#166534;">${d.receita?fmtR(d.receita):'<span style="color:#94a3b8;font-size:.8rem;">(a def.)</span>'}</div></div><div><div class="kpi-lbl">Custo (est.)</div><div style="font-size:.95rem;font-weight:800;color:#854d0e;">${fmtR(d.custo)}</div></div></div><div style="margin-bottom:.58rem;"><div style="display:flex;justify-content:space-between;font-size:.65rem;margin-bottom:.18rem;"><span style="font-weight:700;color:${mC};">Margem ${d.margem!=null?d.margem+'%':'-'}</span><span style="color:#64748b;">${minToHM(d.horas)}h · ${fmt(d.chamados)} ch.</span></div><div style="height:.28rem;background:#f1f5f9;border-radius:9999px;overflow:hidden;">${d.margem!=null?`<div style="height:100%;width:${Math.max(0,Math.min(d.margem,100))}%;background:${mC};transition:width .6s;"></div>`:''}</div></div><div style="display:flex;gap:.9rem;font-size:.65rem;color:#64748b;border-top:1px solid #f1f5f9;padding-top:.42rem;"><span><strong style="color:#1e293b;">${d.numClientes}</strong> cli</span><span><strong style="color:#1e293b;">${d.numContratos}</strong> contratos</span><span><strong style="color:#1e293b;">${usoh}%</strong> horas</span></div></div>`
   }).join('')
-  const _topCliArr=[...D.clientes].sort((a,b)=>cliValor(b.nome)-cliValor(a.nome)).slice(0,7)
+  const _topCliArr=[...fCli()].sort((a,b)=>cliValor(b.nome)-cliValor(a.nome)).slice(0,7)
   const topCli=_topCliArr.map(c=>{
     const rec=cliValor(c.nome),fran=cliFranquia(c.nome),uso=fran?pct(Math.round(c.horas_minutos/60),fran):null,custo=D.totalHoras>0?Math.round(c.horas_minutos/D.totalHoras*totalCusto):0,mg=rec&&custo?Math.round((rec-custo)/rec*100):null,mC=mg==null?'#94a3b8':mg<0?'#ef4444':mg<20?'#f59e0b':'#22c55e',usC=uso==null?'#64748b':uso>100?'#ef4444':uso>85?'#f59e0b':'#22c55e'
     return`<tr><td style="font-weight:600;">${cliDisp(c.nome)}</td><td>${empBadge(getClientEmpresa(c.nome))}</td><td>${minToHM(c.horas_minutos)}h</td><td style="color:${usC};font-weight:700;">${uso!=null?uso+'%':'-'}</td><td style="color:#166534;font-weight:700;">${rec?fmtR(rec):'-'}</td><td style="color:#854d0e;">${fmtR(custo)}</td><td style="color:${mC};font-weight:800;">${mg!=null?mg+'%':'-'}</td></tr>`
@@ -1249,7 +1275,7 @@ function rExecClientes(){
   }
   const cards=empresas.map(emp=>{
     const ec=emp==='4Seniors'?'#2B4C9B':emp==='S4SYS'?'#7c3aed':'#166534'
-    const cts=CONTRACTS.filter(c=>c.empresa===emp&&c.status!=='arquivado'&&c.tipo_cobranca!=='interno')
+    const cts=CONTRACTS.filter(c=>c.empresa===emp&&c.status!=='arquivado'&&c.tipo_cobranca!=='interno'&&(!CLI_SEL.size||CLI_SEL.has(c.cliente)))
     const d=companyStats(emp),mC=d.margem==null?'#94a3b8':d.margem<0?'#ef4444':d.margem<20?'#f59e0b':'#22c55e'
     return`<div class="card mb-4 overflow-x-auto" style="border-left:3px solid ${ec};"><div style="display:flex;align-items:baseline;gap:.68rem;flex-wrap:wrap;margin-bottom:.78rem;"><span style="font-size:.72rem;font-weight:800;color:${ec};text-transform:uppercase;letter-spacing:.06em;">${emp}</span><span style="font-size:.68rem;color:#166534;font-weight:700;">${fmtR(d.receita)} receita</span><span style="font-size:.68rem;color:#854d0e;">${fmtR(d.custo)} custo</span><span style="font-size:.68rem;font-weight:800;color:${mC};">Margem ${d.margem!=null?d.margem+'%':'-'}</span><span style="margin-left:auto;font-size:.65rem;color:#94a3b8;">${cts.length} contratos · ${minToHM(d.horas)}h · ${fmt(d.chamados)} ch.</span></div>
     <table><thead><tr><th>Empresa</th><th>Cliente</th>${CC.contrato?'<th>Contrato</th>':''}${CC.atend?'<th>Atend.</th>':''}${CC.tec?'<th>Tecnologias</th>':''}<th>H. Real</th><th>Franquia</th><th>Uso%</th><th>Ch.</th><th>Receita</th><th>Custo (est.)</th><th>Margem</th>${CC.sla?'<th>SLA At./Re.</th>':''}${CC.acoes?'<th>Ações</th>':''}</tr></thead><tbody>${cts.map(rowFor).join('')||`<tr><td colspan="${nCols}" style="color:#94a3b8;padding:1rem;text-align:center;">Nenhum contrato de ${emp}.</td></tr>`}</tbody></table></div>`
