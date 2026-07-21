@@ -84,8 +84,8 @@ textarea.fi{resize:vertical;min-height:2.7rem}
       <div style="font-size:1.3rem;font-weight:900;color:#0f172a;letter-spacing:-.03em;">SeniorsBI</div>
       <div style="font-size:.62rem;color:#2B4C9B;font-weight:800;text-transform:uppercase;letter-spacing:.14em;">Painel de Dados</div>
     </div>
-    <label style="font-size:.66rem;font-weight:700;color:#475569;">Usuário</label>
-    <input id="loginUser" type="text" autocomplete="username" style="width:100%;box-sizing:border-box;margin:.2rem 0 .65rem;padding:.55rem .7rem;border:1px solid #e2e8f0;border-radius:.5rem;font-size:.85rem;" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+    <label style="font-size:.66rem;font-weight:700;color:#475569;">E-mail</label>
+    <input id="loginUser" type="email" autocomplete="username" placeholder="voce@empresa.com" style="width:100%;box-sizing:border-box;margin:.2rem 0 .65rem;padding:.55rem .7rem;border:1px solid #e2e8f0;border-radius:.5rem;font-size:.85rem;" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
     <label style="font-size:.66rem;font-weight:700;color:#475569;">Senha</label>
     <input id="loginPass" type="password" autocomplete="current-password" style="width:100%;box-sizing:border-box;margin:.2rem 0 .3rem;padding:.55rem .7rem;border:1px solid #e2e8f0;border-radius:.5rem;font-size:.85rem;" onkeydown="if(event.key==='Enter')doLogin()">
     <div id="loginErr" style="min-height:1.05rem;font-size:.7rem;color:#dc2626;font-weight:700;margin-bottom:.35rem;"></div>
@@ -266,7 +266,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v127'
+const APP_VERSION='v128'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
@@ -352,37 +352,47 @@ window.setAppMode=function(m){
   const b=document.getElementById('modeBtn');if(b)b.textContent=APP_MODE==='limited'?'🔓 Versão completa':'▸ Versão Lite'
   renderContent()
 }
-// ===== LOGIN / PERFIS (client-side — NÃO é segurança forte: repo público, tudo roda no browser. Serve p/ organizar acesso) =====
+// ===== LOGIN / PERFIS via Supabase Auth (login no servidor; perfil no banco público.profiles; admin gerencia pela função admin-users) =====
 const SBI_ROLES={
-  admin:     {lbl:'Administrador', areas:['lite','exec','tech','adm'], val:true},
-  gestao:    {lbl:'Gestão',        areas:['lite','exec'],              val:true},
-  financeiro:{lbl:'Financeiro',    areas:['lite'],                     val:true},
-  tecnico:   {lbl:'Técnico',       areas:['tech'],                     val:false}
+  admin:     {lbl:'Administrador', areas:['lite','fin','exec','tech','adm'], val:true, manage:true},
+  executivo: {lbl:'Executivo',     areas:['exec'],                            val:true},
+  financeiro:{lbl:'Financeiro',    areas:['fin'],                             val:true},
+  tecnico:   {lbl:'Técnico',       areas:['tech'],                            val:false}
 };
-const SBI_AREAS={lite:{lbl:'Lite',mode:'limited'},exec:{lbl:'Executiva',mode:'full',section:'exec'},tech:{lbl:'Técnica',mode:'full',section:'tech'},adm:{lbl:'Admin',mode:'full',section:'admin'}};
-// senhas guardadas só como hash SHA-256 (a senha literal não fica no código)
-const SBI_USERS=[
-  {user:'raphael', role:'admin',      hash:'9152cc13894f4d4489f0ed7587e27e0039198283ccf2f1bc4be0b7045678eb71'},
-  {user:'admin',   role:'admin',      hash:'9152cc13894f4d4489f0ed7587e27e0039198283ccf2f1bc4be0b7045678eb71'},
-  {user:'bianca',  role:'financeiro', hash:'0f20de9fc99512ba5a6b71eac4653fcec41ffe225b6d45da321463bb54da0da9'},
-  {user:'gestao',  role:'gestao',     hash:'c3fa3f8ea614178e69eb849c511738b88032acf147cd29f7244bbcfe08183e33'},
-  {user:'cristina',role:'tecnico',    hash:'34f3392f9b9a736522563eafeb1a430751b124fdb4d415a53eeea35ce24d6d05'}
-];
+const SBI_AREAS={
+  lite:{lbl:'Lite',mode:'limited'},
+  fin:{lbl:'Financeiro',mode:'full',section:'fin'},
+  exec:{lbl:'Executiva',mode:'full',section:'exec'},
+  tech:{lbl:'Técnica',mode:'full',section:'tech'},
+  adm:{lbl:'Admin',mode:'full',section:'admin'}
+};
 let AUTH=null, CUR_AREA='lite';
-function normUser(s){return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')}
-async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 function roleAreas(){return AUTH?((SBI_ROLES[AUTH.role]||{}).areas||[]):[]}
 function canVal(){return !!(AUTH&&(SBI_ROLES[AUTH.role]||{}).val)}
+function isAdminUser(){return !!(AUTH&&(SBI_ROLES[AUTH.role]||{}).manage)}
+// carrega o perfil (papel) do usuário logado a partir da sessão do Supabase
+async function loadAuthProfile(){
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session)return false;
+    const {data:prof,error}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
+    if(error||!prof||!prof.active||!SBI_ROLES[prof.role]){AUTH=null;return false}
+    AUTH={id:prof.id,email:prof.email||session.user.email,nome:prof.nome||prof.email||session.user.email,role:prof.role};
+    return true;
+  }catch(e){AUTH=null;return false}
+}
 window.doLogin=async function(){
-  const u=normUser(document.getElementById('loginUser').value), p=document.getElementById('loginPass').value||'', err=document.getElementById('loginErr');
-  const rec=SBI_USERS.find(x=>x.user===u);
-  let h=''; try{ if(rec) h=await sha256hex(p) }catch(e){ err.textContent='Navegador sem suporte a criptografia (use HTTPS).'; return }
-  if(!rec||h!==rec.hash){err.textContent='Usuário ou senha inválidos.';return}
-  AUTH={user:u,role:rec.role}; try{sessionStorage.setItem('sbi_auth',JSON.stringify(AUTH))}catch(e){}
-  err.textContent=''; document.getElementById('loginPass').value='';
+  const email=(document.getElementById('loginUser').value||'').trim(),pass=document.getElementById('loginPass').value||'',err=document.getElementById('loginErr');
+  if(!email||!pass){err.textContent='Preencha e-mail e senha.';return}
+  err.textContent='Entrando…';
+  const {error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){err.textContent=/Email not confirmed/i.test(error.message)?'E-mail não confirmado — fale com o admin.':'E-mail ou senha inválidos.';return}
+  const ok=await loadAuthProfile();
+  if(!ok){err.textContent='Login ok, mas sem perfil ativo. Fale com o administrador.';await sb.auth.signOut();return}
+  err.textContent='';document.getElementById('loginPass').value='';
   applyAuth();
 };
-window.doLogout=function(){AUTH=null;LITE_VAL=false;try{sessionStorage.removeItem('sbi_auth')}catch(e){}
+window.doLogout=async function(){try{await sb.auth.signOut()}catch(e){}AUTH=null;LITE_VAL=false;
   const ls=document.getElementById('loginScreen');if(ls)ls.classList.remove('hidden');
   const ap=document.getElementById('app');if(ap)ap.classList.add('hidden');
   const lu=document.getElementById('loginUser');if(lu)lu.value='';
@@ -390,7 +400,7 @@ window.doLogout=function(){AUTH=null;LITE_VAL=false;try{sessionStorage.removeIte
 function applyAuth(){
   const ls=document.getElementById('loginScreen');if(ls)ls.classList.add('hidden');
   const ap=document.getElementById('app');if(ap)ap.classList.remove('hidden');
-  GO_AREA(roleAreas()[0]||'lite');
+  GO_AREA(roleAreas()[0]||'exec');
 }
 window.GO_AREA=function(k){
   const areas=roleAreas(); if(!areas.includes(k))k=areas[0]; if(!k)return;
@@ -402,8 +412,8 @@ window.GO_AREA=function(k){
 function roleAreaBtns(){const areas=roleAreas();if(areas.length<=1)return '';
   return `<div style="display:flex;gap:.14rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.5rem;padding:.14rem;">`+areas.map(k=>`<button onclick="GO_AREA('${k}')" style="padding:.26rem .6rem;border:none;border-radius:.38rem;font-size:.68rem;font-weight:800;cursor:pointer;white-space:nowrap;background:${CUR_AREA===k?'#2B4C9B':'transparent'};color:${CUR_AREA===k?'#fff':'#475569'};">${SBI_AREAS[k].lbl}</button>`).join('')+`</div>`;
 }
-function roleUserBadge(){if(!AUTH)return '';const r=SBI_ROLES[AUTH.role]||{};
-  return `<span style="font-size:.66rem;color:#64748b;font-weight:700;white-space:nowrap;"><b style="color:#0f172a;text-transform:capitalize;">${esc(AUTH.user)}</b> · ${esc(r.lbl||'')}</span><button onclick="doLogout()" title="Encerrar sessão" style="padding:.24rem .55rem;border:1px solid #fecaca;border-radius:.4rem;background:#fef2f2;color:#b91c1c;font-size:.66rem;font-weight:800;cursor:pointer;white-space:nowrap;">Sair</button>`;
+function roleUserBadge(){if(!AUTH)return '';const r=SBI_ROLES[AUTH.role]||{};const nome=(AUTH.nome||AUTH.email||'').split('@')[0];
+  return `<span style="font-size:.66rem;color:#64748b;font-weight:700;white-space:nowrap;" title="${esc(AUTH.email||'')}"><b style="color:#0f172a;">${esc(nome)}</b> · ${esc(r.lbl||'')}</span><button onclick="doLogout()" title="Encerrar sessão" style="padding:.24rem .55rem;border:1px solid #fecaca;border-radius:.4rem;background:#fef2f2;color:#b91c1c;font-size:.66rem;font-weight:800;cursor:pointer;white-space:nowrap;">Sair</button>`;
 }
 function syncHeaderNav(){
   const nav=document.getElementById('secNav');
@@ -425,7 +435,8 @@ const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cl
 const SECTION_SUBS={
   exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Riscos']],
   tech:[['chamados','Chamados & Atividades'],['parados','Chamados Parados'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências'],['checklists','Checklists']],
-  admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['matriz','Matriz'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']]
+  admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['usuarios','Usuários'],['matriz','Matriz'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']],
+  fin:[]
 }
 
 // ─── Técnicos excluídos das métricas (gestão/pré-venda, não entram em custo/FTE/alertas) ───
@@ -924,9 +935,10 @@ function renderContent(){
   {const _evb=document.getElementById('execValBtn');if(_evb)_evb.innerHTML=(SECTION==='exec')?`<button onclick="toggleExecVal()" style="cursor:pointer;border:none;border-radius:.42rem;padding:.24rem .6rem;font-size:.68rem;font-weight:800;background:${EXEC_VAL?'#fef9c3':'#e0e7ff'};color:${EXEC_VAL?'#854d0e':'#3730a3'};white-space:nowrap;">${EXEC_VAL?'👁 Ocultar valores':'👁 Mostrar valores'}</button>`:''}
   {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display='';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
   if(TIME==='comparar'){renderCompare();return}
-  const standalone=SECTION==='admin'||(SECTION==='tech'&&['chamados','parados','checklists'].includes(TECH_SUB))
+  const standalone=SECTION==='admin'||SECTION==='fin'||(SECTION==='tech'&&['chamados','parados','checklists'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
-  if(SECTION==='exec'){
+  if(SECTION==='fin'){el.innerHTML=rFinanceiro();lucide.createIcons()}
+  else if(SECTION==='exec'){
     const sync={geral:rExecGeral,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecRiscosFull}
     MONEY_MASK=!EXEC_VAL;// oculta R$ só enquanto renderiza o executivo
     try{el.innerHTML=(sync[EXEC_SUB]||rExecGeral)()}finally{MONEY_MASK=false}
@@ -941,6 +953,7 @@ function renderContent(){
   }else{
     const sync={contratos:rContratos,funcionarios:rFuncionarios,matriz:rMatriz,custos:rCustos,'sla-edit':rSLAAdmin,alertcfg:rAlertCfg}
     if(ADMIN_SUB==='log')rIngest().then(h=>{el.innerHTML=h;lucide.createIcons()})
+    else if(ADMIN_SUB==='usuarios'){el.innerHTML=rUsuariosShell();lucide.createIcons();carregarUsuarios()}
     else{el.innerHTML=(sync[ADMIN_SUB]||rContratos)();lucide.createIcons()}
   }
 }
@@ -1104,6 +1117,55 @@ function rExecRiscos(auto){
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">${topCards}</div>
   </div>`;
 }
+// ─── Área FINANCEIRO: painel estilo Lite, porém com TODOS os contratos (reusa o painel de contratos por CC) ───
+function rFinanceiro(){
+  const head=`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;"><span style="font-size:1.1rem;font-weight:900;color:#0f172a;">Financeiro — contratos</span><span style="font-size:.68rem;color:#94a3b8;">todos os clientes · H.H, franquia, escopo e fora de escopo</span></div>`;
+  return head+rExecContratos();
+}
+// ─── Gestão de usuários (admin) — chama a edge function admin-users (service role; valida admin no servidor) ───
+async function fnUsers(action,payload){
+  const {data,error}=await sb.functions.invoke('admin-users',{body:{action,...(payload||{})}});
+  if(error){let msg=error.message||'falha';try{if(error.context&&error.context.json){const j=await error.context.json();if(j&&j.error)msg=j.error}}catch(e){}throw new Error(msg)}
+  if(data&&data.error)throw new Error(data.error);
+  return data;
+}
+const USR_ROLES=[['admin','Administrador'],['executivo','Executivo'],['financeiro','Financeiro'],['tecnico','Técnico']];
+function rUsuariosShell(){
+  if(!isAdminUser())return `<div class="card" style="color:#dc2626;padding:1.5rem;text-align:center;font-weight:700;">Acesso restrito ao administrador.</div>`;
+  const opts=USR_ROLES.map(([k,l])=>`<option value="${k}">${l}</option>`).join('');
+  return `<div class="card mb-4"><div style="font-size:.95rem;font-weight:800;color:#0f172a;">Usuários & acessos</div><div style="font-size:.66rem;color:#64748b;margin-top:.25rem;">Só o administrador cria usuários, troca senha e muda perfil. O <b>perfil</b> define o que a pessoa vê: <b>Admin</b> = tudo · <b>Executivo</b> = Executiva · <b>Financeiro</b> = contratos · <b>Técnico</b> = Técnica. Senhas são tratadas no servidor (Supabase Auth), nunca ficam no navegador.</div></div>
+  <div class="card mb-4"><div style="font-size:.8rem;font-weight:800;margin-bottom:.6rem;">Novo usuário</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.5rem;align-items:end;">
+      <div><label class="kpi-lbl">Nome</label><input id="uNome" class="fi" placeholder="Nome"></div>
+      <div><label class="kpi-lbl">E-mail</label><input id="uEmail" type="email" class="fi" placeholder="pessoa@empresa.com"></div>
+      <div><label class="kpi-lbl">Senha inicial</label><input id="uPass" type="text" class="fi" placeholder="mín. 6 caracteres"></div>
+      <div><label class="kpi-lbl">Perfil</label><select id="uRole" class="fi">${opts}</select></div>
+      <button onclick="usrCreate()" style="cursor:pointer;background:#2B4C9B;color:#fff;border:none;border-radius:.45rem;padding:.5rem 1rem;font-size:.75rem;font-weight:800;">Criar</button>
+    </div><div id="uMsg" style="font-size:.7rem;font-weight:700;margin-top:.5rem;"></div></div>
+  <div class="card overflow-x-auto"><div style="font-size:.8rem;font-weight:800;margin-bottom:.5rem;">Usuários (<span id="uCount">…</span>)</div><div id="uList" style="color:#94a3b8;font-size:.75rem;">Carregando…</div></div>`;
+}
+async function carregarUsuarios(){
+  const list=document.getElementById('uList');if(!list)return;
+  try{
+    const d=await fnUsers('list'),us=d.users||[];const cnt=document.getElementById('uCount');if(cnt)cnt.textContent=us.length;
+    const rows=us.map(u=>{const sel=USR_ROLES.map(([k,l])=>`<option value="${k}" ${u.role===k?'selected':''}>${l}</option>`).join('');const eu=esc(u.email||'').replace(/'/g,"\\'");
+      return `<tr style="${u.active?'':'opacity:.55;'}"><td style="font-weight:600;">${esc(u.nome||'-')}</td><td style="font-size:.68rem;color:#64748b;">${esc(u.email||'')}</td><td><select onchange="usrSetRole('${u.id}',this.value)" style="font-size:.7rem;padding:.2rem .3rem;border:1px solid #e2e8f0;border-radius:.3rem;">${sel}</select></td><td>${u.active?'<span class="badge badge-g">ativo</span>':'<span class="badge badge-r">inativo</span>'}</td><td><div style="display:flex;gap:.3rem;flex-wrap:wrap;"><button onclick="usrPass('${u.id}','${eu}')" class="act-btn act-edit">Senha</button><button onclick="usrToggle('${u.id}',${u.active?'false':'true'})" class="act-btn">${u.active?'Desativar':'Ativar'}</button><button onclick="usrDel('${u.id}','${eu}')" class="act-btn act-del">Excluir</button></div></td></tr>`;
+    }).join('');
+    list.innerHTML=`<table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:1rem;">Nenhum usuário.</td></tr>'}</tbody></table>`;
+  }catch(e){list.innerHTML=`<div style="color:#dc2626;padding:1rem;">Erro ao listar: ${esc(e.message)}</div>`}
+}
+window.usrCreate=async function(){
+  const msg=document.getElementById('uMsg'),nome=document.getElementById('uNome').value.trim(),email=document.getElementById('uEmail').value.trim(),password=document.getElementById('uPass').value,role=document.getElementById('uRole').value;
+  if(!email||!password){msg.style.color='#dc2626';msg.textContent='Preencha e-mail e senha.';return}
+  if(password.length<6){msg.style.color='#dc2626';msg.textContent='Senha mínima de 6 caracteres.';return}
+  msg.style.color='#64748b';msg.textContent='Criando…';
+  try{await fnUsers('create',{email,password,nome,role});msg.style.color='#166534';msg.textContent='Usuário criado com sucesso.';['uNome','uEmail','uPass'].forEach(id=>document.getElementById(id).value='');carregarUsuarios()}
+  catch(e){msg.style.color='#dc2626';msg.textContent='Erro: '+e.message}
+};
+window.usrSetRole=async function(id,role){try{await fnUsers('setRole',{id,role});toast('Perfil atualizado.')}catch(e){toast('Erro: '+e.message,false);carregarUsuarios()}};
+window.usrToggle=async function(id,active){try{await fnUsers('setActive',{id,active});carregarUsuarios()}catch(e){toast('Erro: '+e.message,false)}};
+window.usrPass=function(id,email){const p=prompt('Nova senha para '+email+' (mín. 6 caracteres):');if(p==null)return;if(p.length<6){toast('Senha mínima de 6 caracteres.',false);return}fnUsers('setPassword',{id,password:p}).then(()=>toast('Senha alterada.')).catch(e=>toast('Erro: '+e.message,false))};
+window.usrDel=function(id,email){confirmAction('Excluir o usuário '+email+'? A conta e o acesso serão removidos permanentemente.',()=>{fnUsers('delete',{id}).then(()=>{toast('Usuário excluído.');carregarUsuarios()}).catch(e=>toast('Erro: '+e.message,false))})};
 function rExecGeral(){
   const g=companyStats('all'),auto=buildAutoAlerts().concat(buildChecklistAlerts()).concat(buildMdAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
   const nAtiv=mdEnrichedAtivs().filter(a=>COMPANY==='all'||getClientEmpresa(a.cliente)===COMPANY).length
@@ -2761,8 +2823,8 @@ async function boot(){
   catch(e){document.getElementById('main').innerHTML=`<div class="card" style="border-left:3px solid #ef4444;color:#ef4444;padding:1.25rem;font-size:.875rem;">Erro: ${esc(e.message)}</div>`}
   finally{
     document.getElementById('appVersion').textContent=APP_VERSION;document.getElementById('loading').style.display='none';
-    try{const a=JSON.parse(sessionStorage.getItem('sbi_auth'));if(a&&a.user&&SBI_ROLES[a.role])AUTH=a}catch(e){}
-    if(AUTH){applyAuth()}
+    let logged=false;try{logged=await loadAuthProfile()}catch(e){}
+    if(logged){applyAuth()}
     else{document.getElementById('app').classList.add('hidden');document.getElementById('loginScreen').classList.remove('hidden');const lu=document.getElementById('loginUser');if(lu)setTimeout(()=>lu.focus(),50)}
     lucide.createIcons()
   }
