@@ -269,7 +269,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v138'
+const APP_VERSION='v139'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -444,7 +444,7 @@ const ALERT_GRP={FTE:'profissional',Horas:'profissional',Grupo:'profissional',Fr
 const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Chamado',ic:'ticket',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
-  exec:[['geral','Visão Geral'],['clientes','Por Clientes'],['tecnico','Por Técnico'],['alertas','Alertas'],['sustentacao','Sustentação']],
+  exec:[['geral','Visão Geral'],['operacao','Operação'],['alertas','Alertas'],['sustentacao','Sustentação']],
   tech:[['chamados','Chamados & Atividades'],['parados','Chamados Parados'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['usuarios','Usuários'],['matriz','Matriz'],['custos','Custos'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']],
   fin:[]
@@ -1003,7 +1003,7 @@ function renderContent(){
   if(SECTION==='fin'){el.innerHTML=rFinanceiro();lucide.createIcons()}
   else if(SECTION==='exec'){
     if(EXEC_SUB==='sustentacao'){renderSustentacao(el);return}
-    const sync={geral:rExecGeral,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecRiscosFull}
+    const sync={geral:rExecGeral,operacao:rExecOperacao,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,alertas:rExecRiscosFull}
     MONEY_MASK=!EXEC_VAL;// oculta R$ só enquanto renderiza o executivo
     try{el.innerHTML=(sync[EXEC_SUB]||rExecGeral)()}finally{MONEY_MASK=false}
     lucide.createIcons()
@@ -1449,6 +1449,8 @@ function rExecGeral(){
     return`<div class="card" style="border-top:3px solid ${cor};${total<=0?'opacity:.75;':''}"><div style="display:flex;align-items:center;gap:.45rem;margin-bottom:.6rem;"><div style="background:${cor}18;color:${cor};border-radius:.42rem;padding:.3rem;display:flex;"><i data-lucide="briefcase" style="width:.85rem;height:.85rem;"></i></div><div><div style="font-size:.78rem;font-weight:800;">${titulo}${info?` <sup title="${esc(info)}" style="cursor:help;color:${cor};font-weight:800;">ⓘ</sup>`:''}</div><div style="font-size:.6rem;color:#94a3b8;">${sub}</div></div><span style="margin-left:auto;font-size:1.3rem;font-weight:900;color:${total>0?cor:'#cbd5e1'};">${p!=null?p+'%':'-'}</span></div><div class="grid grid-cols-3 gap-2"><div><div class="kpi-lbl">Salários</div><div style="font-size:.9rem;font-weight:800;color:#854d0e;">${fmtR(Math.round(folha))}</div></div><div><div class="kpi-lbl">Despesas</div><div style="font-size:.9rem;font-weight:800;color:#854d0e;">${fmtR(Math.round(gerais))}</div></div><div><div class="kpi-lbl">Consome</div><div style="font-size:.9rem;font-weight:800;color:${total>0?'#dc2626':'#94a3b8'};">${fmtR(Math.round(total))}</div></div></div><div style="font-size:.57rem;color:#94a3b8;margin-top:.4rem;">Não gera receita — o % é quanto pesa sobre a receita da área técnica.</div></div>`};
   const pnl=(titulo,sub,cst,cstLbl,lucro,mg,cor,icon)=>`<div class="card" style="border-top:3px solid ${cor};"><div style="display:flex;align-items:center;gap:.45rem;margin-bottom:.6rem;"><div style="background:${cor}18;color:${cor};border-radius:.42rem;padding:.3rem;display:flex;"><i data-lucide="${icon}" style="width:.85rem;height:.85rem;"></i></div><div><div style="font-size:.78rem;font-weight:800;">${titulo}</div><div style="font-size:.6rem;color:#94a3b8;">${sub}</div></div><span style="margin-left:auto;font-size:1.3rem;font-weight:900;color:${mc(mg)};">${mg!=null?mg+'%':'-'}</span></div><div class="grid grid-cols-3 gap-2"><div><div class="kpi-lbl">Receita</div><div style="font-size:.9rem;font-weight:800;color:#166534;">${fmtR(receita)}</div></div><div><div class="kpi-lbl">${cstLbl}</div><div style="font-size:.9rem;font-weight:800;color:#854d0e;">${fmtR(cst)}</div></div><div><div class="kpi-lbl">Lucro</div><div style="font-size:.9rem;font-weight:800;color:${lucro>=0?'#166534':'#ef4444'};">${fmtR(lucro)}</div></div></div></div>`
   return`<div id="demo-kpis" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-4">${kpiCard(g.receita?fmtR(g.receita):'(a def.)','Receita Total','#166534','dollar-sign','Todos contratos')}${kpiCard(fmtR(totalCusto),'Custo Equipe (est.)','#854d0e','users','Salários CLT')}${kpiCard(g.margem!=null?g.margem+'%':'-','Margem Global',mgC,'trending-up')}${kpiCard(D.fte+'%','FTE Global',fteC,'activity',minToHM(D.totalHoras)+'h')}${kpiCard(fmt(nAtiv),'Atividades','#0891b2','list-checks','no período')}${kpiCard(fmt(D.totalChamados)+' ch.','Total Chamados','#E04622','ticket')}${kpiCard(auto.length,'Alertas Ativos',alerC,'triangle-alert',auto.filter(a=>a.lv==='critica').length+' críticos')}</div>
+<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem;">Custo-Hora ao vivo <span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">● AO VIVO</span></div>
+${rExecCustoHora('cards')}
 <div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Resultado do período - time técnico × demais departamentos</div>
 <div id="demo-pnl" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
 ${pnl('Time técnico','gera a receita · '+_tec.length+' time(s), '+_tec.reduce((s,o)=>s+o.n,0)+' pessoas',folhaTec,'Custo (salários)',receita-folhaTec,mgTec,'#2B4C9B','wrench')}
@@ -1466,12 +1468,19 @@ BUCKETS.map(b=>{const o=_atu[b],isInt=b==='Interno / Gestão',rec=isInt?0:compan
 <div class="card overflow-x-auto">${ST('Top clientes - financeiro')}<table><thead><tr><th>Cliente</th><th>Empresa</th><th>Horas</th><th>Franquia</th><th>Receita</th><th>Custo</th><th>Margem</th></tr></thead><tbody>${topCli||'<tr><td colspan="7" style="color:#94a3b8;padding:1.25rem;text-align:center;">Configure receitas em Admin → Contratos</td></tr>'}</tbody>${(()=>{if(!_topCliArr.length)return'';const th=_topCliArr.reduce((s,c)=>s+(c.horas_minutos||0),0),trec=_topCliArr.reduce((s,c)=>s+cliValor(c.nome),0),tcus=_topCliArr.reduce((s,c)=>s+(D.totalHoras>0?Math.round(c.horas_minutos/D.totalHoras*totalCusto):0),0),tfr=_topCliArr.reduce((s,c)=>s+cliFranquia(c.nome),0),tuso=tfr?pct(Math.round(th/60),tfr):null,tm=trec&&tcus?Math.round((trec-tcus)/trec*100):null;return`<tfoot><tr style="font-weight:800;background:#f8fafc;border-top:2px solid #cbd5e1;"><td colspan="2" title="Soma apenas dos ${_topCliArr.length} clientes exibidos (de ${(D.clientes||[]).length}). O total geral de H.H do período é ${minToHM(D.totalHoras)}h — por isso não bate com a tabela de técnicos, que mostra outra fatia.">TOTAL (top ${_topCliArr.length} de ${(D.clientes||[]).length})</td><td>${minToHM(th)}h</td><td style="color:${tuso==null?'#64748b':tuso>100?'#ef4444':tuso>85?'#f59e0b':'#22c55e'};">${tuso!=null?tuso+'%':'-'}</td><td style="color:#166534;">${fmtR(trec)}</td><td style="color:#854d0e;">${fmtR(tcus)}</td><td style="color:${tm==null?'#94a3b8':tm<0?'#ef4444':tm<20?'#f59e0b':'#22c55e'};">${tm!=null?tm+'%':'-'}</td></tr></tfoot>`})()}</table></div></div>
 ${rExecRiscos(auto)}
 <div style="margin-top:1.1rem;">${rExecContratos()}</div>
-<div style="margin-top:1.1rem;">${rExecCustoHora()}</div>`
+<div style="margin-top:1.1rem;">${rExecCustoHora('table')}</div>`
 }
 
 // Colunas opcionais do "Por Clientes" (ocultáveis) — o usuário pode enxugar a tabela
 let CLI_COLS={contrato:0,atend:0,tec:0,sla:0,acoes:0};// começam OCULTAS (tabela enxuta); o usuário liga o que quiser
-window.toggleCliCol=function(k){CLI_COLS[k]=CLI_COLS[k]?0:1;if(SECTION==='exec'&&EXEC_SUB==='clientes')renderContent()};
+let EXEC_OP='clientes';// subaba interna da aba Operação (Por Cliente / Por Técnico)
+window.setExecOp=function(k){EXEC_OP=k;renderContent()};
+function rExecOperacao(){
+  const tabs=[['clientes','Por Cliente'],['tecnico','Por Técnico']];
+  const nav=`<div style="display:flex;gap:.4rem;margin-bottom:1rem;">${tabs.map(([k,l])=>`<button onclick="setExecOp('${k}')" style="cursor:pointer;border:none;border-radius:.4rem;padding:.35rem .85rem;font-size:.72rem;font-weight:800;background:${EXEC_OP===k?'#2B4C9B':'#f1f5f9'};color:${EXEC_OP===k?'#fff':'#475569'};">${l}</button>`).join('')}</div>`;
+  return nav+(EXEC_OP==='tecnico'?rExecTecnico():rExecClientes());
+}
+window.toggleCliCol=function(k){CLI_COLS[k]=CLI_COLS[k]?0:1;if(SECTION==='exec'&&EXEC_SUB==='operacao'&&EXEC_OP==='clientes')renderContent()};
 function rExecClientes(){
   const totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
   const CC=CLI_COLS,nCols=9+(CC.contrato?1:0)+(CC.atend?1:0)+(CC.tec?1:0)+(CC.sla?1:0)+(CC.acoes?1:0)
@@ -1496,7 +1505,7 @@ function rExecClientes(){
   return colBar+cards+`<div style="font-size:.59rem;color:#94a3b8;">* Custo est. = proporcional às horas do período. Receita por chamado = valor/chamado × chamados.</div>`
 }
 
-function rExecCustoHora(){
+function rExecCustoHora(mode){
   const _pdays=(MD_ATV_START&&MD_ATV_END)?((new Date(MD_ATV_END+'T12:00:00')-new Date(MD_ATV_START+'T12:00:00'))/864e5+1):30.44
   const pm=Math.max(0.03,_pdays/30.44), periodoTxt=(MD_ATV_START&&MD_ATV_END)?(MD_ATV_START===MD_ATV_END?brDate(MD_ATV_START):brDate(MD_ATV_START)+' a '+brDate(MD_ATV_END)):'no período';
   const ch=getCustoHora(), chCfg=getAlertCfg().custo_hora, isDefault=!(chCfg&&chCfg>0);
@@ -1520,6 +1529,19 @@ function rExecCustoHora(){
       ?`<span title="Franquia MENSAL contratada (cheia): ${r.franqBase}h. As horas do período são comparadas com o teto do mês, não com um valor proporcional.">${r.franqBase}h<span style="color:#cbd5e1;font-size:.57rem;">/mês</span></span>`
       :(r.nCtr>0?'<span style="color:#6d28d9;font-size:.6rem;" title="Contrato por chamado — não tem franquia de horas.">por chamado</span>':'<span style="color:#b45309;font-size:.6rem;" title="Não achei contrato pelo NOME deste cliente. Todos os centros de custo com horas TÊM contrato cadastrado — normalmente é diferença de nomenclatura entre Milldesk e cadastro. O painel de contratos (que casa por CC) mostra o correto.">nome sem match</span>')}</td><td style="color:${usoC};font-weight:700;">${r.uso!=null?r.uso+'%':'-'}</td><td style="color:#854d0e;font-weight:700;">${r.custoH>0?fmtR(r.custoH):'-'}</td><td style="color:#166534;">${r.valor>0?fmtR(r.valor):'-'}</td><td style="color:#64748b;">${r.rhEf!=null?fmtR(r.rhEf)+'/h':'-'}</td><td style="color:${mC};font-weight:800;">${r.margem!=null?fmtR(r.margem)+(r.margemP!=null?' ('+r.margemP+'%)':''):'-'}</td><td>${r.temContrato?sitBadge(r.sit):'<span style="color:#94a3b8;font-size:.62rem;">sem contrato</span>'}</td></tr>`;
   }).join('')||`<tr><td colspan="10" style="color:#94a3b8;padding:1.25rem;text-align:center;">Sincronize o Milldesk (Fila de Chamados) para ver as horas ao vivo.</td></tr>`;
+  const cardsGrid=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      ${kpiCard(fmtR(ch)+'/h','Custo-hora aplicado','#2B4C9B','banknote',isDefault?'padrão (salário÷capacidade)':'definido manualmente')}
+      ${kpiCard(minToHM(Math.round(totHoras*60))+'h','Horas técnicas '+periodoTxt,'#0891b2','clock')}
+      ${kpiCard(fmtR(totCusto),'Custo das horas','#854d0e','coins')}
+      ${kpiCard(fmt(nEstouro),'Clientes estourando',nEstouro?'#ef4444':'#22c55e','trending-up',nEstouro?'horas/custo acima do contrato':'todos dentro do contrato')}
+    </div>`;
+  if(mode==='cards')return cardsGrid;
+  const inputRow=`<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem;font-size:.66rem;color:#475569;"><span style="font-weight:700;">Custo-hora técnica (R$/h):</span><input type="number" min="0" step="10" value="${chCfg||''}" placeholder="${custoHoraDefault()}" onchange="setCustoHora(this.value)" style="width:110px;padding:.3rem .5rem;border:1px solid var(--border);border-radius:.4rem;font-size:.72rem;"><span style="color:#94a3b8;">vazio = padrão derivado (${fmtR(custoHoraDefault())}/h)</span></div>`;
+  const tableBlock=`<div class="overflow-x-auto"><table><thead><tr><th>Empresa</th><th>Cliente</th><th>Horas (live) <sup title="Horas realmente trabalhadas pelos técnicos no período (Milldesk, worked_hour), somadas até o momento do sync." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Franquia <sup title="Franquia MENSAL contratada (cheia), não proporcional ao período. É o teto do mês (ex.: Mileto = 168h)." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Uso <sup title="Horas (live) ÷ franquia mensal cheia. Ex.: 165h de 168h = 98%. Passa de 100% só quando estoura o teto do mês." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Custo das horas <sup title="Horas (live) × custo-hora técnico aplicado (o R$/h do campo acima)." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Valor contrato <sup title="Valor mensal do contrato cadastrado em Admin → Contratos." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>R$/h efetivo <sup title="Valor do contrato ÷ horas (live) — quanto cada hora trabalhada rende de receita." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Margem oper. <sup title="Valor do contrato − custo das horas (e o % sobre o valor). Resultado operacional só da mão de obra." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Situação <sup title="ESTOURANDO = uso >100% ou custo > valor; ATENÇÃO = uso ≥80% ou custo ≥80% do valor; SAUDÁVEL = dentro." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th></tr></thead><tbody>${body}</tbody></table></div>
+    <div style="font-size:.59rem;color:#94a3b8;margin-top:.6rem;"><b>Custo das horas</b> = horas gastas × custo-hora. <b>R$/h efetivo</b> = valor do contrato ÷ horas gastas (quanto cada hora rende). <b>Estourando</b> = horas acima da franquia, ou custo das horas acima do valor do contrato.</div>`;
+  if(mode==='table'){// tabela recolhível (fechada por padrão) — atalho/espelho do "Por Cliente"
+    return`<details class="card mb-4"><summary style="cursor:pointer;display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;"><span style="font-size:.92rem;font-weight:800;color:#0f172a;">Custo-Hora × Contrato</span><span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">● AO VIVO</span><span style="font-size:.62rem;color:#94a3b8;">tabela detalhada — clique para expandir</span><button onclick="event.preventDefault();event.stopPropagation();setSub('operacao');setExecOp('clientes');" style="margin-left:auto;cursor:pointer;background:#eef2ff;border:1px solid #dbeafe;color:#2B4C9B;border-radius:.35rem;font-size:.62rem;font-weight:800;padding:.15rem .5rem;">abrir em Operação → Por Cliente ↗</button></summary><div style="margin-top:.7rem;">${inputRow}${tableBlock}</div></details>`;
+  }
   return`<div class="card mb-4">
     <div style="display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;margin-bottom:.28rem;">
       <span style="font-size:.92rem;font-weight:800;color:#0f172a;">Custo-Hora × Contrato</span>
@@ -1527,19 +1549,7 @@ function rExecCustoHora(){
       <span style="font-size:.62rem;color:#94a3b8;">horas reais dos técnicos (Milldesk) ${periodoTxt} × valor e franquia do contrato</span>
     </div>
     <div style="font-size:.66rem;color:#64748b;line-height:1.5;margin-bottom:.85rem;">Valora as <b>horas realmente gastas pelos técnicos</b> pelo custo-hora e compara ao que o contrato paga — mostra onde o <b>esforço técnico está estourando o contrato</b>, independente do rateio de salário.</div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-      ${kpiCard(fmtR(ch)+'/h','Custo-hora aplicado','#2B4C9B','banknote',isDefault?'padrão (salário÷capacidade)':'definido manualmente')}
-      ${kpiCard(minToHM(Math.round(totHoras*60))+'h','Horas técnicas '+periodoTxt,'#0891b2','clock')}
-      ${kpiCard(fmtR(totCusto),'Custo das horas','#854d0e','coins')}
-      ${kpiCard(fmt(nEstouro),'Clientes estourando',nEstouro?'#ef4444':'#22c55e','trending-up',nEstouro?'horas/custo acima do contrato':'todos dentro do contrato')}
-    </div>
-    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem;font-size:.66rem;color:#475569;">
-      <span style="font-weight:700;">Custo-hora técnica (R$/h):</span>
-      <input type="number" min="0" step="10" value="${chCfg||''}" placeholder="${custoHoraDefault()}" onchange="setCustoHora(this.value)" style="width:110px;padding:.3rem .5rem;border:1px solid var(--border);border-radius:.4rem;font-size:.72rem;">
-      <span style="color:#94a3b8;">vazio = padrão derivado (${fmtR(custoHoraDefault())}/h)</span>
-    </div>
-    <div class="overflow-x-auto"><table><thead><tr><th>Empresa</th><th>Cliente</th><th>Horas (live) <sup title="Horas realmente trabalhadas pelos técnicos no período (Milldesk, worked_hour), somadas até o momento do sync." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Franquia <sup title="Franquia MENSAL contratada (cheia), não proporcional ao período. É o teto do mês (ex.: Mileto = 168h)." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Uso <sup title="Horas (live) ÷ franquia mensal cheia. Ex.: 165h de 168h = 98%. Passa de 100% só quando estoura o teto do mês." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Custo das horas <sup title="Horas (live) × custo-hora técnico aplicado (o R$/h do campo acima)." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Valor contrato <sup title="Valor mensal do contrato cadastrado em Admin → Contratos." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>R$/h efetivo <sup title="Valor do contrato ÷ horas (live) — quanto cada hora trabalhada rende de receita." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Margem oper. <sup title="Valor do contrato − custo das horas (e o % sobre o valor). Resultado operacional só da mão de obra." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Situação <sup title="ESTOURANDO = uso >100% ou custo > valor; ATENÇÃO = uso ≥80% ou custo ≥80% do valor; SAUDÁVEL = dentro." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th></tr></thead><tbody>${body}</tbody></table></div>
-    <div style="font-size:.59rem;color:#94a3b8;margin-top:.6rem;"><b>Custo das horas</b> = horas gastas × custo-hora. <b>R$/h efetivo</b> = valor do contrato ÷ horas gastas (quanto cada hora rende). <b>Estourando</b> = horas acima da franquia, ou custo das horas acima do valor do contrato.</div>
+    ${cardsGrid}${inputRow}${tableBlock}
   </div>`;
 }
 
