@@ -274,7 +274,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v143'
+const APP_VERSION='v144'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -345,7 +345,7 @@ const getLiteCt=()=>{
   const ov=lsGet('sbi_lite_ct')||[],ovByCc={};ov.forEach(o=>{if(o&&o.cc!=null)ovByCc[String(o.cc)]=o})
   return LITE_MANAGED_CC.map(cc=>{
     const c=(CONTRACTS||[]).find(x=>String(x.cc)===cc&&x.status!=='arquivado');if(!c)return null
-    const m=LITE_CC_META[cc]||{cor:'#2B4C9B',pilar:'susten',tipo:'Sustentação'},o=ovByCc[cc]||{},fr=c.franquia_horas||0,vl=c.valor||0
+    const m=LITE_CC_META[cc]||{cor:'#2B4C9B',pilar:'susten',tipo:'Sustentação'},o=ovByCc[cc]||{},fr=c.franquia_horas||0,vl=c.valor_mensal||0
     return{id:c.id,cc:cc,nome:liteFixNome(c.cliente),tipo:m.tipo,franquia:fr,valor:vl,cor:m.cor,pilar:m.pilar,valorHoraAvulsa:(o.valorHoraAvulsa!=null?o.valorHoraAvulsa:(fr?Math.round(vl/fr):0))}
   }).filter(Boolean)
 }
@@ -2127,7 +2127,7 @@ window.liteSaveCt=function(id){
   if(!cc){toast('Centro de custo obrigatório.',false);return}
   const c=(CONTRACTS||[]).find(x=>x.id===id)||(CONTRACTS||[]).find(x=>String(x.cc)===cc);
   if(!c){toast('Contrato não encontrado em Admin → Contratos.',false);return}
-  c.franquia_horas=fr;c.valor=vl;setContracts(CONTRACTS);
+  c.franquia_horas=fr;c.valor_mensal=vl;setContracts(CONTRACTS);
   const ov=lsGet('sbi_lite_ct')||[];let o=ov.find(x=>String(x.cc)===cc);if(!o){o={cc};ov.push(o)}o.valorHoraAvulsa=vha;setLiteCt(ov);
   liteCloseModal();toast('Salvo em Admin → Contratos.');renderContent();
 };
