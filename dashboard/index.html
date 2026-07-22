@@ -274,7 +274,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v144'
+const APP_VERSION='v145'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -799,7 +799,10 @@ function getClientContracts(nome){
   return CONTRACTS.filter(c=>{if(c.status==='arquivado')return false;const n=_norm(c.cliente);return n&&(n===t||n.includes(t)||t.includes(n))})
 }
 // Fator do período: valores mensais (receita/salário/custos) escalam pelo tamanho do período selecionado.
-function mdPeriodFactor(){if(!MD_ATV_START||!MD_ATV_END)return 1;const d=(new Date(MD_ATV_END+'T12:00:00')-new Date(MD_ATV_START+'T12:00:00'))/864e5+1;return Math.max(0.01,d/30.44)}
+// Fator para escalar valores MENSAIS (receita de contrato, folha) ao período: nº de MESES do período (mín. 1).
+// Contrato/salário mensal fatura/paga o mês cheio — não se prorateia por dias decorridos dentro de um mês parcial.
+// (Anual ≈ 12; mês parcial/anterior = 1; períodos curtos = 1.) A capacidade/FTE usa mdCapFactor (dias úteis), à parte.
+function mdPeriodFactor(){if(!MD_ATV_START||!MD_ATV_END)return 1;const d=(new Date(MD_ATV_END+'T12:00:00')-new Date(MD_ATV_START+'T12:00:00'))/864e5+1;return Math.max(1,Math.round(d/30.44))}
 // Capacidade (FTE): dias ÚTEIS no período × 8h/dia. Dia=8h, semana=40h, mês=~168h. Mesma matemática em todos os períodos.
 function mdBizDays(s,e){if(!s||!e)return 21;let d=new Date(s+'T12:00:00');const end=new Date(e+'T12:00:00');let n=0;while(d<=end){const w=d.getDay();if(w>=1&&w<=5)n++;d=new Date(d.getTime()+864e5)}return n}
 function mdCapFactor(){if(!MD_ATV_START||!MD_ATV_END)return 1;return Math.max(1,mdBizDays(MD_ATV_START,MD_ATV_END))/21}
