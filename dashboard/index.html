@@ -267,7 +267,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v135'
+const APP_VERSION='v136'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -707,11 +707,17 @@ function mdApplyToD(raw){
   D.skills=D.skills||[];D.alertas=D.alertas||[];if(!('sla'in D))D.sla=null;if(!('sat'in D))D.sat=null;D._src='milldesk';D._hsrc='chamados'
 }
 // Atividades = fonte das horas: cada apontamento tem seu técnico/horas; cliente/categoria vêm do chamado (id_ticket).
+// Memoiza por período/volume: numa mesma renderização isto é chamado várias vezes (custava ~5×800ms sobre 25k ativs).
+let _enrCache=null;
 function mdEnrichedAtivs(){
+  const key=(MD_ATV_START||'')+'|'+(MD_ATV_END||'')+'|'+((MD.ativs||[]).length)+'|'+((MD.tickets||[]).length)+'|'+((MD.backlogFull||[]).length)+'|'+(MD._enrBust||0);
+  if(_enrCache&&_enrCache.key===key)return _enrCache.val;
   const s=MD_ATV_START,e=MD_ATV_END,tk={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t&&!tk[t.id])tk[t.id]=t})
-  return (MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)).map(a=>{const t=tk[a.tid],loc=a.loc||(t&&t.loc)||'';return{ag:a.ag,tid:a.tid,wh:a.wh||0,ch:a.ch||0,iso:mdActISO(a.start),cliente:mdLocCliente(loc),cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'-',lv:(t&&t.lv)||''}}).filter(a=>!(s&&e)||(a.iso>=s&&a.iso<=e))
+  const val=(MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)).map(a=>{const t=tk[a.tid],loc=a.loc||(t&&t.loc)||'';return{ag:a.ag,tid:a.tid,wh:a.wh||0,ch:a.ch||0,iso:mdActISO(a.start),cliente:mdLocCliente(loc),cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'-',lv:(t&&t.lv)||''}}).filter(a=>!(s&&e)||(a.iso>=s&&a.iso<=e))
+  _enrCache={key,val};return val;
 }
 function mdApplyFromAtivs(){
+  MD._enrBust=(MD._enrBust||0)+1;// invalida os caches de mdEnrichedAtivs/mdMonthlyAgg quando dados novos entram
   const recs={},clis={}
   mdEnrichedAtivs().forEach(a=>{
     const ro=recs[a.ag]=recs[a.ag]||{nome:a.ag,trab_minutos:0,avulsa_minutos:0,ids:new Set(),lv:{}};ro.trab_minutos+=a.wh;ro.avulsa_minutos+=a.ch;ro.ids.add(a.tid);if(a.lv)ro.lv[a.lv]=(ro.lv[a.lv]||0)+1
@@ -822,7 +828,10 @@ function confirmAction(msg,fn){document.getElementById('confirmMsg').textContent
 // ── Agregação MENSAL a partir de TODO o histórico em MD.ativs (o endpoint de atividades ignora o filtro de data,
 // então temos os meses anteriores). Serve para decidir sobrecarga/estouro relacionando o mês atual aos outros. ──
 function ymAddMonths(ym,delta){let[y,m]=String(ym).split('-').map(Number);m+=delta;while(m<=0){m+=12;y--}while(m>12){m-=12;y++}return y+'-'+String(m).padStart(2,'0')}
+let _maCache=null;
 function mdMonthlyAgg(){
+  const mkey=((MD.ativs||[]).length)+'|'+(MD._enrBust||0);
+  if(_maCache&&_maCache.key===mkey)return _maCache.val;
   const per={},cli={};// per[nome][ym]=min trabalhado ; cli[cliente][ym]=min trabalhado
   (MD.ativs||[]).forEach(a=>{
     if(!a||!a.ag||isExcludedTech(a.ag))return;
@@ -831,7 +840,7 @@ function mdMonthlyAgg(){
     (per[nm]=per[nm]||{})[ym]=(per[nm][ym]||0)+wh;
     const cn=mdLocCliente(a.loc||'');if(cn){(cli[cn]=cli[cn]||{})[ym]=(cli[cn][ym]||0)+wh}
   });
-  return{per,cli};
+  _maCache={key:mkey,val:{per,cli}};return _maCache.val;
 }
 function buildAutoAlerts(){
   const cfg=getAlertCfg(),auto=[],lim=cfg.limite_pct||80
