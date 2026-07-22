@@ -269,7 +269,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v141'
+const APP_VERSION='v142'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1219,6 +1219,7 @@ function rExecContratos(){
       <div style="display:flex;align-items:baseline;gap:.4rem;flex-wrap:wrap;margin-bottom:.35rem;">
         <span style="font-size:.78rem;font-weight:800;color:#0f172a;">${esc(r.ct.cliente)}</span>
         <span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">CC ${esc(r.cc)}</span>
+        <button onclick="event.stopPropagation();ctxDetalhe('${r.ct.id}')" title="Abrir o detalhe completo do contrato" style="cursor:pointer;background:#eff6ff;border:1px solid #dbeafe;color:#1d4ed8;border-radius:.3rem;font-size:.57rem;font-weight:800;padding:.08rem .4rem;">Detalhe completo →</button>
         <span style="margin-left:auto;font-size:1.05rem;font-weight:900;color:${uc};">${r.uso!=null?r.uso+'%':'—'}</span>
       </div>
       <div style="font-size:.6rem;color:#94a3b8;margin-bottom:.45rem;">${esc((r.ct.nome||'').slice(0,44))}</div>
@@ -1238,7 +1239,6 @@ function rExecContratos(){
         ${!r.semEscopo?`<div style="font-size:.6rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin:.5rem 0 .2rem;">Pilares (escopo)</div><table style="width:100%;font-size:.62rem;border-collapse:collapse;"><thead><tr style="color:#94a3b8;"><th style="text-align:left;">Pilar</th><th style="text-align:right;">Horas</th><th style="text-align:right;" title="Chamados distintos">Ch</th><th style="text-align:right;">%</th></tr></thead><tbody>${pilBody||'<tr><td colspan="4" style="color:#cbd5e1;padding:.2rem 0;">Sem horas classificadas.</td></tr>'}${foraRow}</tbody><tfoot><tr style="border-top:2px solid #e2e8f0;font-weight:800;"><td style="padding:.12rem 0;">Total</td><td style="text-align:right;">${minToHM(r.used)}h</td><td style="text-align:right;">${r.nCh}</td><td style="text-align:right;">100%</td></tr></tfoot></table>`:'<div style="font-size:.6rem;color:#6d28d9;margin:.4rem 0;">Contrato por chamado — demanda avulsa, sem escopo a classificar.</div>'}
         <div style="font-size:.6rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin:.6rem 0 .2rem;">Horas por técnico</div>
         <table style="width:100%;font-size:.62rem;border-collapse:collapse;"><thead><tr style="color:#94a3b8;"><th style="text-align:left;">Técnico</th><th style="text-align:right;">Horas</th><th style="text-align:right;" title="Chamados distintos">Ch</th><th style="text-align:right;">%</th></tr></thead><tbody>${tecBody||'<tr><td colspan="4" style="color:#cbd5e1;padding:.2rem 0;">sem técnicos</td></tr>'}</tbody><tfoot><tr style="border-top:2px solid #e2e8f0;font-weight:800;"><td style="padding:.12rem 0;">Total</td><td style="text-align:right;">${minToHM(r.used)}h</td><td style="text-align:right;">${r.nCh}</td><td style="text-align:right;">100%</td></tr></tfoot></table>
-        <button onclick="event.stopPropagation();ctxDetalhe('${r.ct.id}')" style="margin-top:.5rem;cursor:pointer;background:#eff6ff;border:1px solid #dbeafe;border-radius:.3rem;color:#1d4ed8;font-size:.58rem;font-weight:800;padding:.18rem .55rem;">Detalhe completo →</button>
       </div>
     </div>`}).join('');
   const tipoChips=['sustentacao','reativo','chamado','interno'].map(t=>{const on=TIPO_SEL.has(t);return`<button onclick="tipoToggleOne('${t}')" style="cursor:pointer;border:1px solid ${on?'#2B4C9B':'#e2e8f0'};background:${on?'#2B4C9B':'#fff'};color:${on?'#fff':'#64748b'};border-radius:99px;padding:.12rem .5rem;font-size:.6rem;font-weight:800;">${TIPO_LABELS[t]}</button>`}).join('');
