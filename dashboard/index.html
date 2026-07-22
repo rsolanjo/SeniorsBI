@@ -269,7 +269,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v140'
+const APP_VERSION='v141'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -585,12 +585,9 @@ function cliMatchFilter(nome){
 }
 function empBadge(e){if(e==='4Seniors')return`<span class="emp-4s">4Seniors</span>`;if(e==='S4SYS')return`<span class="emp-s4">S4SYS</span>`;if(e==='Porto Virtual')return`<span class="emp-pv">Porto Virtual</span>`;return`<span style="color:#94a3b8;font-size:.66rem;">-</span>`}
 function companyStats(empresa){
-  // respeita os filtros de cliente (CLI_SEL) e de tipo de contrato (TIPO_SEL). O filtro de empresa vem pelo parâmetro
-  // (a barra COMPANY é aplicada por quem chama, passando a empresa) — assim os cards por empresa não se anulam.
-  const cliOk=nome=>(!CLI_SEL.size||CLI_SEL.has(nome))&&(!TIPO_SEL.size||getClientContracts(nome).some(tipoMatchCt))
-  const clis=(empresa==='all'?D.clientes:D.clientes.filter(c=>getClientEmpresa(c.nome)===empresa)).filter(c=>cliOk(c.nome))
+  const clis=empresa==='all'?D.clientes:D.clientes.filter(c=>getClientEmpresa(c.nome)===empresa)
   const horas=clis.reduce((s,c)=>s+c.horas_minutos,0),chamados=clis.reduce((s,c)=>s+c.chamados,0)
-  const contratos=(empresa==='all'?CONTRACTS:CONTRACTS.filter(c=>c.empresa===empresa)).filter(c=>c.status!=='arquivado'&&(!CLI_SEL.size||CLI_SEL.has(c.cliente))&&(!TIPO_SEL.size||tipoMatchCt(c)))
+  const contratos=(empresa==='all'?CONTRACTS:CONTRACTS.filter(c=>c.empresa===empresa)).filter(c=>c.status!=='arquivado')
   const receita=contratos.reduce((s,c)=>{const m=matchClient(c.cliente);return s+contractReceita(c,m?m.chamados:0)},0)
   const totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
   const custo=D.totalHoras>0?Math.round(horas/D.totalHoras*totalCusto):0
@@ -606,6 +603,16 @@ function execActAgg(){
   const tecNomes=new Set(acts.map(a=>{const f=matchFuncByAgent(a.ag);return f?f.nome:a.ag}))
   let capMin=0;(D.recursos||[]).forEach(r=>{if(tecNomes.has(r.nome))capMin+=r.cap_minutos})
   return{horasMin,chamados,fte:capMin>0?pct(horasMin,capMin):0,nAtiv:acts.length,capMin,nTec:tecNomes.size}
+}
+// Receita/custo/margem para os KPIs do topo, respeitando COMPANY + CLI_SEL + TIPO_SEL (custo = proporcional às horas filtradas).
+function execKpiStats(){
+  const cliOk=nome=>(COMPANY==='all'||getClientEmpresa(nome)===COMPANY)&&(!CLI_SEL.size||CLI_SEL.has(nome))&&(!TIPO_SEL.size||getClientContracts(nome).some(tipoMatchCt))
+  const clis=(D.clientes||[]).filter(c=>cliOk(c.nome)),horas=clis.reduce((s,c)=>s+c.horas_minutos,0)
+  const contratos=CONTRACTS.filter(c=>c.status!=='arquivado'&&(COMPANY==='all'||c.empresa===COMPANY)&&(!CLI_SEL.size||CLI_SEL.has(c.cliente))&&(!TIPO_SEL.size||tipoMatchCt(c)))
+  const receita=contratos.reduce((s,c)=>{const m=matchClient(c.cliente);return s+contractReceita(c,m?m.chamados:0)},0)
+  const totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
+  const custo=D.totalHoras>0?Math.round(horas/D.totalHoras*totalCusto):0,margem=receita>0?Math.round((receita-custo)/receita*100):null
+  return{receita,custo,margem,horas,numClientes:clis.length,numContratos:contratos.length}
 }
 
 const lsGet=k=>{try{return JSON.parse(localStorage.getItem(k)||'null')}catch{return null}}
@@ -1405,9 +1412,9 @@ window.usrToggle=async function(id,active){try{await fnUsers('setActive',{id,act
 window.usrPass=function(id,email){const p=prompt('Nova senha para '+email+' (mín. 6 caracteres):');if(p==null)return;if(p.length<6){toast('Senha mínima de 6 caracteres.',false);return}fnUsers('setPassword',{id,password:p}).then(()=>toast('Senha alterada.')).catch(e=>toast('Erro: '+e.message,false))};
 window.usrDel=function(id,email){confirmAction('Excluir o usuário '+email+'? A conta e o acesso serão removidos permanentemente.',()=>{fnUsers('delete',{id}).then(()=>{toast('Usuário excluído.');carregarUsuarios()}).catch(e=>toast('Erro: '+e.message,false))})};
 function rExecGeral(){
-  const g=companyStats(COMPANY==='all'?'all':COMPANY),A=execActAgg(),auto=buildAutoAlerts().concat(buildMdAlerts()).concat(buildChamadoHorasAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
+  const g=companyStats('all'),K=execKpiStats(),A=execActAgg(),auto=buildAutoAlerts().concat(buildMdAlerts()).concat(buildChamadoHorasAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
   const nAtiv=A.nAtiv
-  const fteC=A.fte<60?'#ef4444':A.fte<80?'#f59e0b':'#22c55e',mgC=g.margem==null?'#94a3b8':g.margem<0?'#ef4444':g.margem<20?'#f59e0b':'#22c55e',alerC=auto.some(a=>a.lv==='critica')?'#ef4444':auto.length?'#f59e0b':'#22c55e'
+  const fteC=A.fte<60?'#ef4444':A.fte<80?'#f59e0b':'#22c55e',mgC=K.margem==null?'#94a3b8':K.margem<0?'#ef4444':K.margem<20?'#f59e0b':'#22c55e',alerC=auto.some(a=>a.lv==='critica')?'#ef4444':auto.length?'#f59e0b':'#22c55e'
   const empCards=['4Seniors','S4SYS','Porto Virtual'].map(emp=>{
     const d=companyStats(emp),ec=emp==='4Seniors'?'#2B4C9B':emp==='S4SYS'?'#7c3aed':'#166534',mC=d.margem==null?'#94a3b8':d.margem<0?'#ef4444':d.margem<20?'#f59e0b':'#22c55e'
     const usoh=D.totalHoras>0?pct(d.horas,D.totalHoras):0
@@ -1462,7 +1469,7 @@ function rExecGeral(){
   const pnlCusto=(titulo,sub,total,folha,gerais,rec,info)=>{const p=rec>0?Math.round(total/rec*100):null,cor='#7c3aed';
     return`<div class="card" style="border-top:3px solid ${cor};${total<=0?'opacity:.75;':''}"><div style="display:flex;align-items:center;gap:.45rem;margin-bottom:.6rem;"><div style="background:${cor}18;color:${cor};border-radius:.42rem;padding:.3rem;display:flex;"><i data-lucide="briefcase" style="width:.85rem;height:.85rem;"></i></div><div><div style="font-size:.78rem;font-weight:800;">${titulo}${info?` <sup title="${esc(info)}" style="cursor:help;color:${cor};font-weight:800;">ⓘ</sup>`:''}</div><div style="font-size:.6rem;color:#94a3b8;">${sub}</div></div><span style="margin-left:auto;font-size:1.3rem;font-weight:900;color:${total>0?cor:'#cbd5e1'};">${p!=null?p+'%':'-'}</span></div><div class="grid grid-cols-3 gap-2"><div><div class="kpi-lbl">Salários</div><div style="font-size:.9rem;font-weight:800;color:#854d0e;">${fmtR(Math.round(folha))}</div></div><div><div class="kpi-lbl">Despesas</div><div style="font-size:.9rem;font-weight:800;color:#854d0e;">${fmtR(Math.round(gerais))}</div></div><div><div class="kpi-lbl">Consome</div><div style="font-size:.9rem;font-weight:800;color:${total>0?'#dc2626':'#94a3b8'};">${fmtR(Math.round(total))}</div></div></div><div style="font-size:.57rem;color:#94a3b8;margin-top:.4rem;">Não gera receita — o % é quanto pesa sobre a receita da área técnica.</div></div>`};
   const pnl=(titulo,sub,cst,cstLbl,lucro,mg,cor,icon)=>`<div class="card" style="border-top:3px solid ${cor};"><div style="display:flex;align-items:center;gap:.45rem;margin-bottom:.6rem;"><div style="background:${cor}18;color:${cor};border-radius:.42rem;padding:.3rem;display:flex;"><i data-lucide="${icon}" style="width:.85rem;height:.85rem;"></i></div><div><div style="font-size:.78rem;font-weight:800;">${titulo}</div><div style="font-size:.6rem;color:#94a3b8;">${sub}</div></div><span style="margin-left:auto;font-size:1.3rem;font-weight:900;color:${mc(mg)};">${mg!=null?mg+'%':'-'}</span></div><div class="grid grid-cols-3 gap-2"><div><div class="kpi-lbl">Receita</div><div style="font-size:.9rem;font-weight:800;color:#166534;">${fmtR(receita)}</div></div><div><div class="kpi-lbl">${cstLbl}</div><div style="font-size:.9rem;font-weight:800;color:#854d0e;">${fmtR(cst)}</div></div><div><div class="kpi-lbl">Lucro</div><div style="font-size:.9rem;font-weight:800;color:${lucro>=0?'#166534':'#ef4444'};">${fmtR(lucro)}</div></div></div></div>`
-  return`<div id="demo-kpis" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-4">${kpiCard(g.receita?fmtR(g.receita):'(a def.)','Receita Total','#166534','dollar-sign','Todos contratos')}${kpiCard(fmtR(g.custo),'Custo Equipe','#854d0e','users','proporcional às horas')}${kpiCard(g.margem!=null?g.margem+'%':'-','Margem Global',mgC,'trending-up')}${kpiCard(A.fte+'%','FTE Global',fteC,'activity',minToHM(A.horasMin)+'h')}${kpiCard(fmt(nAtiv),'Atividades','#0891b2','list-checks','no período')}${kpiCard(fmt(A.chamados)+' ch.','Total Chamados','#E04622','ticket')}${kpiCard(auto.length,'Alertas Ativos',alerC,'triangle-alert',auto.filter(a=>a.lv==='critica').length+' críticos')}</div>
+  return`<div id="demo-kpis" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-4">${kpiCard(K.receita?fmtR(K.receita):'(a def.)','Receita Total','#166534','dollar-sign',(CLI_SEL.size||COMPANY!=='all'||TIPO_SEL.size)?'contratos do filtro':'Todos contratos')}${kpiCard(fmtR(K.custo),'Custo Equipe','#854d0e','users','proporcional às horas')}${kpiCard(K.margem!=null?K.margem+'%':'-','Margem Global',mgC,'trending-up')}${kpiCard(A.fte+'%','FTE Global',fteC,'activity',minToHM(A.horasMin)+'h')}${kpiCard(fmt(nAtiv),'Atividades','#0891b2','list-checks','no período')}${kpiCard(fmt(A.chamados)+' ch.','Total Chamados','#E04622','ticket')}${kpiCard(auto.length,'Alertas Ativos',alerC,'triangle-alert',auto.filter(a=>a.lv==='critica').length+' críticos')}</div>
 <div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem;">Custo-Hora ao vivo <span class="badge" style="background:#dcfce7;color:#166534;font-weight:800;">● AO VIVO</span></div>
 ${rExecCustoHora('cards')}
 <div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Resultado do período - time técnico × demais departamentos</div>
