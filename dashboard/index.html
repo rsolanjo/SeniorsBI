@@ -219,6 +219,11 @@ textarea.fi{resize:vertical;min-height:2.7rem}
       <div><label class="fl">Nível</label><select id="fNivel" class="fi"><option value="N1">N1</option><option value="N2">N2</option><option value="N3">N3</option><option value="Gestão">Gestão</option><option value="LGPD">LGPD</option></select></div>
       <div><label class="fl">Equipe</label><input type="text" id="fEquipe" class="fi" placeholder="Suporte, Cloud…"></div>
     </div>
+    <div><label class="fl">Empresas onde atua</label><div id="fEmpresasBox" style="display:flex;gap:1.1rem;flex-wrap:wrap;background:#f8fafc;border:1px solid var(--border);border-radius:.43rem;padding:.42rem .55rem;">
+      <label style="display:flex;align-items:center;gap:.3rem;font-size:.74rem;cursor:pointer;"><input type="checkbox" name="fEmp" value="4Seniors" style="accent-color:var(--brand);"> 4Seniors</label>
+      <label style="display:flex;align-items:center;gap:.3rem;font-size:.74rem;cursor:pointer;"><input type="checkbox" name="fEmp" value="S4SYS" style="accent-color:var(--brand);"> S4SYS</label>
+      <label style="display:flex;align-items:center;gap:.3rem;font-size:.74rem;cursor:pointer;"><input type="checkbox" name="fEmp" value="Porto Virtual" style="accent-color:var(--brand);"> Porto Virtual</label>
+    </div></div>
     <div class="grid grid-cols-3 gap-3">
       <div><label class="fl">Vínculo</label><select id="fTipo" class="fi" onchange="updateVH()"><option value="PJ">PJ</option><option value="CLT">CLT</option></select></div>
       <div><label class="fl">Salário (R$/mês)</label><input type="number" id="fSalario" class="fi" min="0" placeholder="0" oninput="updateVH()"></div>
@@ -269,7 +274,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v142'
+const APP_VERSION='v143'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -332,7 +337,18 @@ const LITE_SEED=[
   {id:'mileto-proj',cc:'2809',nome:'Mileto - Projetos',tipo:'Projeto',franquia:80,valor:20900,cor:'#7c3aed',pilar:'projeto'}
 ]
 const liteFixNome=n=>String(n||'').replace(/\s*—\s*/g,' - ').replace(/Projetos\s*\/\s*Evolução/gi,'Projetos');// padroniza nomes (em-dash→hífen; "Projetos / Evolução"→"Projetos")
-const getLiteCt=()=>{const v=lsGet('sbi_lite_ct');const list=(v&&v.length)?v:LITE_SEED.map(c=>({...c}));return list.map(c=>({...c,nome:liteFixNome(c.nome)}))}
+// FONTE ÚNICA: os 3 contratos gerenciados da Sustentação são derivados de CONTRACTS (Admin → Contratos) pelo CC.
+// franquia/valor/nome vêm de lá; só campos exclusivos da Lite (cor/pilar/tipo por CC e valorHoraAvulsa) ficam em overlay.
+const LITE_MANAGED_CC=['71','2807','2809']
+const LITE_CC_META={'71':{cor:'#166534',pilar:'susten',tipo:'Sustentação'},'2807':{cor:'#2B4C9B',pilar:'susten',tipo:'Sustentação'},'2809':{cor:'#7c3aed',pilar:'projeto',tipo:'Projeto'}}
+const getLiteCt=()=>{
+  const ov=lsGet('sbi_lite_ct')||[],ovByCc={};ov.forEach(o=>{if(o&&o.cc!=null)ovByCc[String(o.cc)]=o})
+  return LITE_MANAGED_CC.map(cc=>{
+    const c=(CONTRACTS||[]).find(x=>String(x.cc)===cc&&x.status!=='arquivado');if(!c)return null
+    const m=LITE_CC_META[cc]||{cor:'#2B4C9B',pilar:'susten',tipo:'Sustentação'},o=ovByCc[cc]||{},fr=c.franquia_horas||0,vl=c.valor||0
+    return{id:c.id,cc:cc,nome:liteFixNome(c.cliente),tipo:m.tipo,franquia:fr,valor:vl,cor:m.cor,pilar:m.pilar,valorHoraAvulsa:(o.valorHoraAvulsa!=null?o.valorHoraAvulsa:(fr?Math.round(vl/fr):0))}
+  }).filter(Boolean)
+}
 const setLiteCt=v=>lsSet('sbi_lite_ct',v)
 const litePilares=c=>{if(c&&c.pilaresEdit&&c.pilaresEdit.length)return c.pilaresEdit.map(p=>{let kw;try{kw=new RegExp(p.kws||'(?!)','i')}catch(e){kw=/(?!)/}return{nome:p.nome,kw}});return LITE_PILARES_CC[String(c.cc)]||LITE_PILARES[c.pilar]||LITE_PILARES.susten}
 let LITE_VAL=false// valores protegidos por senha; sempre ocultos ao carregar
@@ -1015,7 +1031,7 @@ function renderContent(){
     rLimitado().then(h=>{el.innerHTML=chrome+h;if(window.lucide)lucide.createIcons()});return}
   if(_nav)_nav.style.display=(roleAreas().length>1)?'flex':'none';if(_st)_st.style.display=''
   {const _evb=document.getElementById('execValBtn');if(_evb)_evb.innerHTML=(SECTION==='exec')?`<button onclick="toggleExecVal()" style="cursor:pointer;border:none;border-radius:.42rem;padding:.24rem .6rem;font-size:.68rem;font-weight:800;background:${EXEC_VAL?'#fef9c3':'#e0e7ff'};color:${EXEC_VAL?'#854d0e':'#3730a3'};white-space:nowrap;">${EXEC_VAL?'👁 Ocultar valores':'👁 Mostrar valores'}</button>`:''}
-  {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display='';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
+  {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display=(SECTION==='admin')?'none':'';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
   renderFilters();
   if(TIME==='comparar'){renderCompare();return}
   const standalone=SECTION==='admin'||SECTION==='fin'||(SECTION==='exec'&&EXEC_SUB==='sustentacao')||(SECTION==='tech'&&['chamados','parados','relacionados','checklists'].includes(TECH_SUB))
@@ -2093,10 +2109,12 @@ window.liteFormCt=function(id){
   const c=id?getLiteCt().find(x=>x.id===id):{id:'',nome:'',cc:'',tipo:'Sustentação',franquia:168,valor:0};if(!c)return;
   const fl='display:block;font-size:.66rem;font-weight:700;color:#64748b;margin-bottom:.2rem;',fi='width:100%;padding:.42rem .55rem;border:1px solid #e2e8f0;border-radius:.45rem;font-size:.8rem;box-sizing:border-box;';
   const opt=LITE_TIPOS.map(x=>`<option value="${x}"${x===c.tipo?' selected':''}>${x}</option>`).join('');
-  const inner=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.7rem;">
-    <div style="grid-column:1/3;"><label style="${fl}">Nome do contrato</label><input id="lctNome" style="${fi}" value="${esc(c.nome)}" placeholder="Ex.: Cliente — Serviço Gerenciado"></div>
-    <div><label style="${fl}">Centro de Custo</label><input id="lctCC" style="${fi}" value="${esc(c.cc)}" placeholder="Ex.: 2807"></div>
-    <div><label style="${fl}">Tipo</label><select id="lctTipo" style="${fi}">${opt}</select></div>
+  const ro='background:#f8fafc;color:#94a3b8;cursor:not-allowed;';
+  const inner=`<div style="grid-column:1/3;font-size:.64rem;color:#64748b;background:#eef2ff;border:1px solid #dbeafe;border-radius:.4rem;padding:.4rem .55rem;margin-bottom:.2rem;">Nome, CC e tipo vêm de <b>Admin → Contratos</b> (fonte única). Aqui você ajusta <b>franquia</b>, <b>valor</b> e o <b>R$/h avulsa</b> — franquia e valor são gravados no próprio contrato do Admin.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.7rem;">
+    <div style="grid-column:1/3;"><label style="${fl}">Nome do contrato</label><input id="lctNome" style="${fi}${ro}" value="${esc(c.nome)}" readonly></div>
+    <div><label style="${fl}">Centro de Custo</label><input id="lctCC" style="${fi}${ro}" value="${esc(c.cc)}" readonly></div>
+    <div><label style="${fl}">Tipo</label><select id="lctTipo" style="${fi}${ro}" disabled>${opt}</select></div>
     <div><label style="${fl}">Franquia (h/mês)</label><input id="lctFr" type="number" min="0" style="${fi}" value="${c.franquia||0}"></div>
     <div><label style="${fl}">Valor mensal R$</label><input id="lctVl" type="number" min="0" style="${fi}" value="${c.valor||0}"></div>
     <div style="grid-column:1/3;"><label style="${fl}">Valor da hora avulsa R$/h <span style="color:#94a3b8;font-weight:400;">(usado no faturamento das horas a cobrar; padrão = valor ÷ franquia)</span></label><input id="lctVha" type="number" min="0" step="0.01" style="${fi}" value="${c.valorHoraAvulsa!=null?c.valorHoraAvulsa:(c.franquia?Math.round((c.valor||0)/c.franquia):0)}"></div></div>
@@ -2104,16 +2122,18 @@ window.liteFormCt=function(id){
   liteOpenModal(id?'Editar contrato':'Novo contrato',inner);
 };
 window.liteSaveCt=function(id){
-  const g=x=>document.getElementById(x),nome=g('lctNome').value.trim(),cc=g('lctCC').value.trim(),tp=g('lctTipo').value,fr=+g('lctFr').value||0,vl=+g('lctVl').value||0,vha=+g('lctVha').value||0;
-  if(!nome||!cc){toast('Preencha nome e centro de custo.',false);return}
-  const list=getLiteCt(),c=list.find(x=>x.id===id);
-  if(c){c.nome=nome;c.cc=cc;c.tipo=tp;c.franquia=fr;c.valor=vl;c.valorHoraAvulsa=vha;c.pilar=litePilarFor(tp)}
-  else list.push({id:'ct_'+cc+'_'+list.length+'_'+Date.now(),nome,cc,tipo:tp,franquia:fr,valor:vl,valorHoraAvulsa:vha,cor:LITE_COR[list.length%LITE_COR.length],pilar:litePilarFor(tp)});
-  setLiteCt(list);liteCloseModal();toast('Contrato salvo.');renderContent();
+  // Fonte única: grava franquia/valor no contrato de Admin (CONTRACTS); só valorHoraAvulsa fica no overlay da Lite.
+  const g=x=>document.getElementById(x),cc=g('lctCC').value.trim(),fr=+g('lctFr').value||0,vl=+g('lctVl').value||0,vha=+g('lctVha').value||0;
+  if(!cc){toast('Centro de custo obrigatório.',false);return}
+  const c=(CONTRACTS||[]).find(x=>x.id===id)||(CONTRACTS||[]).find(x=>String(x.cc)===cc);
+  if(!c){toast('Contrato não encontrado em Admin → Contratos.',false);return}
+  c.franquia_horas=fr;c.valor=vl;setContracts(CONTRACTS);
+  const ov=lsGet('sbi_lite_ct')||[];let o=ov.find(x=>String(x.cc)===cc);if(!o){o={cc};ov.push(o)}o.valorHoraAvulsa=vha;setLiteCt(ov);
+  liteCloseModal();toast('Salvo em Admin → Contratos.');renderContent();
 };
-window.liteAddCt=()=>liteFormCt('');
+window.liteAddCt=()=>toast('Os contratos são cadastrados em Admin → Contratos.',false);
 window.liteEditCt=id=>liteFormCt(id);
-window.liteDelCt=function(id){if(!confirm('Remover este contrato da Lite?'))return;setLiteCt(getLiteCt().filter(x=>x.id!==id));toast('Contrato removido.');renderContent();};
+window.liteDelCt=function(id){toast('Contratos são gerenciados em Admin → Contratos.',false)};
 // Editor de escopo (pilares) por contrato — linhas estruturadas (nome + palavras-chave)
 const _escKws=kw=>kw.source.replace(/\\b/g,'').replace(/[()?!:]/g,'').split('|').map(s=>s.trim()).filter(Boolean).join(', ');
 const _escRow=(nome,kws)=>`<div class="esc-row" style="display:flex;gap:.45rem;align-items:center;margin-bottom:.4rem;"><input class="esc-nome" value="${esc(nome)}" placeholder="Nome do pilar" style="width:12rem;flex-shrink:0;padding:.42rem .55rem;border:1px solid #e2e8f0;border-radius:.45rem;font-size:.74rem;font-weight:700;color:#0f172a;"><span style="color:#cbd5e1;font-weight:800;">=</span><input class="esc-kw" value="${esc(kws)}" placeholder="palavra1, palavra2, ..." style="flex:1;padding:.42rem .55rem;border:1px solid #e2e8f0;border-radius:.45rem;font-size:.74rem;color:#334155;"><button onclick="this.closest('.esc-row').remove()" title="Remover pilar" style="cursor:pointer;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.4rem;color:#94a3b8;width:1.7rem;height:1.7rem;flex-shrink:0;font-size:.9rem;">×</button></div>`;
@@ -2997,10 +3017,10 @@ function rContratos(){
 window.reimportContracts=function(){confirmAction('Reimportar os 35 contratos da base (Excel)? Isso substitui a lista atual de contratos.',()=>{CONTRACTS=BASE_CONTRACTS.map(c=>({...c}));setContracts(CONTRACTS);renderContent();toast('Contratos reimportados da base.')})}
 
 function rFuncionarios(){
-  const rows=FUNCS.filter(f=>!f._removed).map(f=>{const vh=getVH(f.nome,f.nivel);return`<tr><td style="font-weight:600;">${esc(f.nome)}</td><td><span class="tag">${f.nivel}</span></td><td style="color:#64748b;">${esc(f.equipe||'-')}</td><td style="color:#854d0e;font-weight:700;">${f.salario>0?fmtR(f.salario):'<span style="color:#94a3b8;">(a def.)</span>'}</td><td style="color:#166534;font-weight:700;">${vh>0?fmtR(Math.round(vh))+'/h':'<span style="color:#94a3b8;">est.</span>'}</td><td style="color:#64748b;">${f.cap_horas||168}h</td><td style="font-size:.66rem;color:#64748b;max-width:8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(getAlocLabel(f))}</td><td><div style="display:flex;gap:.1rem;"><button class="act-btn act-edit" onclick="openFuncEdit('${f.id}')">Editar</button><button class="act-btn act-del" onclick="removeFunc('${f.id}')">✕</button></div></td></tr>`}).join('')
+  const rows=FUNCS.filter(f=>!f._removed).map(f=>{const vh=getVH(f.nome,f.nivel);return`<tr><td style="font-weight:600;">${esc(f.nome)}</td><td><span class="tag">${f.nivel}</span></td><td style="color:#64748b;">${esc(f.equipe||'-')}</td><td style="white-space:nowrap;">${(f.empresas&&f.empresas.length)?f.empresas.map(e=>empBadge(e)).join(' '):'<span style="color:#cbd5e1;font-size:.66rem;">-</span>'}</td><td style="color:#854d0e;font-weight:700;">${f.salario>0?fmtR(f.salario):'<span style="color:#94a3b8;">(a def.)</span>'}</td><td style="color:#166534;font-weight:700;">${vh>0?fmtR(Math.round(vh))+'/h':'<span style="color:#94a3b8;">est.</span>'}</td><td style="color:#64748b;">${f.cap_horas||168}h</td><td style="font-size:.66rem;color:#64748b;max-width:8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(getAlocLabel(f))}</td><td><div style="display:flex;gap:.1rem;"><button class="act-btn act-edit" onclick="openFuncEdit('${f.id}')">Editar</button><button class="act-btn act-del" onclick="removeFunc('${f.id}')">✕</button></div></td></tr>`}).join('')
   return`<div style="background:#fef9c3;border:1px solid #fde68a;border-radius:.43rem;padding:.4rem .65rem;margin-bottom:.75rem;font-size:.68rem;color:#854d0e;">Edições não alteram histórico. Salário e valor/hora aplicam-se apenas a cálculos futuros.</div>
 <div class="card overflow-x-auto"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.62rem;">${ST('Funcionários')}<button onclick="openFuncNew()" style="display:flex;align-items:center;gap:.26rem;background:var(--brand);color:white;border:none;border-radius:.4rem;padding:.33rem .75rem;font-size:.68rem;font-weight:700;cursor:pointer;margin-top:-.32rem;"><i data-lucide="plus" style="width:.7rem;height:.7rem;"></i>Novo</button></div>
-<table><thead><tr><th>Nome</th><th>Nível</th><th>Equipe</th><th>Salário CLT</th><th>Valor/hora</th><th>Cap. h/mês</th><th>Alocação</th><th>Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="8" style="color:#94a3b8;padding:1.5rem;text-align:center;">Sem funcionários.</td></tr>'}</tbody></table></div>`
+<table><thead><tr><th>Nome</th><th>Nível</th><th>Equipe</th><th>Empresas</th><th>Salário CLT</th><th>Valor/hora</th><th>Cap. h/mês</th><th>Alocação</th><th>Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="9" style="color:#94a3b8;padding:1.5rem;text-align:center;">Sem funcionários.</td></tr>'}</tbody></table></div>`
 }
 
 function rSLAAdmin(){
@@ -3097,9 +3117,9 @@ function deleteContract(id){const c=CONTRACTS.find(x=>x.id===id);if(!c)return;co
 
 function updateVH(){const sal=parseFloat(document.getElementById('fSalario').value)||0,cap=parseFloat(document.getElementById('fCap').value)||168,tE=document.getElementById('fTipo'),tipo=tE?tE.value:'PJ',fCLT=(typeof getLiteFatorCLT==='function')?getLiteFatorCLT():1.7,fator=tipo==='CLT'?fCLT:1,vh=cap>0&&sal>0?sal*fator/cap:0;document.getElementById('vhDisplay').textContent=vh>0?'Custo-hora'+(tipo==='CLT'?' (CLT ×'+fCLT+')':' (PJ)')+': '+fmtR(Math.round(vh)):''}
 function toggleAlocList(){const isEsp=document.getElementById('fAlocEsp').checked,list=document.getElementById('fClientesList');list.classList.toggle('hidden',!isEsp);if(isEsp&&!list.innerHTML.trim())list.innerHTML=(D.clientes||[]).map(c=>`<label style="display:flex;align-items:center;gap:.3rem;padding:.15rem .21rem;cursor:pointer;font-size:.72rem;"><input type="checkbox" name="fCli" value="${esc(c.nome)}" style="accent-color:var(--brand);"> ${esc(c.nome)}</label>`).join('')}
-function openFuncNew(){document.getElementById('mFTitle').textContent='Novo Funcionário';['fId','fNome','fEquipe','fSalario'].forEach(id=>document.getElementById(id).value='');document.getElementById('fNivel').value='N1';document.getElementById('fTipo').value='PJ';document.getElementById('fCap').value='168';document.getElementById('vhDisplay').textContent='';document.getElementById('fAlocTodos').checked=true;document.getElementById('fClientesList').classList.add('hidden');openModal('modalFunc')}
-function openFuncEdit(id){const f=FUNCS.find(x=>x.id===id);if(!f)return;document.getElementById('mFTitle').textContent='Editar Funcionário';document.getElementById('fId').value=f.id;document.getElementById('fNome').value=f.nome;document.getElementById('fNivel').value=f.nivel||'N1';document.getElementById('fTipo').value=f.tipo||'PJ';document.getElementById('fEquipe').value=f.equipe||'';document.getElementById('fSalario').value=f.salario||'';document.getElementById('fCap').value=f.cap_horas||168;updateVH();const isEsp=f.alocacao_tipo==='especifico';document.getElementById(isEsp?'fAlocEsp':'fAlocTodos').checked=true;const list=document.getElementById('fClientesList');list.classList.toggle('hidden',!isEsp);if(isEsp)list.innerHTML=(D.clientes||[]).map(c=>`<label style="display:flex;align-items:center;gap:.3rem;padding:.15rem .21rem;cursor:pointer;font-size:.72rem;"><input type="checkbox" name="fCli" value="${esc(c.nome)}"${(f.alocacao_clientes||[]).includes(c.nome)?' checked':''} style="accent-color:var(--brand);"> ${esc(c.nome)}</label>`).join('');openModal('modalFunc')}
-function saveFunc(e){e.preventDefault();const id=document.getElementById('fId').value||uid(),isEsp=document.getElementById('fAlocEsp').checked,clientes=[...document.querySelectorAll('[name="fCli"]:checked')].map(x=>x.value),row={id,nome:document.getElementById('fNome').value.trim(),nivel:document.getElementById('fNivel').value,tipo:document.getElementById('fTipo').value,equipe:document.getElementById('fEquipe').value.trim(),salario:parseFloat(document.getElementById('fSalario').value)||0,cap_horas:parseInt(document.getElementById('fCap').value)||168,alocacao_tipo:isEsp?'especifico':'todos',alocacao_clientes:isEsp?clientes:[]};const idx=FUNCS.findIndex(x=>x.id===id);if(idx>=0)FUNCS[idx]=row;else FUNCS.push(row);setFuncs(FUNCS);closeModal('modalFunc');renderContent();toast('Funcionário salvo. Histórico preservado.')}
+function openFuncNew(){document.getElementById('mFTitle').textContent='Novo Funcionário';['fId','fNome','fEquipe','fSalario'].forEach(id=>document.getElementById(id).value='');document.getElementById('fNivel').value='N1';document.getElementById('fTipo').value='PJ';document.getElementById('fCap').value='168';document.getElementById('vhDisplay').textContent='';document.getElementById('fAlocTodos').checked=true;document.getElementById('fClientesList').classList.add('hidden');document.querySelectorAll('[name="fEmp"]').forEach(cb=>cb.checked=false);openModal('modalFunc')}
+function openFuncEdit(id){const f=FUNCS.find(x=>x.id===id);if(!f)return;document.getElementById('mFTitle').textContent='Editar Funcionário';document.getElementById('fId').value=f.id;document.getElementById('fNome').value=f.nome;document.getElementById('fNivel').value=f.nivel||'N1';document.getElementById('fTipo').value=f.tipo||'PJ';document.getElementById('fEquipe').value=f.equipe||'';document.getElementById('fSalario').value=f.salario||'';document.getElementById('fCap').value=f.cap_horas||168;document.querySelectorAll('[name="fEmp"]').forEach(cb=>cb.checked=(f.empresas||[]).includes(cb.value));updateVH();const isEsp=f.alocacao_tipo==='especifico';document.getElementById(isEsp?'fAlocEsp':'fAlocTodos').checked=true;const list=document.getElementById('fClientesList');list.classList.toggle('hidden',!isEsp);if(isEsp)list.innerHTML=(D.clientes||[]).map(c=>`<label style="display:flex;align-items:center;gap:.3rem;padding:.15rem .21rem;cursor:pointer;font-size:.72rem;"><input type="checkbox" name="fCli" value="${esc(c.nome)}"${(f.alocacao_clientes||[]).includes(c.nome)?' checked':''} style="accent-color:var(--brand);"> ${esc(c.nome)}</label>`).join('');openModal('modalFunc')}
+function saveFunc(e){e.preventDefault();const id=document.getElementById('fId').value||uid(),isEsp=document.getElementById('fAlocEsp').checked,clientes=[...document.querySelectorAll('[name="fCli"]:checked')].map(x=>x.value),empresas=[...document.querySelectorAll('[name="fEmp"]:checked')].map(x=>x.value),prev=FUNCS.find(x=>x.id===id)||{},row={...prev,id,nome:document.getElementById('fNome').value.trim(),nivel:document.getElementById('fNivel').value,tipo:document.getElementById('fTipo').value,equipe:document.getElementById('fEquipe').value.trim(),empresas,salario:parseFloat(document.getElementById('fSalario').value)||0,cap_horas:parseInt(document.getElementById('fCap').value)||168,alocacao_tipo:isEsp?'especifico':'todos',alocacao_clientes:isEsp?clientes:[]};const idx=FUNCS.findIndex(x=>x.id===id);if(idx>=0)FUNCS[idx]=row;else FUNCS.push(row);setFuncs(FUNCS);closeModal('modalFunc');renderContent();toast('Funcionário salvo. Histórico preservado.')}
 function removeFunc(id){const f=FUNCS.find(x=>x.id===id);if(!f)return;confirmAction(`Ocultar "${f.nome}"?`,()=>{f._removed=true;setFuncs(FUNCS);renderContent();toast('Ocultado.')})}
 
 async function saveSLA(e){e.preventDefault();const row={mes_slug:MES,tma_minutos:Math.round(parseFloat(document.getElementById('slaTMA').value)*60),tmr_minutos:Math.round(parseFloat(document.getElementById('slaTMR').value)*60),dentro_sla_pct:parseInt(document.getElementById('slaPct').value)||0,chamados_sla:parseInt(document.getElementById('slaCh').value)||0,chamados_fora:parseInt(document.getElementById('slaFora').value)||0};try{const{error}=await sb.from('sla').upsert(row,{onConflict:'mes_slug'});if(error)throw error;await loadMonth(MES);toast('SLA atualizado!')}catch(err){toast('Erro: '+err.message,false)}}
