@@ -120,7 +120,7 @@ textarea.fi{resize:vertical;min-height:2.7rem}
   <div class="flex items-center gap-2.5 flex-wrap">
     <div id="compBar" style="display:contents;">
     <div class="flex items-center gap-1.5">
-      <div id="rotDot" style="width:.44rem;height:.44rem;border-radius:50%;background:#2B4C9B;animation:pulse 2s infinite;flex-shrink:0;"></div>
+      <div id="rotDot" style="width:.44rem;height:.44rem;border-radius:50%;background:#94a3b8;flex-shrink:0;"></div>
       <span id="rotLabel" style="font-size:.73rem;font-weight:800;color:#1e293b;">Todas</span>
       <span id="rotCount" style="font-size:.62rem;background:#f1f5f9;color:#64748b;padding:.06rem .3rem;border-radius:.27rem;font-family:monospace;font-weight:700;">30s</span>
       <div style="width:7rem;height:.23rem;background:#f1f5f9;border-radius:9999px;overflow:hidden;"><div id="rotProgress" style="height:100%;background:#2B4C9B;width:100%;transition:width 1s linear;"></div></div>
@@ -130,7 +130,7 @@ textarea.fi{resize:vertical;min-height:2.7rem}
       <button class="comp-btn" onclick="selectCompany('4Seniors')" id="cb4S">4Seniors</button>
       <button class="comp-btn" onclick="selectCompany('S4SYS')" id="cbS4">S4SYS</button>
       <button class="comp-btn" onclick="selectCompany('Porto Virtual')" id="cbPV">Porto Virtual</button>
-      <button onclick="toggleRot()" style="padding:.2rem .38rem;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.36rem;cursor:pointer;color:#64748b;display:flex;align-items:center;"><i data-lucide="pause" style="width:.72rem;height:.72rem;" id="rotIcon"></i></button>
+      <button onclick="toggleRot()" style="padding:.2rem .38rem;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.36rem;cursor:pointer;color:#64748b;display:flex;align-items:center;"><i data-lucide="play" style="width:.72rem;height:.72rem;" id="rotIcon"></i></button>
     </div>
     <div style="width:1px;height:1.05rem;background:#e2e8f0;flex-shrink:0;"></div>
     </div>
@@ -267,7 +267,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v132'
+const APP_VERSION='v133'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -426,7 +426,7 @@ function syncHeaderNav(){
   if(nav){const areas=roleAreas();nav.innerHTML=areas.map(k=>`<button class="sec-btn ${CUR_AREA===k?'active':''}" onclick="GO_AREA('${k}')">${SBI_AREAS[k].lbl}</button>`).join('');nav.style.display=(APP_MODE==='full'&&areas.length>1)?'flex':'none';}
   const ub=document.getElementById('userBadge');if(ub)ub.innerHTML=roleUserBadge();
 }
-let ROT_PAUSED=false,rotTimer=null,rotSec=30,rotIdx=0
+let ROT_PAUSED=true,rotTimer=null,rotSec=30,rotIdx=0
 let FUNCS=[],CONTRACTS=[]
 const ROT_SEQ=['all','4Seniors','S4SYS','Porto Virtual']
 const ROT_LABELS={all:'Todas','4Seniors':'4Seniors',S4SYS:'S4SYS','Porto Virtual':'Porto Virtual'}
@@ -819,15 +819,38 @@ const closeModal=id=>{document.getElementById(id).classList.add('hidden');lucide
 const openModal=id=>{document.getElementById(id).classList.remove('hidden');lucide.createIcons()}
 function confirmAction(msg,fn){document.getElementById('confirmMsg').textContent=msg;document.getElementById('confirmOk').onclick=()=>{closeModal('modalConfirm');fn()};openModal('modalConfirm')}
 
+// ── Agregação MENSAL a partir de TODO o histórico em MD.ativs (o endpoint de atividades ignora o filtro de data,
+// então temos os meses anteriores). Serve para decidir sobrecarga/estouro relacionando o mês atual aos outros. ──
+function ymAddMonths(ym,delta){let[y,m]=String(ym).split('-').map(Number);m+=delta;while(m<=0){m+=12;y--}while(m>12){m-=12;y++}return y+'-'+String(m).padStart(2,'0')}
+function mdMonthlyAgg(){
+  const per={},cli={};// per[nome][ym]=min trabalhado ; cli[cliente][ym]=min trabalhado
+  (MD.ativs||[]).forEach(a=>{
+    if(!a||!a.ag||isExcludedTech(a.ag))return;
+    const iso=mdActISO(a.start);if(!iso)return;const ym=iso.slice(0,7),wh=a.wh||0;if(wh<=0)return;
+    const f=matchFuncByAgent(a.ag),nm=f?f.nome:a.ag;
+    (per[nm]=per[nm]||{})[ym]=(per[nm][ym]||0)+wh;
+    const cn=mdLocCliente(a.loc||'');if(cn){(cli[cn]=cli[cn]||{})[ym]=(cli[cn][ym]||0)+wh}
+  });
+  return{per,cli};
+}
 function buildAutoAlerts(){
   const cfg=getAlertCfg(),auto=[],lim=cfg.limite_pct||80
+  // Base mensal + histórico: o mês de referência é o do fim do período selecionado; comparamos com os 3 meses anteriores e com o ano.
+  const _mAgg=mdMonthlyAgg(),_refYm=(MD_ATV_END||todayISO()).slice(0,7),_priorYms=[1,2,3].map(k=>ymAddMonths(_refYm,-k)),_yr=_refYm.slice(0,4)
   // Por técnico - só do roster ATIVO (xls). Técnico fora do roster já saiu → sem alerta de sobrecarga (item 6).
   D.recursos.forEach(r=>{
     if(!getFunc(r.nome))return
     const f=pct(r.trab_minutos,r.cap_minutos)
-    // capacidade do período = dias úteis JÁ DECORRIDOS × 8h (não as 168h do mês cheio) — deixa isso explícito no alerta
-    if(f>cfg.fte_max)auto.push({lv:'critica',cat:'FTE',msg:`${r.nome}: FTE ${f}% - sobrecarga`,det:`${minToHM(r.trab_minutos)}h de ${minToHM(r.cap_minutos)}h no período (${mdBizDays(MD_ATV_START,MD_ATV_END)} dias úteis × 8h; o mês cheio seria ${minToHM(Math.round((r.cap_minutos||0)/Math.max(0.01,mdCapFactor())))}h)`})
-    else if(f<cfg.fte_min)auto.push({lv:'media',cat:'FTE',msg:`${r.nome}: FTE ${f}% - ocioso`,det:`${minToHM(r.trab_minutos)}h de ${minToHM(r.cap_minutos)}h · margem ${cfg.fte_min}-${cfg.fte_max}%`})
+    // Sobrecarga NÃO se decide pelo período parcial. Compara as horas DO MÊS com a franquia mensal (cap_horas)
+    // e só vira "sobrecarga" (crítica) se também estourou em mês(es) anterior(es) — recorrência. Aviso a partir de 80%.
+    const capMin=getCapH(r.nome)*60,mm=_mAgg.per[r.nome]||{},curMin=mm[_refYm]||0,usoMes=pct(curMin,capMin)
+    const priorOver=_priorYms.filter(y=>(mm[y]||0)>=capMin).length
+    const yrMes=Object.keys(mm).filter(y=>y.slice(0,4)===_yr),yrOver=yrMes.filter(y=>(mm[y]||0)>=capMin).length
+    const yrTxt=`no ano de ${_yr}: estourou ${yrOver} de ${yrMes.length} ${yrMes.length===1?'mês':'meses'} com dado`
+    if(usoMes>=100&&priorOver>=1)auto.push({lv:'critica',cat:'FTE',msg:`${r.nome}: sobrecarga recorrente (${usoMes}% da franquia em ${_refYm})`,det:`${minToHM(curMin)}h de ${getCapH(r.nome)}h no mês — e estourou em ${priorOver} dos 3 meses anteriores. ${yrTxt}.`})
+    else if(usoMes>=100)auto.push({lv:'alta',cat:'FTE',msg:`${r.nome}: estourou a franquia em ${_refYm} (${usoMes}%)`,det:`${minToHM(curMin)}h de ${getCapH(r.nome)}h neste mês. Isolado — nos 3 meses anteriores ficou dentro, não caracteriza sobrecarga. ${yrTxt}.`})
+    else if(usoMes>=80)auto.push({lv:'media',cat:'FTE',msg:`${r.nome}: ${usoMes}% da franquia em ${_refYm}`,det:`${minToHM(curMin)}h de ${getCapH(r.nome)}h — perto do limite mensal (dentro da franquia). ${yrTxt}.`})
+    else if(f<cfg.fte_min)auto.push({lv:'media',cat:'FTE',msg:`${r.nome}: FTE ${f}% - ocioso`,det:`${minToHM(r.trab_minutos)}h de ${minToHM(r.cap_minutos)}h no período · margem ${cfg.fte_min}-${cfg.fte_max}%`})
   })
   // Por grupo/nível (N1, N2, N3) - agregado do roster ativo
   ;['N1','N2','N3'].forEach(nv=>{
@@ -836,9 +859,15 @@ function buildAutoAlerts(){
     const trab=g.reduce((s,r)=>s+r.trab_minutos,0),cap=g.reduce((s,r)=>s+r.cap_minutos,0),f=pct(trab,cap)
     if(f>=lim)auto.push({lv:f>cfg.fte_max?'critica':'alta',cat:'Grupo',msg:`Grupo ${nv}: ${f}% da capacidade`,det:`${g.length} téc · ${minToHM(trab)}h de ${minToHM(cap)}h`})
   })
-  // Por cliente - franquia contratada
-  // Estouro de franquia (contratos de horas fixas) — escala pela proporção do período; alerta no grupo Cliente.
-  D.clientes.forEach(c=>{const fran=cliFranquia(c.nome);if(!fran)return;const franP=Math.max(1,fran*mdPeriodFactor()),uso=pct(Math.round(c.horas_minutos/60),franP);if(uso>100)auto.push({lv:'critica',cat:'Franquia',msg:`${c.nome}: ${uso}% da franquia (${fran}h/mês) - estourando`,det:`${Math.round(c.horas_minutos/60)}h no período vs ${Math.round(franP)}h proporcionais`});else if(uso>=lim)auto.push({lv:'alta',cat:'Franquia',msg:`${c.nome}: ${uso}% da franquia (${fran}h/mês)`,det:`Ritmo atingiu ${lim}%+ do proporcional`})})
+  // Por cliente - franquia contratada. Mesma lógica de Pessoas: compara o MÊS com a franquia mensal.
+  // Estourou (100%+) neste mês = crítica; 80%+ = aviso; abaixo de 80% não alerta. Sempre com o contexto do ano.
+  D.clientes.forEach(c=>{const fran=cliFranquia(c.nome);if(!fran)return;
+    const capMin=fran*60,mm=_mAgg.cli[c.nome]||{},curMin=mm[_refYm]||0,uso=pct(curMin,capMin);
+    const yrMes=Object.keys(mm).filter(y=>y.slice(0,4)===_yr),yrOver=yrMes.filter(y=>(mm[y]||0)>=capMin).length;
+    const yrTxt=`no ano de ${_yr}: estourou ${yrOver} de ${yrMes.length} ${yrMes.length===1?'mês':'meses'} com dado`;
+    if(uso>=100)auto.push({lv:'critica',cat:'Franquia',msg:`${c.nome}: estourou a franquia em ${_refYm} (${uso}% de ${fran}h)`,det:`${minToHM(curMin)}h no mês vs ${fran}h contratadas. ${yrTxt}.`});
+    else if(uso>=80)auto.push({lv:'alta',cat:'Franquia',msg:`${c.nome}: ${uso}% da franquia em ${_refYm} (${fran}h/mês)`,det:`${minToHM(curMin)}h de ${fran}h — perto do limite. ${yrTxt}.`});
+  })
   if(D.sla&&D.sla.dentro_sla_pct<90)auto.push({lv:'alta',cat:'SLA',msg:`SLA: ${D.sla.dentro_sla_pct}% dentro do prazo`,det:`${D.sla.chamados_fora} chamados vencidos`})
   if(D.sat){if(D.sat.csat<75)auto.push({lv:'critica',cat:'CSAT',msg:`CSAT: ${D.sat.csat}% - crítico`,det:'Satisfação comprometida'});else if(D.sat.csat<85)auto.push({lv:'media',cat:'CSAT',msg:`CSAT: ${D.sat.csat}%`,det:'Monitorar tendência'})}
   // Custo - margem por empresa
@@ -1205,8 +1234,29 @@ window.ctxExportCSV=function(id){
 };
 // ─── Área FINANCEIRO: painel estilo Lite, porém com TODOS os contratos (reusa o painel de contratos por CC) ───
 function rFinanceiro(){
-  const head=`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;"><span style="font-size:1.1rem;font-weight:900;color:#0f172a;">Financeiro — contratos</span><span style="font-size:.68rem;color:#94a3b8;">todos os clientes · H.H, franquia, escopo e fora de escopo</span></div>`;
-  return head+rExecContratos();
+  const head=`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;"><span style="font-size:1.1rem;font-weight:900;color:#0f172a;">Financeiro</span><span style="font-size:.68rem;color:#94a3b8;">todos os clientes · H.H, franquia, escopo, avulsas e resultado</span></div>`;
+  if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk para ver o Financeiro.</div>`;
+  const st=companyStats('all');
+  // Avulsas (a cobrar) de TODOS os clientes no período — não só os 3 contratos gerenciados da Sustentação.
+  const s10=(MD_ATV_START||'').slice(0,10),e10=(MD_ATV_END||'').slice(0,10);
+  const av=(MD.avulsas||[]).filter(a=>{const d=(a.iso||'').slice(0,10),inP=(!d)||((!s10||d>=s10)&&(!e10||d<=e10));return inP&&cliMatchFilter((a.loc||'').split('|')[0].trim()||a.cc||'')});
+  const avMin=av.reduce((s,a)=>s+(a.ch||0),0);
+  const kpis=`<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">`+
+    kpiCard(minToHM(st.horas)+'h','H.H no período','#2B4C9B','clock',fmt(st.chamados)+' chamados')+
+    kpiCard(fmtR(st.receita),'Receita contratada','#166534','trending-up',st.numContratos+' contratos')+
+    kpiCard(fmtR(st.custo),'Custo (folha rateada)','#854d0e','wallet','proporcional ao período')+
+    kpiCard(st.margem==null?'—':st.margem+'%','Margem',st.margem==null?'#94a3b8':st.margem>=30?'#16a34a':st.margem>=0?'#f59e0b':'#dc2626','percent',st.margem==null?'sem receita':fmtR(st.receita-st.custo)+' líquido')+
+    kpiCard(minToHM(avMin)+'h','Avulsas a cobrar','#7c3aed','receipt',fmt(av.length)+' lanç. · fora da franquia')+
+    kpiCard(fmt(st.numClientes),'Clientes ativos','#0f766e','users','com hora no período')+
+    `</div>`;
+  return head+kpis+rFinAvulsas(av,avMin)+rExecContratos();
+}
+// Bloco de avulsas do Financeiro — read-only, todos os clientes, inicia RECOLHIDO (<details> sem "open").
+function rFinAvulsas(av,avMin){
+  if(!av||!av.length)return `<details class="card mb-4"><summary style="cursor:pointer;font-weight:800;color:#0f172a;">Horas avulsas (a cobrar) — 0 no período</summary><div style="font-size:.68rem;color:#94a3b8;padding:.6rem 0;">Nenhuma hora a cobrar (fora da franquia) neste período.</div></details>`;
+  const g={};av.forEach(a=>{const k=(a.loc||'').split('|')[0].trim()||String(a.cc||'—');const o=g[k]||(g[k]={cc:a.cc,min:0,n:0});o.min+=(a.ch||0);o.n++});
+  const rows=Object.entries(g).sort((a,b)=>b[1].min-a[1].min).map(([k,o])=>`<tr style="border-top:1px solid #f8fafc;"><td style="font-weight:600;color:#334155;padding:.15rem 0;">${esc(k)}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(String(o.cc||'—'))}</span></td><td style="text-align:right;color:#64748b;">${fmt(o.n)}</td><td style="text-align:right;font-weight:700;color:#7c3aed;">${minToHM(o.min)}h</td></tr>`).join('');
+  return `<details class="card mb-4"><summary style="cursor:pointer;font-weight:800;color:#0f172a;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">Horas avulsas (a cobrar)<span class="badge" style="background:#f3e8ff;color:#6b21a8;font-weight:700;">FORA DA FRANQUIA</span><span style="font-size:.66rem;font-weight:600;color:#94a3b8;">${fmt(av.length)} lançamentos · ${minToHM(avMin)}h · clique para expandir</span></summary><div style="margin-top:.6rem;"><table style="width:100%;font-size:.68rem;border-collapse:collapse;"><thead><tr style="color:#94a3b8;"><th style="text-align:left;">Cliente</th><th style="text-align:left;">CC</th><th style="text-align:right;">Lançamentos</th><th style="text-align:right;">Trabalhado (a cobrar)</th></tr></thead><tbody>${rows}</tbody><tfoot><tr style="font-weight:800;border-top:2px solid #e2e8f0;"><td>Total</td><td></td><td style="text-align:right;color:#64748b;">${fmt(av.length)}</td><td style="text-align:right;color:#7c3aed;">${minToHM(avMin)}h</td></tr></tfoot></table><div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;">Fonte: relatório <b>Atividades com horas a cobrar</b> do Milldesk (todos os clientes, período da barra). O detalhe editável (início/fim, a cobrar/a pagar, validação) fica na Sustentação → Horas avulsas, para os 3 contratos gerenciados.</div></div></details>`;
 }
 // ─── Gestão de usuários (admin) — chama a edge function admin-users (service role; valida admin no servidor) ───
 async function fnUsers(action,payload){
