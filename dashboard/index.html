@@ -274,7 +274,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v152'
+const APP_VERSION='v153'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1667,7 +1667,7 @@ function rExecRiscosFull(){
       <span style="background:${sev.b};color:${sev.c};font-size:.7rem;font-weight:900;border-radius:.4rem;padding:.18rem .6rem;">${sev.t}</span>
       <span style="font-size:.68rem;color:#94a3b8;">o que precisa de decisão, agrupado por tema</span>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(fmt(crit),'Alertas críticos',crit?'#dc2626':'#16a34a','triangle-alert',altos+' altos · '+auto.length+' no total')}${kpiCard(fmt(incPend),'Inconsistências abertas',incPend?'#b45309':'#16a34a','search','apontamentos a revisar')}${kpiCard(fmt(franqExtrap),'Franquias estouradas',franqExtrap?'#dc2626':'#16a34a','file-text','clientes acima do contratado')}${kpiCard(g.margem!=null?g.margem+'%':'-','Margem global',g.margem==null?'#94a3b8':g.margem<0?'#dc2626':g.margem<20?'#b45309':'#16a34a','trending-up','receita − custo')}</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(fmt(crit),'Alertas críticos',crit?'#dc2626':'#16a34a','triangle-alert',altos+' altos · '+auto.length+' no total')}<div onclick="setSection('tech');setSub('alertas');setAlSub('incid')" style="cursor:pointer;" title="Abrir os apontamentos inconsistentes em Técnica → Alertas & Inconsistências">${kpiCard(fmt(incPend),'Inconsistências abertas',incPend?'#b45309':'#16a34a','search','clique p/ ver os apontamentos →')}</div>${kpiCard(fmt(franqExtrap),'Franquias estouradas',franqExtrap?'#dc2626':'#16a34a','file-text','clientes acima do contratado')}${kpiCard(g.margem!=null?g.margem+'%':'-','Margem global',g.margem==null?'#94a3b8':g.margem<0?'#dc2626':g.margem<20?'#b45309':'#16a34a','trending-up','receita − custo')}</div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">${cols}</div>`;
 }
 function rExecAlertas(){
