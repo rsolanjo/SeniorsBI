@@ -277,7 +277,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v161'
+const APP_VERSION='v162'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -354,6 +354,30 @@ const getLiteCt=()=>{
 }
 const setLiteCt=v=>lsSet('sbi_lite_ct',v)
 const litePilares=c=>{if(c&&c.pilaresEdit&&c.pilaresEdit.length)return c.pilaresEdit.map(p=>{let kw;try{kw=new RegExp(p.kws||'(?!)','i')}catch(e){kw=/(?!)/}return{nome:p.nome,kw}});return LITE_PILARES_CC[String(c.cc)]||LITE_PILARES[c.pilar]||LITE_PILARES.susten}
+// ═══ REGRA ÚNICA de classificação de pilar ═══
+// Usada pela Sustentação (liteData), pela Visão Geral (rExecContratos) e pelo Auditor (_audContratos),
+// para as três telas NUNCA divergirem no mesmo contrato. Ordem de decisão:
+//   1) override manual do chamado (Reclassificar) vence tudo;
+//   2) CATEGORIA do chamado (mais confiável que o texto livre da atividade);
+//   3) categoria + assunto + atividade;
+//   4) contrato de escopo único → tudo cai no único pilar.
+// A atividade precisa trazer {tid, cat, assunto, atv} — use pilarActFields() para montar.
+const getPilOv=()=>lsGet('sbi_lite_pilov')||{};
+function pilarDeAtividade(a,pil,pilOv){
+  const ov=pilOv&&pilOv[a.tid];
+  if(ov==='__FORA__')return null;
+  let p;
+  if(ov)p=pil.find(pl=>pl.nome===ov)||null;
+  else{
+    const catTxt=(a.cat||'').toLowerCase();
+    p=catTxt.trim()?pil.find(pl=>pl.kw.test(catTxt)):null;
+    if(!p)p=pil.find(pl=>pl.kw.test(((a.cat||'')+' '+(a.assunto||'')+' '+(a.atv||'')).toLowerCase()));
+  }
+  if(!p&&pil.length===1)p=pil[0];
+  return p||null;
+}
+// Índice de chamados p/ recuperar categoria e assunto (a atividade do Milldesk nem sempre traz)
+function tkIndex(){const m={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t)m[t.id]=t});return m}
 let LITE_VAL=false// valores protegidos por senha; sempre ocultos ao carregar
 const liteAprovKey=a=>a.tid+'|'+(a.iso||'')+'|'+a.ch
 const getLiteAprov=()=>lsGet('sbi_lite_aprov')||{}
@@ -1242,7 +1266,8 @@ function rExecContratos(){
   const capFTE=Math.max(1,mdBizDays(MD_ATV_START,MD_ATV_END)*8*60);// capacidade de 1 pessoa no período (min) p/ FTE
   const salOf=n=>{const f=matchFuncByAgent(n);return f?getSalario(f.nome,f.nivel):8000};// custo-hora = salário/168
   // CC comparado em MINÚSCULAS: quando não é numérico o Milldesk varia a caixa ("MITSUI | XX" vs "OAK | xx")
-  const acts=(MD.ativs||[]).map(a=>({cc:String(mdCC(a.loc||'')).toLowerCase(),loc:a.loc||'',wh:a.wh||0,iso:mdActISO(a.start),ag:a.ag,atv:a.atv||'',assunto:a.assunto||'',tid:a.tid}))
+  const _tk=tkIndex(),pilOv=getPilOv();
+  const acts=(MD.ativs||[]).map(a=>{const t=_tk[a.tid];return{cc:String(mdCC(a.loc||'')).toLowerCase(),loc:a.loc||'',wh:a.wh||0,iso:mdActISO(a.start),ag:a.ag,atv:a.atv||'',assunto:a.assunto||(t?t.t:'')||'',cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'',tid:a.tid}})
     .filter(a=>a.ag&&!isExcludedTech(a.ag)&&atvInRange(a.iso));
   // Horas avulsas (a cobrar) por centro de custo no período — alimenta a 3ª barra do card
   const _as10=(MD_ATV_START||'').slice(0,10),_ae10=(MD_ATV_END||'').slice(0,10),avByCC={};
@@ -1267,7 +1292,7 @@ function rExecContratos(){
     const uso=franqP?Math.round(used/franqP*100):null,saldo=franqP-used;
     const pil=litePilares(Object.assign({},ct,{cc,pilar:_pilarKeyDe(ct)}));// passa o contrato inteiro p/ respeitar pilaresEdit
     const pilMin={},tecMin={},pilTk={},tecTk={};let foraMin=0;const foraTk=new Set(),foraActs=[];
-    A.forEach(a=>{tecMin[a.ag]=(tecMin[a.ag]||0)+a.wh;(tecTk[a.ag]=tecTk[a.ag]||new Set()).add(a.tid);const txt=(a.assunto+' '+a.atv).toLowerCase();const p=pil.find(pl=>pl.kw.test(txt));if(p){pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;(pilTk[p.nome]=pilTk[p.nome]||new Set()).add(a.tid);}else{foraMin+=a.wh;foraTk.add(a.tid);foraActs.push(a);}});
+    A.forEach(a=>{tecMin[a.ag]=(tecMin[a.ag]||0)+a.wh;(tecTk[a.ag]=tecTk[a.ag]||new Set()).add(a.tid);const p=pilarDeAtividade(a,pil,pilOv);if(p){pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;(pilTk[p.nome]=pilTk[p.nome]||new Set()).add(a.tid);}else{foraMin+=a.wh;foraTk.add(a.tid);foraActs.push(a);}});
     const pilTkN={},pilTids={};Object.keys(pilTk).forEach(k=>{pilTkN[k]=pilTk[k].size;pilTids[k]=[...pilTk[k]]});
     const tecN={},tecTids={};Object.keys(tecTk).forEach(k=>{tecN[k]=tecTk[k].size;tecTids[k]=[...tecTk[k]]});
     const nCh=new Set(A.map(a=>a.tid)).size;
@@ -1425,11 +1450,13 @@ window.ctxExportCSV=function(id){
 // ═══ AUDITOR GERAL (todos os contratos) — reaproveita a lógica provada do rExecContratos ═══
 // Fonte de atividades: MD.ativs. all=true traz TODAS as carregadas (p/ tendência); senão só o período.
 function _audActs(all){
-  return (MD.ativs||[]).map(a=>({cc:String(mdCC(a.loc||'')).toLowerCase(),loc:a.loc||'',wh:a.wh||0,iso:mdActISO(a.start),ag:a.ag,atv:a.atv||'',assunto:a.assunto||'',tid:a.tid}))
+  const _tk=tkIndex();
+  return (MD.ativs||[]).map(a=>{const t=_tk[a.tid];return{cc:String(mdCC(a.loc||'')).toLowerCase(),loc:a.loc||'',wh:a.wh||0,iso:mdActISO(a.start),ag:a.ag,atv:a.atv||'',assunto:a.assunto||(t?t.t:'')||'',cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'',tid:a.tid}})
     .filter(a=>a.ag&&!isExcludedTech(a.ag)&&(all||atvInRange(a.iso)));
 }
 // Agregação por contrato — MESMA lógica do rExecContratos (used/franqP/uso/fora/custo/técnicos), respeitando filtros.
 function _audContratos(acts){
+  const _pilOv=getPilOv();
   const mf=(typeof liteMonths==='function')?liteMonths():1;
   const capFTE=Math.max(1,mdBizDays(MD_ATV_START,MD_ATV_END)*8*60);
   const salOf=n=>{const f=matchFuncByAgent(n);return f?getSalario(f.nome,f.nivel):8000};
@@ -1446,7 +1473,7 @@ function _audContratos(acts){
     const uso=franqP?Math.round(used/franqP*100):null,saldo=franqP-used;
     const pil=litePilares(Object.assign({},ct,{cc,pilar:_pilarKeyDe(ct)}));
     const tecMin={},tecTk={};let foraMin=0;const foraTk=new Set();
-    A.forEach(a=>{tecMin[a.ag]=(tecMin[a.ag]||0)+a.wh;(tecTk[a.ag]=tecTk[a.ag]||new Set()).add(a.tid);const txt=(a.assunto+' '+a.atv).toLowerCase();const p=pil.find(pl=>pl.kw.test(txt));if(!p){foraMin+=a.wh;foraTk.add(a.tid)}});
+    A.forEach(a=>{tecMin[a.ag]=(tecMin[a.ag]||0)+a.wh;(tecTk[a.ag]=tecTk[a.ag]||new Set()).add(a.tid);if(!pilarDeAtividade(a,pil,_pilOv)){foraMin+=a.wh;foraTk.add(a.tid)}});
     const nCh=new Set(A.map(a=>a.tid)).size;
     // Receita via contractReceita — o contrato usa `valor_mensal` (não existe `ct.valor`).
     const custoUsado=Object.entries(tecMin).reduce((s,[n,m])=>s+(m/60)*(salOf(n)/168),0),valorP=contractReceita(ct,nCh),fte=used/capFTE;
@@ -2233,14 +2260,9 @@ function liteData(){
     const isSust=/sustenta/i.test(ct.tipo||'');
     acts.forEach(a=>{const rate=liteTechRate(a.ag),val=(a.wh/60)*rate;custoUsado+=val;ctTk.add(a.tid);
       tec[a.ag]=(tec[a.ag]||0)+a.wh;(tecTk[a.ag]=tecTk[a.ag]||new Set()).add(a.tid);
-      const catTxt=(a.cat||'').toLowerCase(),txt=(a.cat+' '+a.assunto+' '+a.atv).toLowerCase();
       const deployTxt=(a.cat+' '+a.assunto).toLowerCase();// deploy é avaliado pelo CHAMADO (categoria/assunto), NÃO pelo nome da atividade (ex.: atividade "Novo report" não torna o chamado um deploy)
       const ov=pilOv[a.tid];// override manual vence tudo
-      let p;
-      if(ov==='__FORA__')p=null;
-      else if(ov)p=pil.find(pl=>pl.nome===ov)||null;
-      else{p=catTxt.trim()?pil.find(pl=>pl.kw.test(catTxt)):null;if(!p)p=pil.find(pl=>pl.kw.test(txt))}// PILAR PRIMEIRO: se casa um pilar (ex.: WIFI→Redes, VPN→Firewall), é escopo — mesmo que a atividade tenha "novo/criação"
-      if(!p&&ov!=='__FORA__'&&pil.length===1)p=pil[0];// contrato de ESCOPO ÚNICO (ex.: Mileto - Projetos): tudo entra no pilar
+      const p=pilarDeAtividade(a,pil,pilOv);// REGRA ÚNICA — a mesma da Visão Geral e do Auditor
       const isDeploy=isSust&&!p&&ov!=='__FORA__'&&!LITE_MAINT_RE.test(deployTxt)&&LITE_DEPLOY_RE.test(deployTxt);// só quando NÃO casou nenhum pilar: deploy sem pilar = projeto (fora)
       if(p){pilMin[p.nome]=(pilMin[p.nome]||0)+a.wh;(pilTk[p.nome]=pilTk[p.nome]||new Set()).add(a.tid);pilVal[p.nome]=(pilVal[p.nome]||0)+val}else{fora.push(Object.assign({},a,{motivo:ov==='__FORA__'?'manual':(isDeploy?'projeto':'sem-pilar')}));foraTk.add(a.tid)}});
     const pilTkN={},pilTids={};for(const k in pilTk){pilTkN[k]=pilTk[k].size;pilTids[k]=[...pilTk[k]]}
