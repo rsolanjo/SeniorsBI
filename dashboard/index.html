@@ -277,7 +277,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v163'
+const APP_VERSION='v164'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1250,6 +1250,24 @@ window.ctxSaveEscopo=function(id){
 window.ctxResetEscopo=function(id){const c=CONTRACTS.find(x=>x.id===id);if(!c)return;delete c.pilaresEdit;setContracts(CONTRACTS);liteCloseModal();toast('Escopo restaurado ao padrão.');renderContent()};
 function ctxToggle(id){const e=document.getElementById('ctx-exp-'+id);if(!e)return;e.style.display=e.style.display==='none'?'block':'none';if(window.lucide)lucide.createIcons()}
 window.atuPessoas=function(bucket,namesPipe){const names=(namesPipe||'').split('|').filter(Boolean);const html=`<div style="font-size:.72rem;color:#334155;">${names.map(n=>`<div style="padding:.28rem .1rem;border-bottom:1px solid #f1f5f9;">${esc(n)}</div>`).join('')||'<div style="color:#94a3b8;padding:.4rem;">Nenhuma pessoa.</div>'}</div><div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;">${names.length} pessoa(s) com horas atribuídas a esta frente no período.</div>`;liteOpenModal('Pessoas — '+bucket,html)};
+// Listas por trás dos KPIs da Visão Geral (estourando em H.H / financeiro / técnicos / pendentes) — alimentam os popups.
+let _GE_POP={hh:[],fin:[],tec:[],pend:[]};
+window.geEstourandoModal=function(tipo){
+  const L=_GE_POP[tipo]||[];
+  const wrap=(t,head,rows,nota)=>liteOpenModal(t,`<div style="font-size:.68rem;color:#64748b;margin-bottom:.6rem;">${nota}</div><div style="overflow-x:auto;max-height:62vh;"><table style="width:100%;font-size:.72rem;"><thead><tr>${head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows||`<tr><td colspan="${head.length}" style="text-align:center;color:#94a3b8;padding:1rem;">Nenhum.</td></tr>`}</tbody></table></div>`);
+  if(tipo==='hh')return wrap('Clientes estourando em H.H ('+L.length+')',['Cliente','Contrato','CC','Franquia','Consumido','Uso'],
+    L.map(x=>`<tr><td style="font-weight:700;">${esc(x.cliente)}</td><td style="font-size:.66rem;color:#64748b;">${esc(x.contrato)}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(String(x.cc||'—'))}</span></td><td>${x.franq}h</td><td style="font-weight:700;">${minToHM(Math.round(x.horas*60))}h</td><td style="font-weight:800;color:#dc2626;">${x.uso}%</td></tr>`).join(''),
+    'Clientes cujas horas consumidas passaram de <b>100% da franquia mensal</b> contratada.');
+  if(tipo==='fin')return wrap('Clientes estourando financeiramente ('+L.length+')',['Cliente','Contrato','CC','Receita','Custo das horas','Excedente'],
+    L.map(x=>`<tr><td style="font-weight:700;">${esc(x.cliente)}</td><td style="font-size:.66rem;color:#64748b;">${esc(x.contrato)}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(String(x.cc||'—'))}</span></td><td style="color:#166534;">${fmtR(x.receita)}</td><td style="color:#854d0e;font-weight:700;">${fmtR(x.custo)}</td><td style="color:#dc2626;font-weight:800;">${fmtR(x.excedente)}</td></tr>`).join(''),
+    'Clientes cujo <b>custo das horas trabalhadas</b> (horas × custo-hora) já passou o valor do contrato.');
+  if(tipo==='tec')return wrap('Técnicos estourando H.H ('+L.length+')',['Técnico','Nível','Horas','Capacidade','FTE'],
+    L.map(x=>`<tr><td style="font-weight:700;">${esc(techDisp(x.nome))}</td><td><span class="tag">${esc(x.nivel)}</span></td><td style="font-weight:700;">${minToHM(x.horas)}h</td><td style="color:#64748b;">${minToHM(x.cap)}h</td><td style="font-weight:800;color:#dc2626;">${x.fte}%</td></tr>`).join(''),
+    'Técnicos que trabalharam <b>mais horas do que a própria capacidade</b> no período (sobrecarga).');
+  if(tipo==='pend')return wrap('Chamados pendentes ('+L.length+')',['Chamado','Cliente','Status','Responsável','Aberto em','Assunto'],
+    L.slice().sort((a,b)=>String(a.st||'').localeCompare(String(b.st||''))).map(t=>`<tr><td style="font-weight:700;white-space:nowrap;">${esc(t.id)}</td><td style="font-size:.66rem;">${esc((t.loc||'').split('|')[0].trim())}</td><td><span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700;">${esc(t.st||'-')}</span></td><td style="white-space:nowrap;font-size:.66rem;">${esc((t.ag||'-').split(' ').slice(0,2).join(' '))}</td><td style="white-space:nowrap;font-size:.66rem;">${esc(String(t.start||'').split(' ')[0])}</td><td style="font-size:.65rem;color:#334155;">${esc((t.t||'').slice(0,70))}</td></tr>`).join(''),
+    'Todos os chamados <b>ainda não fechados/resolvidos</b> no Milldesk neste momento (backlog aberto), independente do período selecionado.');
+};
 // Guarda a última agregação por contrato do painel executivo, p/ os popups do card (fora de escopo).
 let _CTX_ROWS={};
 window.ctxForaDetalhe=function(id){
@@ -1568,15 +1586,51 @@ function cadDiff(){
   const total=locNovos.length+locSumidos.length+locAlterados.length+tecNovos.length+tecSumidos.length;
   return{semBase:false,base,cur,locNovos,locSumidos,locAlterados,tecNovos,tecSumidos,total};
 }
-function cadDiscrepCount(){try{return MD.loaded?cadDiff().total:0}catch(e){return 0}}
+// Confronto CADASTRO × MILLDESK — o que existe no Milldesk e não está cadastrado (e vice-versa).
+// É aqui que aparece, por exemplo, "4SENIORS BRASIL | 2.2 - Serviços internos" com horas enquanto o contrato do
+// 4Seniors está com CC 9: o centro de custo do local não casa com o CC de nenhum contrato.
+function cadConfronto(){
+  const locMin={},locTk={};
+  (MD.ativs||[]).forEach(a=>{const L=String(a.loc||'').trim();if(L)locMin[L]=(locMin[L]||0)+(a.wh||0)});
+  (MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{const L=String(t.loc||'').trim();if(L){locTk[L]=(locTk[L]||0)+1;if(locMin[L]==null)locMin[L]=0}});
+  const cts=CONTRACTS.filter(c=>c.status!=='arquivado');
+  const ccSet=new Set(cts.map(c=>String(c.cc||'').toLowerCase()).filter(Boolean));
+  const locais=Object.keys(locMin).map(L=>({loc:L,cc:String(mdCC(L)||'').toLowerCase(),min:locMin[L],tk:locTk[L]||0}));
+  const locSemContrato=locais.filter(x=>!x.cc||!ccSet.has(x.cc)).sort((a,b)=>b.min-a.min);
+  const ccVistos=new Set(locais.map(x=>x.cc).filter(Boolean));
+  const ctSemMovimento=cts.filter(c=>{const cc=String(c.cc||'').toLowerCase();return !cc||!ccVistos.has(cc)})
+    .map(c=>({cliente:c.cliente,nome:c.nome||'',cc:c.cc,semCC:!String(c.cc||'').trim()||/^x+$/i.test(String(c.cc||'').trim())}));
+  const agMd=new Set();(MD.ativs||[]).forEach(a=>{const n=String(a.ag||'').trim();if(n&&!isExcludedTech(n))agMd.add(n)});
+  const tecSemCadastro=[...agMd].filter(n=>!matchFuncByAgent(n)).sort();
+  const funcSemMd=(FUNCS||[]).filter(f=>!f._removed&&f.nome).filter(f=>![...agMd].some(n=>{const m=matchFuncByAgent(n);return m&&m.nome===f.nome})).map(f=>f.nome).sort();
+  return{locSemContrato,ctSemMovimento,tecSemCadastro,funcSemMd,
+    total:locSemContrato.length+ctSemMovimento.length+tecSemCadastro.length+funcSemMd.length};
+}
+function cadDiscrepCount(){try{if(!MD.loaded)return 0;return cadConfronto().total+cadDiff().total}catch(e){return 0}}
 function rCadDiscrep(){
   const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:.95rem;font-weight:800;color:#0f172a;">Discrepâncias de cadastro</span><span class="badge" style="background:#eef2ff;color:#3730a3;font-weight:700;">locais & técnicos</span></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Compara os <b>locais (centros de custo)</b> e os <b>técnicos</b> que aparecem no Milldesk com a última <b>foto</b> aceita. Serve para descobrir que alguém <b>criou, apagou ou renomeou</b> um local/técnico sem avisar.</div></div>`;
   if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk para comparar.</div>`;
-  const d=cadDiff();
+  const d=cadDiff(),F=cadConfronto();
   const btn=`<button onclick="cadAceitar()" style="cursor:pointer;background:#2B4C9B;color:#fff;border:none;border-radius:.4rem;padding:.38rem .85rem;font-size:.7rem;font-weight:800;">✓ Aceitar como novo normal</button>`;
-  if(d.semBase)return head+`<div class="card" style="background:#eff6ff;border:1px solid #dbeafe;"><div style="font-size:.78rem;font-weight:800;color:#1d4ed8;margin-bottom:.3rem;">Nenhuma foto de referência ainda</div><div style="font-size:.68rem;color:#475569;line-height:1.6;margin-bottom:.7rem;">Hoje existem <b>${Object.keys(d.cur.locais).length}</b> locais e <b>${d.cur.tecnicos.length}</b> técnicos no Milldesk. Salve esta foto para que, a partir do próximo sync, qualquer inclusão, exclusão ou renomeação apareça aqui.</div>${btn}</div>`;
+  // ── Bloco 1: CADASTRO × MILLDESK (o que precisa de ação) ──
+  const tb=(titulo,sub,cor,head,rows,n)=>n?`<div class="card mb-3 overflow-x-auto" style="border-left:3px solid ${cor};"><div style="font-size:.78rem;font-weight:800;color:${cor};">${titulo} <span style="color:#94a3b8;font-weight:700;">(${n})</span></div><div style="font-size:.63rem;color:#64748b;margin:.15rem 0 .45rem;">${sub}</div><table style="width:100%;font-size:.7rem;"><thead><tr>${head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`:'';
+  const conf=
+    tb('Locais do Milldesk sem contrato cadastrado','O centro de custo do local não bate com o CC de nenhum contrato — essas horas não entram em nenhuma franquia. Cadastre o contrato ou corrija o CC em <b>Admin → Contratos</b>.','#dc2626',
+      ['Local no Milldesk','CC extraído','Horas','Chamados'],
+      F.locSemContrato.slice(0,40).map(x=>`<tr><td style="font-weight:600;">${esc(x.loc)}</td><td>${x.cc?`<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:800;">${esc(x.cc)}</span>`:'<span class="badge" style="background:#f1f5f9;color:#64748b;">sem CC</span>'}</td><td style="font-weight:700;">${minToHM(x.min)}h</td><td style="color:#64748b;">${x.tk||'-'}</td></tr>`).join(''),F.locSemContrato.length)+
+    tb('Contratos cadastrados sem nenhum local no Milldesk','O CC do contrato não aparece em nenhum local — ou o CC está errado/placeholder, ou o contrato não teve movimento algum.','#b45309',
+      ['Cliente','Contrato','CC'],
+      F.ctSemMovimento.map(x=>`<tr><td style="font-weight:600;">${esc(x.cliente)}</td><td style="font-size:.66rem;color:#64748b;">${esc(x.nome)}</td><td>${x.semCC?'<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:800;">CC não preenchido</span>':`<span class="badge" style="background:#fef9c3;color:#854d0e;font-weight:800;">${esc(String(x.cc))}</span>`}</td></tr>`).join(''),F.ctSemMovimento.length)+
+    tb('Técnicos do Milldesk sem cadastro em Funcionários','Lançam horas mas não têm salário/capacidade cadastrados — entram nos custos com o valor padrão do nível.','#7c3aed',
+      ['Técnico'],F.tecSemCadastro.map(n=>`<tr><td style="font-weight:600;">${esc(n)}</td></tr>`).join(''),F.tecSemCadastro.length)+
+    tb('Funcionários cadastrados que não aparecem no Milldesk','Estão em Admin → Funcionários mas não lançaram nenhuma hora — conferir se saíram da empresa ou se o nome está diferente no Milldesk.','#0891b2',
+      ['Funcionário'],F.funcSemMd.map(n=>`<tr><td style="font-weight:600;">${esc(n)}</td></tr>`).join(''),F.funcSemMd.length);
+  const confOk=F.total?'':`<div class="card mb-3" style="background:#f0fdf4;border:1px solid #dcfce7;"><div style="font-size:.78rem;font-weight:800;color:#166534;">✓ Cadastro e Milldesk batem</div><div style="font-size:.66rem;color:#475569;margin-top:.25rem;">Todos os locais têm contrato, todos os contratos têm movimento e todos os técnicos estão cadastrados.</div></div>`;
+  const cabConf=`<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">Cadastro × Milldesk${F.total?` · <span style="color:#dc2626;">${F.total} ponto(s) de atenção</span>`:''}</div>`;
+  const cabMud=`<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin:1.1rem 0 .5rem;">Mudanças desde a última foto</div>`;
+  if(d.semBase)return head+cabConf+conf+confOk+cabMud+`<div class="card" style="background:#eff6ff;border:1px solid #dbeafe;"><div style="font-size:.78rem;font-weight:800;color:#1d4ed8;margin-bottom:.3rem;">Nenhuma foto de referência ainda</div><div style="font-size:.68rem;color:#475569;line-height:1.6;margin-bottom:.7rem;">Hoje existem <b>${Object.keys(d.cur.locais).length}</b> locais e <b>${d.cur.tecnicos.length}</b> técnicos no Milldesk. Salve esta foto para que, a partir do próximo sync, qualquer inclusão, exclusão ou renomeação apareça aqui.</div>${btn}</div>`;
   const quando=d.base.ts?new Date(d.base.ts).toLocaleString('pt-BR'):'-';
-  if(!d.total)return head+`<div class="card" style="background:#f0fdf4;border:1px solid #dcfce7;"><div style="font-size:.8rem;font-weight:800;color:#166534;">✓ Nenhuma discrepância</div><div style="font-size:.66rem;color:#475569;margin-top:.3rem;">Locais e técnicos batem com a foto de <b>${esc(quando)}</b> (${Object.keys(d.cur.locais).length} locais · ${d.cur.tecnicos.length} técnicos).</div></div>`;
+  if(!d.total)return head+cabConf+conf+confOk+cabMud+`<div class="card" style="background:#f0fdf4;border:1px solid #dcfce7;"><div style="font-size:.8rem;font-weight:800;color:#166534;">✓ Nenhuma mudança</div><div style="font-size:.66rem;color:#475569;margin-top:.3rem;">Locais e técnicos batem com a foto de <b>${esc(quando)}</b> (${Object.keys(d.cur.locais).length} locais · ${d.cur.tecnicos.length} técnicos).</div></div>`;
   const bloco=(titulo,cor,bg,itens,render)=>itens.length?`<div class="card mb-3" style="border-left:3px solid ${cor};"><div style="font-size:.74rem;font-weight:800;color:${cor};margin-bottom:.4rem;">${titulo} (${itens.length})</div><div style="display:flex;flex-wrap:wrap;gap:.3rem;">${itens.map(render).join('')}</div></div>`:'';
   const chip=(txt,cor,bg)=>`<span style="background:${bg};color:${cor};border-radius:.35rem;padding:.15rem .45rem;font-size:.66rem;font-weight:700;">${esc(txt)}</span>`;
   const corpo=
@@ -1586,7 +1640,7 @@ function rCadDiscrep(){
     bloco('Técnicos novos','#166534','#dcfce7',d.tecNovos,n=>chip(n,'#166534','#dcfce7'))+
     bloco('Técnicos que sumiram','#991b1b','#fee2e2',d.tecSumidos,n=>chip(n,'#991b1b','#fee2e2'));
   const aviso=`<div class="card" style="font-size:.62rem;color:#64748b;line-height:1.6;"><b style="color:#0f172a;">Como ler:</b> a comparação usa os dados <b>carregados no período selecionado</b>. Um local ou técnico sem nenhum chamado/atividade no período aparece como "sumiu" mesmo sem ter sido apagado — para uma leitura limpa, use um período largo (Anual) antes de aceitar a foto. <b>Renomeado</b> = o mesmo centro de custo passou a vir com outro nome de cliente, o que costuma quebrar o casamento com o contrato.</div>`;
-  return head+`<div class="card mb-3" style="background:#fffbeb;border:1px solid #fde68a;"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="triangle-alert" style="width:1rem;height:1rem;color:#b45309;"></i><span style="font-size:.8rem;font-weight:800;color:#92400e;">${d.total} mudança(s) desde a foto de ${esc(quando)}</span><span style="margin-left:auto;">${btn}</span></div></div>`+corpo+aviso;
+  return head+cabConf+conf+confOk+cabMud+`<div class="card mb-3" style="background:#fffbeb;border:1px solid #fde68a;"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="triangle-alert" style="width:1rem;height:1rem;color:#b45309;"></i><span style="font-size:.8rem;font-weight:800;color:#92400e;">${d.total} mudança(s) desde a foto de ${esc(quando)}</span><span style="margin-left:auto;">${btn}</span></div></div>`+corpo+aviso;
 }
 // ═══ CENTRAL DE RELATÓRIOS (Executiva) — todos os clientes, mesmo padrão dos relatórios da Sustentação ═══
 const EXEC_REPS={geral:'Relatório Executivo',contratos:'Contratos & Escopo',tecnicos:'Horas por Técnico',clientes:'Resultado por Cliente',avulsas:'Horas Avulsas',completo:'Relatório Completo'};
@@ -1782,19 +1836,26 @@ function rExecGeral(){
   // Horas a consumir DA EQUIPE: capacidade dos técnicos no período − horas já trabalhadas (limite físico de entrega)
   const _saldoEquipe=(A.capMin||0)-(A.horasMin||0)
   // Chamados: fechados vs pendentes (tickets do período, respeitando o filtro de cliente)
-  const _tkF=(MD.tickets||[]).filter(t=>{const ct=mdContractForCC(t.cc);return cliMatchFilter(ct?ct.cliente:((t.loc||'').split('|')[0].trim()))})
+  const _cliDeTk=t=>{const ct=mdContractForCC(t.cc);return ct?ct.cliente:((t.loc||'').split('|')[0].trim())}
   const _isOpen=t=>(typeof mdIsOpen==='function')?mdIsOpen(t.st):false
-  const _chFech=new Set(_tkF.filter(t=>!_isOpen(t)).map(t=>t.id)).size,_chPend=new Set(_tkF.filter(_isOpen).map(t=>t.id)).size
+  // FECHADOS = tickets do período já encerrados. PENDENTES = backlog de abertos AGORA (qualquer status que não seja
+  // fechado/resolvido/cancelado), independente do período — é o "Solicitações ainda abertas" do Milldesk.
+  const _tkF=(MD.tickets||[]).filter(t=>cliMatchFilter(_cliDeTk(t)))
+  const _chFech=new Set(_tkF.filter(t=>!_isOpen(t)).map(t=>t.id)).size
+  const _pendArr=[];{const seen={};(MD.backlogFull||[]).forEach(t=>{if(!_isOpen(t)||seen[t.id]||!cliMatchFilter(_cliDeTk(t)))return;seen[t.id]=1;_pendArr.push(t)})}
+  const _chPend=_pendArr.length
   // Clientes estourando: em HORAS (uso da franquia >100%) e FINANCEIRAMENTE (custo das horas > receita do contrato)
   const _ctFil=CONTRACTS.filter(c=>c.status!=='arquivado'&&c.tipo_cobranca!=='interno'&&(COMPANY==='all'||c.empresa===COMPANY)&&(!CLI_SEL.size||CLI_SEL.has(c.cliente))&&(!TIPO_SEL.size||tipoMatchCt(c)))
-  let _estHH=0,_estFin=0
+  const _estHHArr=[],_estFinArr=[]
   _ctFil.forEach(ct=>{const c=matchClient(ct.cliente);if(!c)return
     const frH=(c.franq_minutos!=null?c.franq_minutos:c.horas_minutos)/60
-    if((ct.franquia_horas||0)>0&&frH>ct.franquia_horas)_estHH++
-    const rec=contractReceita(ct,c.chamados),cst=(c.horas_minutos/60)*_ch
-    if(rec>0&&cst>rec)_estFin++})
+    if((ct.franquia_horas||0)>0&&frH>ct.franquia_horas)_estHHArr.push({cliente:ct.cliente,contrato:ct.nome||'',cc:ct.cc,franq:ct.franquia_horas,horas:frH,uso:Math.round(frH/ct.franquia_horas*100)})
+    const rec=contractReceita(ct,c.chamados),cst=Math.round((c.horas_minutos/60)*_ch)
+    if(rec>0&&cst>rec)_estFinArr.push({cliente:ct.cliente,contrato:ct.nome||'',cc:ct.cc,receita:rec,custo:cst,excedente:cst-rec})})
   // Técnicos estourando H.H: horas trabalhadas acima da própria capacidade no período (FTE ≥ 100%)
-  const _tecEst=(D.recursos||[]).filter(r=>tecMatchFilter(r.nome)&&r.cap_minutos>0&&r.trab_minutos>r.cap_minutos).length
+  const _tecEstArr=(D.recursos||[]).filter(r=>tecMatchFilter(r.nome)&&r.cap_minutos>0&&r.trab_minutos>r.cap_minutos).map(r=>({nome:r.nome,nivel:r.nivel||'-',horas:r.trab_minutos,cap:r.cap_minutos,fte:Math.round(r.trab_minutos/r.cap_minutos*100)})).sort((a,b)=>b.fte-a.fte)
+  const _estHH=_estHHArr.length,_estFin=_estFinArr.length,_tecEst=_tecEstArr.length
+  _GE_POP={hh:_estHHArr.sort((a,b)=>b.uso-a.uso),fin:_estFinArr.sort((a,b)=>b.excedente-a.excedente),tec:_tecEstArr,pend:_pendArr}
   const _saldoFin=_recMaisAv-_custoMaisAv
   const empCards=['4Seniors','S4SYS','Porto Virtual'].map(emp=>{
     const d=companyStats(emp),ec=emp==='4Seniors'?'#2B4C9B':emp==='S4SYS'?'#7c3aed':'#166534',mC=d.margem==null?'#94a3b8':d.margem<0?'#ef4444':d.margem<20?'#f59e0b':'#22c55e'
@@ -1872,7 +1933,7 @@ function rExecGeral(){
     kpiCard(fmtR(Math.round(custoEmp)),'Custo Total','#854d0e','wallet','time técnico + demais áreas','Custo TOTAL da empresa no período: folha do time técnico + folha das demais áreas + despesas gerais lançadas em Admin → Custos Adicionais.'),
     kpiCard(_mgTot!=null?_mgTot+'%':'-','Margem Global',mgTotC,'trending-up',fmtR(Math.round(receita-custoEmp))+' líquido','(Receita Total − Custo Total) ÷ Receita Total.'),
     kpiCard(A.fte+'%','FTE Global',fteC,'activity',minToHM(A.horasMin)+'h','Horas trabalhadas ÷ capacidade dos técnicos do escopo (dias úteis × 8h por pessoa). 100% = 1 pessoa cheia; acima disso, sobrecarga.'),
-    kpiCard(auto.length,'Alertas Ativos',alerC,'triangle-alert',auto.filter(a=>a.lv==='critica').length+' críticos','Alertas automáticos ativos (pessoas, contratos, chamados) no escopo atual.')
+    kpiCard(`<span onclick="setSub('alertas')" title="Abrir a aba Alertas" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${auto.length}</span>`,'Alertas Ativos',alerC,'triangle-alert',`<span onclick="setSub('alertas')" style="cursor:pointer;text-decoration:underline dotted;">${auto.filter(a=>a.lv==='critica').length} críticos · ver aba →</span>`,'Alertas automáticos ativos (pessoas, contratos, chamados) no escopo atual. Clique para abrir a aba Alertas.')
   ],'grid-cols-2 md:grid-cols-3 lg:grid-cols-5')
 +_grp('Horas',[
     kpiCard(minToHM(A.horasMin)+'h','H.H Consumido','#2B4C9B','clock','trabalhado no período','Horas realmente trabalhadas pelos técnicos (worked_hour do Milldesk) no escopo/período.'),
@@ -1881,14 +1942,14 @@ function rExecGeral(){
     kpiCard(minToHM(_avMin)+'h','Horas Avulsas','#7c3aed','receipt',`<span onclick="execAvulsasModal()" style="cursor:pointer;text-decoration:underline dotted;">${fmt(_avArr.length)} lanç. · clique p/ ver →</span>`,'Horas a cobrar (relatório de atividades a cobrar do Milldesk) — não entram na franquia.')
   ],'grid-cols-2 md:grid-cols-4')
 +_grp('Atendimento',[
-    kpiCard(`<span style="color:#16a34a;">${fmt(_chFech)}</span> <span style="color:#cbd5e1;">/</span> <span style="color:#f59e0b;">${fmt(_chPend)}</span>`,'Chamados','#0f766e','circle-check','fechados / pendentes','Chamados do período no filtro: FECHADOS (status resolvido/encerrado) e PENDENTES (ainda em aberto no Milldesk).'),
+    kpiCard(`<span style="color:#16a34a;">${fmt(_chFech)}</span> <span style="color:#cbd5e1;">/</span> <span onclick="geEstourandoModal('pend')" title="Ver os chamados pendentes" style="color:#f59e0b;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${fmt(_chPend)}</span>`,'Chamados','#0f766e','circle-check','fechados no período / <span onclick="geEstourandoModal(\'pend\')" style="cursor:pointer;text-decoration:underline dotted;">pendentes agora →</span>','FECHADOS = chamados do período já encerrados. PENDENTES = tudo que NÃO está fechado/resolvido no Milldesk neste momento (backlog aberto), independente do período — é o "Solicitações ainda abertas" do Milldesk.'),
     kpiCard(fmt(nAtiv),'Atividades','#0891b2','list-checks','no período','Nº de apontamentos (lançamentos de atividade) no período e filtro atuais.'),
-    kpiCard(fmt(_estHH),'Clientes Estourando em HH',_estHH?'#ef4444':'#22c55e','trending-up','uso acima da franquia','Clientes cujas horas consumidas passaram de 100% da franquia mensal contratada.'),
-    kpiCard(fmt(_tecEst),'Técnicos Estourando HH',_tecEst?'#ef4444':'#22c55e','user-cog','acima da própria capacidade','Técnicos que trabalharam mais horas do que a própria capacidade no período (FTE ≥ 100% = sobrecarga).')
+    kpiCard(`<span onclick="geEstourandoModal('hh')" title="Ver os clientes" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${fmt(_estHH)}</span>`,'Clientes Estourando em HH',_estHH?'#ef4444':'#22c55e','trending-up','<span onclick="geEstourandoModal(\'hh\')" style="cursor:pointer;text-decoration:underline dotted;">uso acima da franquia →</span>','Clientes cujas horas consumidas passaram de 100% da franquia mensal contratada. Clique para ver a lista.'),
+    kpiCard(`<span onclick="geEstourandoModal('tec')" title="Ver os técnicos" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${fmt(_tecEst)}</span>`,'Técnicos Estourando HH',_tecEst?'#ef4444':'#22c55e','user-cog','<span onclick="geEstourandoModal(\'tec\')" style="cursor:pointer;text-decoration:underline dotted;">acima da capacidade →</span>','Técnicos que trabalharam mais horas do que a própria capacidade no período (FTE ≥ 100% = sobrecarga). Clique para ver a lista.')
   ],'grid-cols-2 md:grid-cols-4')
 +_grp('Financeiro',[
     kpiCard(fmtR(_saldoFin),'Saldo',_saldoFin<0?'#ef4444':'#16a34a','scale','receita − custo (c/ avulsas)','Resultado do período: (Receita + Avulsas) − (Custo com Avulsas). Positivo = sobra; negativo = o custo passou da receita.'),
-    kpiCard(fmt(_estFin),'Clientes estourando financeiramente',_estFin?'#ef4444':'#22c55e','alert-circle','custo da hora > receita','Clientes cujo custo das horas trabalhadas (horas × custo-hora) já passou o valor do contrato — o atendimento está saindo mais caro do que rende.'),
+    kpiCard(`<span onclick="geEstourandoModal('fin')" title="Ver os clientes" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${fmt(_estFin)}</span>`,'Clientes estourando financeiramente',_estFin?'#ef4444':'#22c55e','alert-circle','<span onclick="geEstourandoModal(\'fin\')" style="cursor:pointer;text-decoration:underline dotted;">custo da hora > receita →</span>','Clientes cujo custo das horas trabalhadas (horas × custo-hora) já passou o valor do contrato — o atendimento está saindo mais caro do que rende. Clique para ver a lista.'),
     kpiCard(fmtR(_recMaisAv),'Receita + Avulsas','#166534','trending-up',fmtR(Math.round(_avFatR))+' em avulsas','Receita dos contratos + as horas avulsas faturadas pelo R$/h avulsa de cada contrato.'),
     kpiCard(fmtR(_custoMaisAv),'Custo com Avulsas','#b45309','coins','+ custo das avulsas','Custo Equipe (folha rateada) + o custo de mão de obra das horas avulsas.')
   ],'grid-cols-2 md:grid-cols-4')
@@ -1955,7 +2016,7 @@ function rExecClientes(){
   // Custo-hora aplicado: campo que alimenta as colunas Custo H.H / Margem oper. / Situação (vindo da antiga aba "Custo-Hora × Contrato")
   const _chCfg=getAlertCfg().custo_hora;
   const chRow=`<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem;font-size:.66rem;color:#475569;"><span style="font-weight:700;">Custo-hora técnica (R$/h):</span><input type="number" min="0" step="10" value="${_chCfg||''}" placeholder="${custoHoraDefault()}" onchange="setCustoHora(this.value)" style="width:110px;padding:.3rem .5rem;border:1px solid var(--border);border-radius:.4rem;font-size:.72rem;"><span style="color:#94a3b8;">vazio = padrão derivado (${fmtR(custoHoraDefault())}/h) · alimenta <b>Custo H.H</b>, <b>Margem oper.</b> e <b>Situação</b></span></div>`;
-  return rExecCustoHora('cards')+chRow+colBar+cards+`<div style="font-size:.59rem;color:#94a3b8;">* <b>Custo est.</b> = folha do período rateada pelas horas do cliente. <b>Custo H.H</b> = horas reais × custo-hora aplicado (métodos diferentes, por isso os dois aparecem). Receita por chamado = valor/chamado × chamados.</div>`
+  return chRow+colBar+cards+`<div style="font-size:.59rem;color:#94a3b8;">* <b>Custo est.</b> = folha do período rateada pelas horas do cliente. <b>Custo H.H</b> = horas reais × custo-hora aplicado (métodos diferentes, por isso os dois aparecem). Receita por chamado = valor/chamado × chamados.</div>`
 }
 
 function rExecCustoHora(mode){
