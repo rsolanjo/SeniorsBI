@@ -274,7 +274,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v153'
+const APP_VERSION='v154'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1037,7 +1037,6 @@ function renderContent(){
     {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='none';if(_fb)_fb.style.display='none'}
     const chrome=liteChrome();
     if((MD.loading||MD.ativsLoading)&&LITE_SUB!=='cadastro'){el.innerHTML=chrome+`<div class="card" style="text-align:center;color:#334155;padding:2.5rem 1rem;"><div style="width:2rem;height:2rem;border:3px solid #e2e8f0;border-top-color:#2B4C9B;border-radius:50%;margin:0 auto .8rem;animation:spin .8s linear infinite;"></div><div style="font-weight:800;">Sincronizando com o Milldesk…</div><div style="font-size:.72rem;color:#94a3b8;margin-top:.35rem;">Buscando atividades e horas a cobrar do período selecionado.</div></div>`;if(window.lucide)lucide.createIcons();return}
-    if(LITE_SUB==='cadastro'){el.innerHTML=chrome+rLiteContratos()+'<div style="height:1rem;"></div>'+rLiteFunc();if(window.lucide)lucide.createIcons();return}
     if(LITE_SUB==='avulsas'){el.innerHTML=chrome+rLiteAvulsas();if(window.lucide)lucide.createIcons();return}
     if(LITE_SUB==='relatorios'){el.innerHTML=chrome+rLiteRelatorios();if(window.lucide)lucide.createIcons();return}
     if(LITE_SUB==='auditor'){el.innerHTML=chrome+rLiteAuditor();if(window.lucide)lucide.createIcons();return}
@@ -1317,7 +1316,7 @@ function rExecRiscos(auto){
 }
 // ─── Sustentação (antigo Lite) — agora sub-aba da Executiva; nav interna reusa as views da Lite ───
 function sustNav(){
-  const tabs=[['painel','Painel'],['avulsas','Horas Avulsas'],['relatorios','Relatórios'],['auditor','Auditor'],['cadastro','Cadastro']];
+  const tabs=[['painel','Painel'],['avulsas','Horas Avulsas'],['relatorios','Relatórios'],['auditor','Auditor']];
   const btns=tabs.map(([k,l])=>`<button onclick="setLiteSub('${k}')" style="cursor:pointer;border:none;border-radius:.4rem;padding:.3rem .7rem;font-size:.7rem;font-weight:800;background:${LITE_SUB===k?'#2B4C9B':'#f1f5f9'};color:${LITE_SUB===k?'#fff':'#475569'};">${l}</button>`).join('');
   const valBtn=canVal()?`<button onclick="liteToggleVal()" style="cursor:pointer;border:none;border-radius:.4rem;padding:.3rem .7rem;font-size:.7rem;font-weight:800;background:${LITE_VAL?'#fef9c3':'#e0e7ff'};color:${LITE_VAL?'#854d0e':'#3730a3'};">${LITE_VAL?'Ocultar valores':'Mostrar valores'}</button>`:'';
   return `<div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem;"><span style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-right:.3rem;">Sustentação · 3 contratos gerenciados</span>${btns}<span style="margin-left:auto;">${valBtn}</span></div>`;
@@ -1328,7 +1327,6 @@ function renderSustentacao(el){
   if(LITE_SUB==='avulsas')put(rLiteAvulsas());
   else if(LITE_SUB==='relatorios')put(rLiteRelatorios());
   else if(LITE_SUB==='auditor')put(rLiteAuditor());
-  else if(LITE_SUB==='cadastro')put(rLiteContratos()+'<div style="height:1rem;"></div>'+rLiteFunc());
   else rLimitado().then(put);
 }
 // dados de UM contrato (mesma lógica de casamento do painel) — usado pelo modal de detalhe e pelo CSV
@@ -1642,8 +1640,8 @@ function rExecRiscosFull(){
   const auto=buildAutoAlerts().concat(buildMdAlerts()).concat(buildChamadoHorasAlerts());
   const ord={critica:0,alta:1,media:2,baixa:3};auto.sort((a,b)=>(ord[a.lv]==null?9:ord[a.lv])-(ord[b.lv]==null?9:ord[b.lv]));
   const crit=auto.filter(a=>a.lv==='critica').length,altos=auto.filter(a=>a.lv==='alta').length;
-  const treat=getIncid(),incAll=MD.loaded?mdInconsistencias():[],incPend=incAll.filter(x=>(treat[x.key]&&treat[x.key].status)!=='resolvido').length;
-  const franqExtrap=(D.clientes||[]).filter(c=>{const fr=cliFranquia(c.nome);return fr&&Math.round(c.horas_minutos/60)>fr}).length;
+  const treat=getIncid(),incAll=MD.loaded?mdInconsistencias():[],incPend=incAll.filter(x=>cliMatchFilter(x.cliente)&&(treat[x.key]&&treat[x.key].status)!=='resolvido').length;
+  const franqExtrap=(D.clientes||[]).filter(c=>cliMatchFilter(c.nome)&&(()=>{const fr=cliFranquia(c.nome);return fr&&Math.round((c.franq_minutos!=null?c.franq_minutos:c.horas_minutos)/60)>fr})()).length;
   const g=companyStats('all');
   const sev=crit>=5?{t:'Ação imediata',c:'#dc2626',b:'#fee2e2'}:crit>0?{t:'Atenção',c:'#b45309',b:'#fef9c3'}:auto.length?{t:'Sob controle',c:'#166534',b:'#dcfce7'}:{t:'Tudo limpo',c:'#166534',b:'#dcfce7'};
   const temaDe=a=>(RISCO_TEMAS.find(t=>t.cats.includes(a.cat))||{k:'entrega'}).k;
@@ -1667,7 +1665,7 @@ function rExecRiscosFull(){
       <span style="background:${sev.b};color:${sev.c};font-size:.7rem;font-weight:900;border-radius:.4rem;padding:.18rem .6rem;">${sev.t}</span>
       <span style="font-size:.68rem;color:#94a3b8;">o que precisa de decisão, agrupado por tema</span>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(fmt(crit),'Alertas críticos',crit?'#dc2626':'#16a34a','triangle-alert',altos+' altos · '+auto.length+' no total')}<div onclick="setSection('tech');setSub('alertas');setAlSub('incid')" style="cursor:pointer;" title="Abrir os apontamentos inconsistentes em Técnica → Alertas & Inconsistências">${kpiCard(fmt(incPend),'Inconsistências abertas',incPend?'#b45309':'#16a34a','search','clique p/ ver os apontamentos →')}</div>${kpiCard(fmt(franqExtrap),'Franquias estouradas',franqExtrap?'#dc2626':'#16a34a','file-text','clientes acima do contratado')}${kpiCard(g.margem!=null?g.margem+'%':'-','Margem global',g.margem==null?'#94a3b8':g.margem<0?'#dc2626':g.margem<20?'#b45309':'#16a34a','trending-up','receita − custo')}</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${kpiCard(fmt(crit),'Alertas críticos',crit?'#dc2626':'#16a34a','triangle-alert',altos+' altos · '+auto.length+' no total')}<div onclick="execIncModal()" style="cursor:pointer;" title="Ver os apontamentos inconsistentes">${kpiCard(fmt(incPend),'Inconsistências abertas',incPend?'#b45309':'#16a34a','search','clique p/ ver os apontamentos →')}</div>${kpiCard(fmt(franqExtrap),'Franquias estouradas',franqExtrap?'#dc2626':'#16a34a','file-text','clientes acima do contratado')}${kpiCard(g.margem!=null?g.margem+'%':'-','Margem global',g.margem==null?'#94a3b8':g.margem<0?'#dc2626':g.margem<20?'#b45309':'#16a34a','trending-up','receita − custo')}</div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">${cols}</div>`;
 }
 function rExecAlertas(){
@@ -2516,7 +2514,7 @@ window.liteBuscarPeriodo=function(){const de=(document.getElementById('litePDe')
 // Cabeçalho próprio da Lite — marca em destaque + abas + filtro + ocultar/exportar + versão completa
 function liteChrome(){
   const md=getMD(),live=!!md.key&&MD.loaded;
-  const tabs=[['painel','Painel'],['avulsas','Horas Avulsas'],['relatorios','Relatórios'],['auditor','Auditor'],['cadastro','Cadastro']].map(([k,l])=>`<button onclick="setLiteSub('${k}')" class="sub-tab ${LITE_SUB===k?'active':''}">${l}</button>`).join('');
+  const tabs=[['painel','Painel'],['avulsas','Horas Avulsas'],['relatorios','Relatórios'],['auditor','Auditor']].map(([k,l])=>`<button onclick="setLiteSub('${k}')" class="sub-tab ${LITE_SUB===k?'active':''}">${l}</button>`).join('');
   const times=[['mensal','Mensal parcial'],['diario','Hoje'],['semana','Semana corrente'],['mesant','Mês anterior'],['anual','Anual'],['periodo','Data específica']].map(([k,l])=>`<button onclick="liteTime('${k}')" class="time-btn ${TIME===k?'active':''}">${l}</button>`).join('');
   const _r=(function(){try{return mdPeriodRange()}catch(e){return[MD_ATV_START,MD_ATV_END]}})();
   const periodoLabel=(_r&&_r[0])?`<span style="display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;color:#334155;font-weight:700;background:#eef2ff;border:1px solid #dbeafe;border-radius:.5rem;padding:.28rem .55rem;white-space:nowrap;"><i data-lucide="calendar" style="width:.78rem;height:.78rem;color:#2B4C9B;"></i>${_r[0]===_r[1]?brDate(_r[0]):brDate(_r[0])+' a '+brDate(_r[1])}</span>`:'';
@@ -2958,6 +2956,16 @@ function rIncidencias(){
 <div class="card mb-4">${ST('Validação manual de apontamentos - coerência horas × serviço')}<div style="font-size:.66rem;color:#64748b;margin-bottom:.6rem;">Registre apontamentos suspeitos (ex.: "10h para trocar pilha do mouse") e marque como verificado após checar.</div><div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2"><input id="apTec" class="fi" placeholder="Técnico" style="padding:.3rem .5rem;font-size:.72rem;"><input id="apCli" class="fi" placeholder="Cliente" style="padding:.3rem .5rem;font-size:.72rem;"><input id="apAtiv" class="fi" placeholder="Atividade" style="padding:.3rem .5rem;font-size:.72rem;"><input id="apH" class="fi" placeholder="Horas" style="padding:.3rem .5rem;font-size:.72rem;"><input id="apMot" class="fi" placeholder="Motivo" style="padding:.3rem .5rem;font-size:.72rem;"></div><button onclick="addApont()" style="display:inline-flex;align-items:center;gap:.3rem;padding:.33rem .72rem;background:var(--brand);color:white;border:none;border-radius:.43rem;font-size:.7rem;font-weight:700;cursor:pointer;margin-bottom:.6rem;"><i data-lucide="plus" style="width:.7rem;height:.7rem;"></i>Registrar</button><div class="overflow-x-auto"><table><thead><tr><th>Técnico</th><th>Cliente</th><th>Atividade</th><th>Horas</th><th>Motivo</th><th>Status</th><th>Ações</th></tr></thead><tbody>${revRows||'<tr><td colspan="7" style="color:#94a3b8;padding:1rem;text-align:center;">Nenhum apontamento em revisão.</td></tr>'}</tbody></table></div></div>
 <div class="card">${ST('Referência - gatilhos de reclassificação por contrato (editável em cada contrato)')}<div style="font-size:.64rem;color:#94a3b8;margin-bottom:.4rem;">Clique em "editar" para ajustar os gatilhos de um contrato.</div>${CONTRACTS.filter(c=>c.status!=='arquivado').flatMap(c=>effGatilhos(c).map(g=>({c,g}))).map(x=>`<div style="display:flex;gap:.4rem;align-items:center;font-size:.67rem;padding:.2rem 0;border-bottom:1px solid #f8fafc;"><span class="tag" style="flex-shrink:0;">${esc(x.c.cliente)}</span><span style="color:#475569;flex:1;">${esc(x.g)}</span><button onclick="openContractView('${x.c.id}')" style="background:none;border:none;color:var(--brand);cursor:pointer;font-size:.63rem;font-weight:700;flex-shrink:0;">editar</button></div>`).join('')||'<div style="font-size:.68rem;color:#94a3b8;">Nenhum gatilho definido. Edite nos contratos (Admin → Contratos → Ver).</div>'}</div>`
 }
+// Popup executivo das inconsistências (o executivo puro não acessa a Técnica) — respeita o filtro de cliente/empresa/tipo.
+window.execIncModal=function(){
+  const treat=getIncid(),all=(MD.loaded?mdInconsistencias():[]).filter(x=>cliMatchFilter(x.cliente));
+  const pend=all.filter(x=>(treat[x.key]&&treat[x.key].status)!=='resolvido');
+  const tb=t=>t==='Tempo'?'#854d0e':t==='Contrato'?'#991b1b':t==='Data'?'#6d28d9':t==='Descrição'?'#b45309':'#1d4ed8';
+  const rows=pend.slice(0,250).map(x=>`<tr style="border-top:1px solid #f1f5f9;"><td style="white-space:nowrap;font-size:.62rem;color:#64748b;padding:.2rem .3rem;">${esc(x.data||'-')}</td><td><span class="badge" style="background:${tb(x.tipo)}1a;color:${tb(x.tipo)};font-weight:700;">${esc(x.tipo)}</span></td><td style="font-family:monospace;font-size:.62rem;">#${esc(String(x.id))}</td><td style="font-size:.64rem;">${esc(x.cliente||'-')}</td><td style="font-size:.64rem;">${esc((x.tecnico||'-').split(' ').slice(0,2).join(' '))}</td><td style="font-size:.63rem;color:#475569;">${esc(x.motivo||'')}</td></tr>`).join('');
+  const filt=(CLI_SEL.size||COMPANY!=='all'||TIPO_SEL.size);
+  const html=`<div style="font-size:.68rem;color:#64748b;margin-bottom:.6rem;line-height:1.5;"><b>${pend.length}</b> apontamento(s) inconsistente(s)${filt?' <b>no filtro atual</b>':''} a revisar. Detecta: tempo excessivo numa atividade, descrição vazia/rasa/× tempo, local sem contrato, assunto de cliente em CC interno, data no futuro. O tratamento completo (marcar resolvido, anotar) fica em <b>Técnica → Alertas & Inconsistências</b> (admin).</div><div style="overflow:auto;max-height:60vh;"><table style="width:100%;border-collapse:collapse;"><thead><tr style="color:#94a3b8;text-align:left;font-size:.62rem;"><th>Data</th><th>Tipo</th><th>Chamado</th><th>Cliente</th><th>Técnico</th><th>Motivo</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="color:#22c55e;padding:1.2rem;text-align:center;">Nenhuma inconsistência no filtro. 👍</td></tr>'}</tbody></table>${pend.length>250?`<div style="font-size:.6rem;color:#94a3b8;margin-top:.4rem;">Mostrando 250 de ${pend.length}.</div>`:''}</div>`;
+  liteOpenModal('Inconsistências — apontamentos a revisar',html);
+};
 window.openIncid=function(ek){const key=decodeURIComponent(ek),x=(window._INC||[]).find(i=>i.key===key);if(!x)return;const treat=getIncid()[key]||{};document.getElementById('inBody').innerHTML=`<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;"><span class="badge ${x.tipo==='Tempo'?'badge-y':x.tipo==='Contrato'?'badge-r':'badge-b'}">${x.tipo}</span><h3 style="font-size:.95rem;font-weight:800;">Chamado #${esc(x.id)}</h3></div>
 <div style="display:flex;flex-wrap:wrap;gap:.9rem;background:#f8fafc;border:1px solid var(--border);border-radius:.5rem;padding:.7rem;margin-bottom:.7rem;"><div><div class="kpi-lbl">Data</div><div style="font-size:.8rem;font-weight:700;">${esc(x.data||'-')}</div></div><div><div class="kpi-lbl">Cliente</div><div style="font-size:.8rem;font-weight:700;">${esc(x.cliente)}</div></div><div><div class="kpi-lbl">Técnico</div><div style="font-size:.8rem;font-weight:700;">${esc(x.tecnico)}</div></div></div>
 <div style="font-size:.75rem;color:#334155;margin-bottom:.5rem;line-height:1.5;"><b>Motivo:</b> ${esc(x.motivo)}</div>${x.ctx?`<div style="font-size:.68rem;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.4rem;padding:.5rem .6rem;margin-bottom:.7rem;line-height:1.5;"><b>Contexto (atividades do chamado):</b> ${esc(x.ctx)}</div>`:''}
