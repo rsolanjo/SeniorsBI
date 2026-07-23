@@ -274,7 +274,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v154'
+const APP_VERSION='v155'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -551,7 +551,7 @@ const BASE_CONTRACTS=[
   _bc(20602,'Porto Virtual 602','Contrato 602','Porto Virtual',168,19000,'mensal'),
   _bc(20708,'Porto Virtual 708','Contrato 708','Porto Virtual',168,19000,'mensal'),
   _bc(201008,'Porto Virtual 1008','Contrato 1008','Porto Virtual',168,19000,'mensal'),
-  _bc(10,'Porto Virtual Geral','Centro de Custo Interno','Porto Virtual',168,0,'interno')
+  _bc(10,'PORTO VIRTUAL | 2.2 - Serviços internos','Serviços internos (2.2)','Porto Virtual',168,0,'interno')
 ]
 // Ajustes de tecnologias/tenants + tipo de atendimento
 ;(function(){
@@ -724,6 +724,16 @@ const stripHtml=s=>String(s==null?'':s).replace(/<[^>]+>/g,' ').replace(/&[a-z#0
 const mdCompact=r=>({id:r.id,t:r.ticket,loc:r.location,cc:mdCC(r.location),ag:r.agent,dep:r.department,lv:r.level,st:r.status,start:r.start,end:r.end,ana:r.analysis,reab:r.reopening,cat:r.category,subcat:r.subcategory,pri:r.priority,wh:mdWorkedMin(r.worked_hour),ch:mdWorkedMin(r.charge_hour),req:r.requester,grupo:r.stage,desc:stripHtml(r.description).slice(0,300)})
 const mdIsOpen=st=>!/fechad|resolvid|cancelad/i.test(st||'')
 function mdContractForCC(cc){return CONTRACTS.find(c=>String(c.cc)===String(cc))||null}
+// Porto Virtual: tudo é lançado no local "2.2 - Serviços internos". Roteamos por SALA (na descrição) para o CC do contrato da sala.
+const PORTO_ROOM_CC={'305':'20305','307':'20307','308':'20308','309':'20309','408':'20408','409':'20408','1007':'20408','602':'20602','708':'20708','1008':'201008'};
+function portoAttrib(a){
+  if(!/porto virtual/i.test(a.loc||''))return null;
+  const txt=(a.assunto||'')+' '+(a.desc||'')+' '+(a.atv||'');
+  const m=txt.match(/sala\s*(\d{3,4})/i)||txt.match(/porto\s*virtual\s*(\d{3,4})/i);
+  const room=m?m[1]:null,cc=room?PORTO_ROOM_CC[room]:null,ct=cc?mdContractForCC(cc):null;
+  if(ct)return{cliente:ct.cliente,cc,room};
+  return{cliente:'PORTO VIRTUAL | 2.2 - Serviços internos',cc:'10',room:room||null};// sem sala, ou sala sem contrato → 2.2 internos
+}
 // Resolve o nome do cliente a partir do "local" da atividade: CC numérico → nome (antes do 1º |) → interno.
 function mdLocCliente(loc){loc=String(loc||'').trim();if(!loc)return'-';const cc=mdCC(loc),ct=cc?mdContractForCC(cc):null;if(ct)return ct.cliente;const nm=loc.split('|')[0].trim();if(nm){const t=_norm(nm);const c2=CONTRACTS.find(c=>c.status!=='arquivado'&&_norm(c.cliente)&&(_norm(c.cliente)===t||_norm(c.cliente).includes(t)||t.includes(_norm(c.cliente))));if(c2)return c2.cliente}if(cc==='9'||cc==='10'||/geral/i.test(loc))return'Interno (Geral)';return nm||'-'}
 // Milldesk manda horas em "HH:MM" (ex.: 00:20 = 20 min); também aceita decimal (1.5) como fallback.
@@ -757,7 +767,7 @@ function mdEnrichedAtivs(){
   const key=(MD_ATV_START||'')+'|'+(MD_ATV_END||'')+'|'+((MD.ativs||[]).length)+'|'+((MD.tickets||[]).length)+'|'+((MD.backlogFull||[]).length)+'|'+(MD._enrBust||0);
   if(_enrCache&&_enrCache.key===key)return _enrCache.val;
   const s=MD_ATV_START,e=MD_ATV_END,tk={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t&&!tk[t.id])tk[t.id]=t})
-  const val=(MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)).map(a=>{const t=tk[a.tid],loc=a.loc||(t&&t.loc)||'';return{ag:a.ag,tid:a.tid,wh:a.wh||0,ch:a.ch||0,iso:mdActISO(a.start),cc:mdCC(loc),cliente:mdLocCliente(loc),cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'-',lv:(t&&t.lv)||''}}).filter(a=>!(s&&e)||(a.iso>=s&&a.iso<=e))
+  const val=(MD.ativs||[]).filter(a=>a.ag&&!isExcludedTech(a.ag)).map(a=>{const t=tk[a.tid],loc=a.loc||(t&&t.loc)||'';let cc=mdCC(loc),cliente=mdLocCliente(loc);const pa=portoAttrib(a);if(pa){cc=pa.cc;cliente=pa.cliente}return{ag:a.ag,tid:a.tid,wh:a.wh||0,ch:a.ch||0,iso:mdActISO(a.start),cc,cliente,cat:(t&&t.cat)||(MD.tkCat&&MD.tkCat[a.tid])||'-',lv:(t&&t.lv)||''}}).filter(a=>!(s&&e)||(a.iso>=s&&a.iso<=e))
   _enrCache={key,val};return val;
 }
 function mdApplyFromAtivs(){
@@ -835,6 +845,8 @@ function seedLocalData(){
   if(!CONTRACTS.length){CONTRACTS=BASE_CONTRACTS.map(c=>({...c}));setContracts(CONTRACTS)}
   dedupeContractIds()
   addExtraContracts()
+  // Migração: "Porto Virtual Geral" (CC 10) → "PORTO VIRTUAL | 2.2 - Serviços internos"
+  {let _m=0;CONTRACTS.forEach(c=>{if(c.cliente==='Porto Virtual Geral'){c.cliente='PORTO VIRTUAL | 2.2 - Serviços internos';c.nome='Serviços internos (2.2)';_m++}});if(_m)setContracts(CONTRACTS)}
 }
 // Contratos dos locais que tinham horas mas nenhum contrato (apareciam como "não atribuídas" no painel).
 // Migração ADITIVA: só insere o que falta, nunca sobrescreve o que já existe. Roda 1x (flag no localStorage).
@@ -3069,7 +3081,7 @@ function rContratos(){
   return`<div class="card overflow-x-auto"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.62rem;gap:.5rem;flex-wrap:wrap;">${ST('Contratos ('+list.length+(anyF?' de '+CONTRACTS.length:'')+')')}<div style="display:flex;gap:.4rem;margin-top:-.32rem;"><button onclick="reimportContracts()" style="display:flex;align-items:center;gap:.26rem;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:.4rem;padding:.33rem .7rem;font-size:.68rem;font-weight:700;cursor:pointer;"><i data-lucide="download" style="width:.7rem;height:.7rem;"></i>Reimportar base</button><button onclick="openContractNew()" style="display:flex;align-items:center;gap:.26rem;background:var(--brand);color:white;border:none;border-radius:.4rem;padding:.33rem .75rem;font-size:.68rem;font-weight:700;cursor:pointer;"><i data-lucide="plus" style="width:.7rem;height:.7rem;"></i>Novo</button></div></div>
 ${filterBar}
 <table><thead>${th}</thead><tbody>${rows||`<tr><td colspan="${nCols}" style="color:#94a3b8;padding:1.5rem;text-align:center;">Nenhum contrato${anyF?' no filtro':''}.</td></tr>`}</tbody>${tfoot}</table>
-<div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;">Centros de custo internos (4Seniors GERAL, S4SYS, Porto Virtual Geral) entram sem receita. Contratos sem valor no Excel foram carregados a R$ 19.000; os por chamado a R$ 100/ch; assinatura = hoje. Ajuste conforme necessário.</div></div>`
+<div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;">Centros de custo internos (4Seniors GERAL, S4SYS, PORTO VIRTUAL 2.2) entram sem receita. Contratos sem valor no Excel foram carregados a R$ 19.000; os por chamado a R$ 100/ch; assinatura = hoje. Ajuste conforme necessário.</div></div>`
 }
 window.reimportContracts=function(){confirmAction('Reimportar os 35 contratos da base (Excel)? Isso substitui a lista atual de contratos.',()=>{CONTRACTS=BASE_CONTRACTS.map(c=>({...c}));setContracts(CONTRACTS);renderContent();toast('Contratos reimportados da base.')})}
 
