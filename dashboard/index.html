@@ -274,7 +274,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v145'
+const APP_VERSION='v146'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -892,7 +892,7 @@ function buildAutoAlerts(){
   const _mAgg=mdMonthlyAgg(),_refYm=(MD_ATV_END||todayISO()).slice(0,7),_priorYms=[1,2,3].map(k=>ymAddMonths(_refYm,-k)),_yr=_refYm.slice(0,4)
   // Por técnico - só do roster ATIVO (xls). Técnico fora do roster já saiu → sem alerta de sobrecarga (item 6).
   D.recursos.forEach(r=>{
-    if(!getFunc(r.nome))return
+    if(!getFunc(r.nome)||!tecMatchFilter(r.nome))return
     const f=pct(r.trab_minutos,r.cap_minutos)
     // Sobrecarga NÃO se decide pelo período parcial. Compara as horas DO MÊS com a franquia mensal (cap_horas)
     // e só vira "sobrecarga" (crítica) se também estourou em mês(es) anterior(es) — recorrência. Aviso a partir de 80%.
@@ -914,7 +914,7 @@ function buildAutoAlerts(){
   })
   // Por cliente - franquia contratada. Mesma lógica de Pessoas: compara o MÊS com a franquia mensal.
   // Estourou (100%+) neste mês = crítica; 80%+ = aviso; abaixo de 80% não alerta. Sempre com o contexto do ano.
-  D.clientes.forEach(c=>{const fran=cliFranquia(c.nome);if(!fran)return;
+  D.clientes.forEach(c=>{const fran=cliFranquia(c.nome);if(!fran||!cliMatchFilter(c.nome))return;
     const capMin=fran*60,mm=_mAgg.cli[c.nome]||{},curMin=mm[_refYm]||0,uso=pct(curMin,capMin);
     const yrMes=Object.keys(mm).filter(y=>y.slice(0,4)===_yr),yrOver=yrMes.filter(y=>(mm[y]||0)>=capMin).length;
     const yrTxt=`no ano de ${_yr}: estourou ${yrOver} de ${yrMes.length} ${yrMes.length===1?'mês':'meses'} com dado`;
@@ -943,8 +943,9 @@ function buildChecklistAlerts(){
 function buildMdAlerts(){
   if(!MD.loaded)return[]
   const M=mdMetrics(),di=getAlertCfg().dias_inat||3,out=[]
-  M.semAtual.slice(0,12).forEach(t=>out.push({lv:t.dias>=di*3?'critica':'alta',cat:'Sem update',msg:`#${t.id} parado ${t.dias}d: ${(t.t||'').slice(0,48)}`,det:(mdContractForCC(t.cc)?.cliente||t.loc||'-')+' · '+(t.ag||'sem técnico')}))
-  M.reinc.slice(0,8).forEach(g=>out.push({lv:'media',cat:'Reincidência',msg:`${g.ids.length}× ${(g.titulo||'').slice(0,48)}`,det:(mdContractForCC(g.cc)?.cliente||g.loc||'-')}))
+  const cliDe=(cc,loc)=>mdContractForCC(cc)?.cliente||mdLocCliente(loc||'')||loc||''
+  M.semAtual.slice(0,40).filter(t=>cliMatchFilter(cliDe(t.cc,t.loc))&&tecMatchFilter(t.ag)).slice(0,12).forEach(t=>out.push({lv:t.dias>=di*3?'critica':'alta',cat:'Sem update',msg:`#${t.id} parado ${t.dias}d: ${(t.t||'').slice(0,48)}`,det:(cliDe(t.cc,t.loc)||'-')+' · '+(t.ag||'sem técnico')}))
+  M.reinc.slice(0,30).filter(g=>cliMatchFilter(cliDe(g.cc,g.loc))).slice(0,8).forEach(g=>out.push({lv:'media',cat:'Reincidência',msg:`${g.ids.length}× ${(g.titulo||'').slice(0,48)}`,det:(cliDe(g.cc,g.loc)||'-')}))
   return out
 }
 // Chamados AINDA ABERTOS que já acumularam MUITAS horas — custo/esforço alto sem fechar (sinal de retrabalho/complexidade)
@@ -953,8 +954,9 @@ function buildChamadoHorasAlerts(){
   const bk=(MD.backlogFull||[]);if(!bk.length||!MD.ativs)return[]
   const open=new Set(bk.map(t=>String(t.id))),info={};bk.forEach(t=>info[String(t.id)]=t)
   const byTk={};(MD.ativs||[]).forEach(a=>{if(!a||!open.has(String(a.tid)))return;byTk[a.tid]=(byTk[a.tid]||0)+(a.wh||0)})
-  return Object.entries(byTk).map(([id,mn])=>({id,mn,t:info[id]||{}})).filter(x=>x.mn>=10*60).sort((a,b)=>b.mn-a.mn).slice(0,8)
-    .map(x=>({lv:x.mn>=20*60?'critica':'alta',cat:'Chamado',msg:`#${x.id} com ${minToHM(x.mn)}h e ainda aberto: ${(x.t.t||'').slice(0,42)}`,det:(mdContractForCC(x.t.cc)?.cliente||x.t.loc||'-')+' · '+(x.t.ag||'sem técnico')}))
+  const cliDe=t=>mdContractForCC(t.cc)?.cliente||mdLocCliente(t.loc||'')||t.loc||''
+  return Object.entries(byTk).map(([id,mn])=>({id,mn,t:info[id]||{}})).filter(x=>x.mn>=10*60&&cliMatchFilter(cliDe(x.t))&&tecMatchFilter(x.t.ag)).sort((a,b)=>b.mn-a.mn).slice(0,8)
+    .map(x=>({lv:x.mn>=20*60?'critica':'alta',cat:'Chamado',msg:`#${x.id} com ${minToHM(x.mn)}h e ainda aberto: ${(x.t.t||'').slice(0,42)}`,det:(cliDe(x.t)||'-')+' · '+(x.t.ag||'sem técnico')}))
 }
 // Cadastro: contrato/técnico que aparece no Milldesk mas não está na lista master (Admin) → cadastrar no SeniorsTalent
 function buildCadastroAlerts(){
@@ -1034,7 +1036,7 @@ function renderContent(){
     rLimitado().then(h=>{el.innerHTML=chrome+h;if(window.lucide)lucide.createIcons()});return}
   if(_nav)_nav.style.display=(roleAreas().length>1)?'flex':'none';if(_st)_st.style.display=''
   {const _evb=document.getElementById('execValBtn');if(_evb)_evb.innerHTML=(SECTION==='exec')?`<button onclick="toggleExecVal()" style="cursor:pointer;border:none;border-radius:.42rem;padding:.24rem .6rem;font-size:.68rem;font-weight:800;background:${EXEC_VAL?'#fef9c3':'#e0e7ff'};color:${EXEC_VAL?'#854d0e':'#3730a3'};white-space:nowrap;">${EXEC_VAL?'👁 Ocultar valores':'👁 Mostrar valores'}</button>`:''}
-  {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display=(SECTION==='admin')?'none':'';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
+  {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display=(SECTION==='admin'||(SECTION==='exec'&&EXEC_SUB==='sustentacao'))?'none':'';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
   renderFilters();
   if(TIME==='comparar'){renderCompare();return}
   const standalone=SECTION==='admin'||SECTION==='fin'||(SECTION==='exec'&&EXEC_SUB==='sustentacao')||(SECTION==='tech'&&['chamados','parados','relacionados','checklists'].includes(TECH_SUB))
@@ -1459,10 +1461,15 @@ function rExecGeral(){
   // ── Horas por (técnico, cliente) e por (técnico, empresa) a partir das atividades do período ──
   // Base para a Receita REAL por técnico (por contrato) e para o Custo por atuação (por empresa).
   const _tcMin={},_pe={},EMPS=['4Seniors','S4SYS','Porto Virtual'];
+  // _pe (Custo por atuação) respeita os filtros ativos; _tcMin (Receita real do topFunc) fica cheio.
+  const _tipoOkAtu=TIPO_SEL.size?new Set((D.clientes||[]).map(c=>c.nome).filter(n=>getClientContracts(n).some(tipoMatchCt))):null;
+  const _atuFiltrado=!!(CLI_SEL.size||TEC_SEL.size||TIPO_SEL.size||COMPANY!=='all');
   mdEnrichedAtivs().forEach(a=>{const k=normName(a.ag),wh=a.wh||0;if(wh<=0)return;
     const tc=_tcMin[k]=_tcMin[k]||{};tc[a.cliente]=(tc[a.cliente]||0)+wh;
-    const empRaw=getClientEmpresa(a.cliente),emp=EMPS.includes(empRaw)?empRaw:'Interno / Gestão';
-    const pe=_pe[k]=_pe[k]||{};pe[emp]=(pe[emp]||0)+wh;
+    if(cliMatchFilter(a.cliente)&&tecMatchFilter(a.ag)&&(!_tipoOkAtu||_tipoOkAtu.has(a.cliente))){
+      const empRaw=getClientEmpresa(a.cliente),emp=EMPS.includes(empRaw)?empRaw:'Interno / Gestão';
+      const pe=_pe[k]=_pe[k]||{};pe[emp]=(pe[emp]||0)+wh;
+    }
   });
   const cliRate=nome=>{const fr=cliFranquia(nome),vl=cliValor(nome);return(fr>0&&vl>0)?vl/fr:0};// R$/h do contrato = valor mensal ÷ franquia
   const recRealDe=nome=>{const m=_tcMin[normName(nome)]||{};return Math.round(Object.entries(m).reduce((s,[cli,mn])=>s+(mn/60)*cliRate(cli),0))};
@@ -1470,7 +1477,7 @@ function rExecGeral(){
   const BUCKETS=['4Seniors','S4SYS','Porto Virtual','Interno / Gestão'];
   const _atu={};BUCKETS.forEach(b=>_atu[b]={min:0,custo:0,pes:new Set()});
   _fsAll.forEach(f=>{const k=normName(f.nome),pe=_pe[k]||{},tot=Object.values(pe).reduce((s,v)=>s+v,0),sal=getSalario(f.nome,f.nivel)*_pf;
-    if(tot<=0){_atu['Interno / Gestão'].custo+=sal;_atu['Interno / Gestão'].pes.add(f.nome);return}
+    if(tot<=0){if(!_atuFiltrado){_atu['Interno / Gestão'].custo+=sal;_atu['Interno / Gestão'].pes.add(f.nome)}return}
     Object.entries(pe).forEach(([b,mn])=>{const o=_atu[b]||(_atu[b]={min:0,custo:0,pes:new Set()});o.min+=mn;o.custo+=sal*(mn/tot);o.pes.add(f.nome)})});
   const _atuTotal=BUCKETS.reduce((s,b)=>s+_atu[b].custo,0);
   // Top funcionários - financeiro: receita ATRIBUÍDA por rateio de horas + receita REAL por contrato (R$/h × horas no contrato)
@@ -1530,7 +1537,7 @@ function rExecClientes(){
     const c=matchClient(ct.cliente)||{horas_minutos:0,chamados:0}
     const uso=ct.franquia_horas?pct(Math.round(c.horas_minutos/60),ct.franquia_horas):null,usC=uso==null?'#64748b':uso>100?'#ef4444':uso>=80?'#f59e0b':'#22c55e'
     const custo=D.totalHoras>0?Math.round(c.horas_minutos/D.totalHoras*totalCusto):0,rec=contractReceita(ct,c.chamados)
-    const mg=rec&&custo?Math.round((rec-custo)/rec*100):null,mgC=mg==null?'#94a3b8':mg<0?'#ef4444':mg<20?'#f59e0b':'#22c55e'
+    const mg=rec>0?Math.round((rec-custo)/rec*100):null,mgC=mg==null?'#94a3b8':mg<0?'#ef4444':mg<20?'#f59e0b':'#22c55e'
     return`<tr><td>${empBadge(ct.empresa)}</td><td style="font-weight:600;">${cliDisp(ct.cliente)}</td>${CC.contrato?`<td style="color:#64748b;">${esc(ct.nome)}</td>`:''}${CC.atend?`<td>${atendBadge(ct.tipo_atendimento)}</td>`:''}${CC.tec?`<td>${techTags(ct.tecnologias)}</td>`:''}<td>${minToHM(c.horas_minutos)}h</td><td style="color:#64748b;">${ct.franquia_horas?ct.franquia_horas+'h':'-'}</td><td style="color:${usC};font-weight:700;">${uso!=null?uso+'%':'-'}</td><td>${fmt(c.chamados)}</td><td style="color:#166534;font-weight:700;">${rec?fmtR(rec):'-'}</td><td style="color:#854d0e;">${fmtR(custo)}</td><td style="color:${mgC};font-weight:800;">${mg!=null?mg+'%':'-'}</td>${CC.sla?`<td style="font-size:.66rem;color:#64748b;">${ct.sla_atend_h!=null?ct.sla_atend_h+'h/'+ct.sla_resol_h+'h':'-'}</td>`:''}${CC.acoes?`<td><button class="act-btn act-edit" onclick="openContractEdit('${ct.id}')">Editar</button></td>`:''}</tr>`
   }
   const cards=empresas.map(emp=>{
