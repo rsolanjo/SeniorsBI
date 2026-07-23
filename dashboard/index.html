@@ -277,7 +277,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v164'
+const APP_VERSION='v165'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1261,9 +1261,9 @@ window.geEstourandoModal=function(tipo){
   if(tipo==='fin')return wrap('Clientes estourando financeiramente ('+L.length+')',['Cliente','Contrato','CC','Receita','Custo das horas','Excedente'],
     L.map(x=>`<tr><td style="font-weight:700;">${esc(x.cliente)}</td><td style="font-size:.66rem;color:#64748b;">${esc(x.contrato)}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(String(x.cc||'—'))}</span></td><td style="color:#166534;">${fmtR(x.receita)}</td><td style="color:#854d0e;font-weight:700;">${fmtR(x.custo)}</td><td style="color:#dc2626;font-weight:800;">${fmtR(x.excedente)}</td></tr>`).join(''),
     'Clientes cujo <b>custo das horas trabalhadas</b> (horas × custo-hora) já passou o valor do contrato.');
-  if(tipo==='tec')return wrap('Técnicos estourando H.H ('+L.length+')',['Técnico','Nível','Horas','Capacidade','FTE'],
-    L.map(x=>`<tr><td style="font-weight:700;">${esc(techDisp(x.nome))}</td><td><span class="tag">${esc(x.nivel)}</span></td><td style="font-weight:700;">${minToHM(x.horas)}h</td><td style="color:#64748b;">${minToHM(x.cap)}h</td><td style="font-weight:800;color:#dc2626;">${x.fte}%</td></tr>`).join(''),
-    'Técnicos que trabalharam <b>mais horas do que a própria capacidade</b> no período (sobrecarga).');
+  if(tipo==='tec')return wrap('Técnicos estourando H.H ('+L.length+')',['Técnico','Nível','Horas','Capacidade (cadastro)','Excedente','FTE'],
+    L.map(x=>`<tr><td style="font-weight:700;">${esc(techDisp(x.nome))}</td><td><span class="tag">${esc(x.nivel)}</span></td><td style="font-weight:700;">${minToHM(x.horas)}h</td><td style="color:#64748b;">${minToHM(x.cap)}h</td><td style="color:#dc2626;font-weight:700;">+${minToHM(x.horas-x.cap)}h</td><td style="font-weight:800;color:#dc2626;">${x.fte}%</td></tr>`).join(''),
+    'Técnicos que trabalharam <b>mais horas do que a capacidade cadastrada</b> em <b>Admin → Funcionários</b> (campo "Capacidade (h/mês)"). É o valor global do cadastro, não o proporcional ao período.');
   if(tipo==='pend')return wrap('Chamados pendentes ('+L.length+')',['Chamado','Cliente','Status','Responsável','Aberto em','Assunto'],
     L.slice().sort((a,b)=>String(a.st||'').localeCompare(String(b.st||''))).map(t=>`<tr><td style="font-weight:700;white-space:nowrap;">${esc(t.id)}</td><td style="font-size:.66rem;">${esc((t.loc||'').split('|')[0].trim())}</td><td><span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700;">${esc(t.st||'-')}</span></td><td style="white-space:nowrap;font-size:.66rem;">${esc((t.ag||'-').split(' ').slice(0,2).join(' '))}</td><td style="white-space:nowrap;font-size:.66rem;">${esc(String(t.start||'').split(' ')[0])}</td><td style="font-size:.65rem;color:#334155;">${esc((t.t||'').slice(0,70))}</td></tr>`).join(''),
     'Todos os chamados <b>ainda não fechados/resolvidos</b> no Milldesk neste momento (backlog aberto), independente do período selecionado.');
@@ -1852,8 +1852,10 @@ function rExecGeral(){
     if((ct.franquia_horas||0)>0&&frH>ct.franquia_horas)_estHHArr.push({cliente:ct.cliente,contrato:ct.nome||'',cc:ct.cc,franq:ct.franquia_horas,horas:frH,uso:Math.round(frH/ct.franquia_horas*100)})
     const rec=contractReceita(ct,c.chamados),cst=Math.round((c.horas_minutos/60)*_ch)
     if(rec>0&&cst>rec)_estFinArr.push({cliente:ct.cliente,contrato:ct.nome||'',cc:ct.cc,receita:rec,custo:cst,excedente:cst-rec})})
-  // Técnicos estourando H.H: horas trabalhadas acima da própria capacidade no período (FTE ≥ 100%)
-  const _tecEstArr=(D.recursos||[]).filter(r=>tecMatchFilter(r.nome)&&r.cap_minutos>0&&r.trab_minutos>r.cap_minutos).map(r=>({nome:r.nome,nivel:r.nivel||'-',horas:r.trab_minutos,cap:r.cap_minutos,fte:Math.round(r.trab_minutos/r.cap_minutos*100)})).sort((a,b)=>b.fte-a.fte)
+  // Técnicos estourando H.H: horas trabalhadas acima da CAPACIDADE CADASTRADA do técnico.
+  // A capacidade vem de Admin → Funcionários (campo "Capacidade (h/mês)", via getCapH) — é o valor GLOBAL do
+  // cadastro, NÃO o proporcional ao período (D.recursos.cap_minutos já vem rateado por mdCapFactor()).
+  const _tecEstArr=(D.recursos||[]).filter(r=>tecMatchFilter(r.nome)).map(r=>{const cap=getCapH(r.nome)*60;return{nome:r.nome,nivel:r.nivel||'-',horas:r.trab_minutos,cap,fte:cap>0?Math.round(r.trab_minutos/cap*100):0}}).filter(x=>x.cap>0&&x.horas>x.cap).sort((a,b)=>b.fte-a.fte)
   const _estHH=_estHHArr.length,_estFin=_estFinArr.length,_tecEst=_tecEstArr.length
   _GE_POP={hh:_estHHArr.sort((a,b)=>b.uso-a.uso),fin:_estFinArr.sort((a,b)=>b.excedente-a.excedente),tec:_tecEstArr,pend:_pendArr}
   const _saldoFin=_recMaisAv-_custoMaisAv
@@ -1945,7 +1947,7 @@ function rExecGeral(){
     kpiCard(`<span style="color:#16a34a;">${fmt(_chFech)}</span> <span style="color:#cbd5e1;">/</span> <span onclick="geEstourandoModal('pend')" title="Ver os chamados pendentes" style="color:#f59e0b;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${fmt(_chPend)}</span>`,'Chamados','#0f766e','circle-check','fechados no período / <span onclick="geEstourandoModal(\'pend\')" style="cursor:pointer;text-decoration:underline dotted;">pendentes agora →</span>','FECHADOS = chamados do período já encerrados. PENDENTES = tudo que NÃO está fechado/resolvido no Milldesk neste momento (backlog aberto), independente do período — é o "Solicitações ainda abertas" do Milldesk.'),
     kpiCard(fmt(nAtiv),'Atividades','#0891b2','list-checks','no período','Nº de apontamentos (lançamentos de atividade) no período e filtro atuais.'),
     kpiCard(`<span onclick="geEstourandoModal('hh')" title="Ver os clientes" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${fmt(_estHH)}</span>`,'Clientes Estourando em HH',_estHH?'#ef4444':'#22c55e','trending-up','<span onclick="geEstourandoModal(\'hh\')" style="cursor:pointer;text-decoration:underline dotted;">uso acima da franquia →</span>','Clientes cujas horas consumidas passaram de 100% da franquia mensal contratada. Clique para ver a lista.'),
-    kpiCard(`<span onclick="geEstourandoModal('tec')" title="Ver os técnicos" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${fmt(_tecEst)}</span>`,'Técnicos Estourando HH',_tecEst?'#ef4444':'#22c55e','user-cog','<span onclick="geEstourandoModal(\'tec\')" style="cursor:pointer;text-decoration:underline dotted;">acima da capacidade →</span>','Técnicos que trabalharam mais horas do que a própria capacidade no período (FTE ≥ 100% = sobrecarga). Clique para ver a lista.')
+    kpiCard(`<span onclick="geEstourandoModal('tec')" title="Ver os técnicos" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${fmt(_tecEst)}</span>`,'Técnicos Estourando HH',_tecEst?'#ef4444':'#22c55e','user-cog','<span onclick="geEstourandoModal(\'tec\')" style="cursor:pointer;text-decoration:underline dotted;">acima da capacidade →</span>','Técnicos que trabalharam mais horas do que a capacidade cadastrada em Admin → Funcionários (campo "Capacidade (h/mês)"). Clique para ver a lista.')
   ],'grid-cols-2 md:grid-cols-4')
 +_grp('Financeiro',[
     kpiCard(fmtR(_saldoFin),'Saldo',_saldoFin<0?'#ef4444':'#16a34a','scale','receita − custo (c/ avulsas)','Resultado do período: (Receita + Avulsas) − (Custo com Avulsas). Positivo = sobra; negativo = o custo passou da receita.'),
