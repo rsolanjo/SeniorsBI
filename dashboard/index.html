@@ -274,7 +274,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v151'
+const APP_VERSION='v152'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1617,8 +1617,13 @@ function rExecCustoHora(mode){
 function rExecTecnico(){
   const totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
   const empH={'4Seniors':0,S4SYS:0,'Porto Virtual':0};D.clientes.forEach(c=>{const e=getClientEmpresa(c.nome);if(empH[e]!==undefined)empH[e]+=c.horas_minutos})
-  const _rs=fRec()
-  const _h=(r,emp)=>D.totalHoras>0?Math.round(r.trab_minutos*empH[emp]/D.totalHoras/60):0
+  // Filtro de cliente/empresa/tipo escopa os técnicos: mostra só quem trabalhou no escopo, com as horas DAQUELE escopo.
+  const _filt=!!(CLI_SEL.size||COMPANY!=='all'||TIPO_SEL.size)
+  const _tipoOkT=TIPO_SEL.size?new Set((D.clientes||[]).map(c=>c.nome).filter(n=>getClientContracts(n).some(tipoMatchCt))):null
+  const _hByTec={},_empByTec={}
+  if(_filt)mdEnrichedAtivs().forEach(a=>{if(!cliMatchFilter(a.cliente)||(_tipoOkT&&!_tipoOkT.has(a.cliente)))return;const f=matchFuncByAgent(a.ag),nm=f?f.nome:a.ag;_hByTec[nm]=(_hByTec[nm]||0)+a.wh;const e=getClientEmpresa(a.cliente);if(e&&empH[e]!==undefined){(_empByTec[nm]=_empByTec[nm]||{})[e]=((_empByTec[nm]||{})[e]||0)+a.wh}})
+  const _rs=_filt?(D.recursos||[]).filter(r=>tecMatchFilter(r.nome)&&(_hByTec[r.nome]||0)>0).map(r=>({...r,trab_minutos:_hByTec[r.nome]})):fRec()
+  const _h=(r,emp)=>_filt?Math.round(((_empByTec[r.nome]||{})[emp]||0)/60):(D.totalHoras>0?Math.round(r.trab_minutos*empH[emp]/D.totalHoras/60):0)
   const rows=_rs.map(r=>{
     const fte=pct(r.trab_minutos,r.cap_minutos),fC=fte>90?'#ef4444':fte<60?'#f59e0b':'#22c55e',sal=getSalario(r.nome,r.nivel),vh=getVH(r.nome,r.nivel),cr=vh>0?Math.round(r.trab_minutos/60*vh):sal,isEst=!(getFunc(r.nome)?.salario>0)
     const h4s=_h(r,'4Seniors'),hS4=_h(r,'S4SYS'),hPV=_h(r,'Porto Virtual')
