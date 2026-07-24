@@ -278,7 +278,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v179'
+const APP_VERSION='v180'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -379,6 +379,22 @@ function pilarDeAtividade(a,pil,pilOv){
 }
 // Índice de chamados p/ recuperar categoria e assunto (a atividade do Milldesk nem sempre traz)
 function tkIndex(){const m={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t)m[t.id]=t});return m}
+// ═══ REGRA ÚNICA de casamento atividade → contrato ═══
+// 1) pelo CENTRO DE CUSTO (o jeito certo; CC repetido entre empresas desempata pelo nome);
+// 2) se o local NÃO tem CC (ex.: "H.Stern - Lojas", "Way2Go"), cai no NOME do cliente —
+//    senão essas horas ficariam órfãs para sempre, já que não há CC para casar.
+function ctIndexPorCC(cts){const m={};cts.forEach(c=>{const k=String(c.cc||'').toLowerCase();if(k)(m[k]=m[k]||[]).push(c)});return m}
+function contratoDaAtividade(a,porCC,cts){
+  const nl=normName(String(a.loc||'').split('|')[0]);
+  const bate=v=>{const n=normName(v||'');return !!(n&&(n===nl||n.includes(nl)||nl.includes(n)))};
+  const cc=String(a.cc||'').toLowerCase();
+  if(cc){const lista=porCC[cc]||[];if(!lista.length)return null;if(lista.length===1)return lista[0];
+    if(!nl)return null;return lista.find(c=>bate(c.cliente))||lista.find(c=>bate(c.empresa))||null;}
+  if(!nl)return null;
+  // sem CC: só aceita quando UM único contrato casa o nome (evita atribuir para o cliente errado)
+  const cand=cts.filter(c=>bate(c.cliente));
+  return cand.length===1?cand[0]:null;
+}
 let LITE_VAL=false// valores protegidos por senha; sempre ocultos ao carregar
 const liteAprovKey=a=>a.tid+'|'+(a.iso||'')+'|'+a.ch
 const getLiteAprov=()=>lsGet('sbi_lite_aprov')||{}
@@ -1334,11 +1350,8 @@ function rExecContratos(){
   // (4Seniors e S4SYS têm, cada uma, o seu CC 9). O Milldesk só traz "CLIENTE | CC" no local, então a empresa
   // é inferida pelo nome do cliente. CC único casa direto; CC compartilhado desempata por cliente e depois empresa.
   const ctsAtivos=CONTRACTS.filter(c=>c.status!=='arquivado');
-  const porCC={};ctsAtivos.forEach(c=>{const k=String(c.cc||'').toLowerCase();(porCC[k]=porCC[k]||[]).push(c)});
-  const contratoDe=a=>{const lista=porCC[a.cc]||[];if(!lista.length)return null;if(lista.length===1)return lista[0];
-    const nl=normName(String(a.loc).split('|')[0]);if(!nl)return null;
-    const bate=v=>{const n=normName(v||'');return !!(n&&(n===nl||n.includes(nl)||nl.includes(n)))};
-    return lista.find(c=>bate(c.cliente))||lista.find(c=>bate(c.empresa))||null};
+  const porCC=ctIndexPorCC(ctsAtivos);
+  const contratoDe=a=>contratoDaAtividade(a,porCC,ctsAtivos);
   // Nada é descartado em silêncio: o que não casar é somado e mostrado no rodapé do painel.
   const byCtr={};let naoCasouMin=0;const naoCasouLoc={};
   acts.forEach(a=>{const c=contratoDe(a);
@@ -1519,11 +1532,8 @@ function _audContratos(acts){
   const capFTE=Math.max(1,mdBizDays(MD_ATV_START,MD_ATV_END)*8*60);
   const salOf=n=>{const f=matchFuncByAgent(n);return f?getSalario(f.nome,f.nivel):8000};
   const ctsAtivos=CONTRACTS.filter(c=>c.status!=='arquivado');
-  const porCC={};ctsAtivos.forEach(c=>{const k=String(c.cc||'').toLowerCase();(porCC[k]=porCC[k]||[]).push(c)});
-  const contratoDe=a=>{const lista=porCC[a.cc]||[];if(!lista.length)return null;if(lista.length===1)return lista[0];
-    const nl=normName(String(a.loc).split('|')[0]);if(!nl)return null;
-    const bate=v=>{const n=normName(v||'');return !!(n&&(n===nl||n.includes(nl)||nl.includes(n)))};
-    return lista.find(c=>bate(c.cliente))||lista.find(c=>bate(c.empresa))||null};
+  const porCC=ctIndexPorCC(ctsAtivos);
+  const contratoDe=a=>contratoDaAtividade(a,porCC,ctsAtivos);
   // Guarda o que NÃO casou com contrato — sem isso o total do Auditor não fecha com o Milldesk.
   const byCtr={},orfas=[];acts.forEach(a=>{const c=contratoDe(a);if(c)(byCtr[c.id]=byCtr[c.id]||[]).push(a);else orfas.push(a)});
   const out=ctsAtivos.map(ct=>{
@@ -1655,10 +1665,11 @@ function cadConfronto(){
   (MD.ativs||[]).forEach(a=>{const L=String(a.loc||'').trim();if(L)locMin[L]=(locMin[L]||0)+(a.wh||0)});
   (MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{const L=String(t.loc||'').trim();if(L){locTk[L]=(locTk[L]||0)+1;if(locMin[L]==null)locMin[L]=0}});
   const cts=CONTRACTS.filter(c=>c.status!=='arquivado');
-  const ccSet=new Set(cts.map(c=>String(c.cc||'').toLowerCase()).filter(Boolean));
+  const porCC=ctIndexPorCC(cts);
   const locais=Object.keys(locMin).map(L=>({loc:L,cc:String(mdCC(L)||'').toLowerCase(),min:locMin[L],tk:locTk[L]||0}));
   const IG=getDiscIgn();
-  const locSemContrato=locais.filter(x=>(!x.cc||!ccSet.has(x.cc))&&!IG.loc.includes(x.loc)).sort((a,b)=>b.min-a.min);
+  // usa a MESMA regra do painel (CC e, sem CC, nome do cliente) — senão a tela acusa órfão que já casa
+  const locSemContrato=locais.filter(x=>!contratoDaAtividade(x,porCC,cts)&&!IG.loc.includes(x.loc)).sort((a,b)=>b.min-a.min);
   const ccVistos=new Set(locais.map(x=>x.cc).filter(Boolean));
   const ctSemMovimento=cts.filter(c=>{const cc=String(c.cc||'').toLowerCase();return (!cc||!ccVistos.has(cc))&&!IG.ct.includes(c.id)})
     .map(c=>({id:c.id,cliente:c.cliente,nome:c.nome||'',cc:c.cc,semCC:!String(c.cc||'').trim()||/^x+$/i.test(String(c.cc||'').trim())}));
