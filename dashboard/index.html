@@ -278,7 +278,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v167'
+const APP_VERSION='v168'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -491,7 +491,7 @@ const SECTION_SUBS={
   exec:[['geral','Visão Geral'],['operacao','Operação'],['relatorios','Relatórios'],['alertas','Alertas'],['sustentacao','Sustentação']],
   tech:[['chamados','Chamados & Atividades'],['parados','Chamados Parados'],['relacionados','Pai / Filho'],['avulsas','Horas Avulsas'],['auditor','Auditor'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['usuarios','Usuários'],['matriz','Matriz'],['custos','Custos Adicionais'],['discrep','Discrepâncias'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']],
-  fin:[['geral','Visão Geral'],['performance','Performance'],['relatorios','Relatórios']]
+  fin:[['geral','Visão Geral'],['avulsas','Horas Avulsas'],['performance','Performance'],['relatorios','Relatórios']]
 }
 
 // ─── Técnicos excluídos das métricas (gestão/pré-venda, não entram em custo/FTE/alertas) ───
@@ -1695,7 +1695,7 @@ function rCadDiscrep(){
   return head+cabConf+conf+confOk+cabMud+`<div class="card mb-3" style="background:#fffbeb;border:1px solid #fde68a;"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="triangle-alert" style="width:1rem;height:1rem;color:#b45309;"></i><span style="font-size:.8rem;font-weight:800;color:#92400e;">${d.total} mudança(s) desde a foto de ${esc(quando)}</span><span style="margin-left:auto;">${btn}</span></div></div>`+corpo+aviso;
 }
 // ═══ CENTRAL DE RELATÓRIOS (Executiva) — todos os clientes, mesmo padrão dos relatórios da Sustentação ═══
-const EXEC_REPS={geral:'Relatório Executivo',contratos:'Contratos & Escopo',tecnicos:'Horas por Técnico',clientes:'Resultado por Cliente',avulsas:'Horas Avulsas',completo:'Relatório Completo'};
+const EXEC_REPS={geral:'Relatório Executivo',contratos:'Contratos & Escopo',tecnicos:'Horas por Técnico',clientes:'Resultado por Cliente',avulsas:'Horas Avulsas',financeiro:'Relatório Financeiro'};
 // No Financeiro os valores sempre entram; na Executiva seguem o botão "Mostrar valores".
 const repVal=()=>SECTION==='fin'?true:((typeof EXEC_VAL==='undefined')?true:EXEC_VAL);
 function execRepAvulsas(){
@@ -1705,7 +1705,7 @@ function execRepAvulsas(){
 function execReportSecoes(tipo){
   const val=repVal(),d=_audData(),secs=[];
   const R=v=>val?fmtR(Math.round(v)):'•••';
-  if(tipo==='geral'||tipo==='contratos'||tipo==='completo'){
+  if(tipo==='geral'||tipo==='contratos'||tipo==='financeiro'){
     const head=['Cliente','Contrato','CC','Franquia','Consumido','Saldo','Uso %','Chamados','Fora de escopo','FTE'];if(val)head.push('Receita (R$)','Custo H.H (R$)','Margem');
     const rows=d.rows.map(r=>{const o=[r.ct.cliente,r.ct.nome||'',r.cc,r.franqP?minToHM(r.franqP)+'h':'—',minToHM(r.used)+'h',r.franqP?hmSigned(r.saldo)+'h':'—',r.uso!=null?r.uso+'%':'—',r.chamados,minToHM(r.foraMin)+'h',(r.fte||0).toFixed(2)];
       if(val)o.push(R(r.valorP),R(r.custoUsado),r.valorP>0?Math.round((r.valorP-r.custoUsado)/r.valorP*100)+'%':'—');return o});
@@ -1713,30 +1713,56 @@ function execReportSecoes(tipo){
     if(val)tot.push(R(d.totVal),R(d.totCusto),d.totVal?Math.round((d.totVal-d.totCusto)/d.totVal*100)+'%':'—');
     secs.push({nome:'Contratos — consumo e resultado',head,rows,tot,note:'Franquia proporcional ao período. Atividade casada ao contrato pelo centro de custo.'});
   }
-  if(tipo==='geral'||tipo==='tecnicos'||tipo==='completo'){
+  if(tipo==='geral'||tipo==='tecnicos'||tipo==='financeiro'){
     const head=['#','Técnico','Horas','% do total','Chamados','h/chamado','FTE','Contratos'];if(val)head.push('Custo-hora','Custo (R$)');
     const rows=d.tecnicos.map((t,i)=>{const o=[i+1,t.nome,minToHM(t.min)+'h',(d.totUsed?Math.round(t.min/d.totUsed*100):0)+'%',t.ch,t.ch?minToHM(Math.round(t.min/t.ch))+'h':'—',t.fte.toFixed(2),t.nCt];
       if(val)o.push(R(t.rate),R(t.custo));return o});
     const tot=['','TOTAL ('+d.tecnicos.length+')',minToHM(d.totUsed)+'h','100%',d.totCh,d.totCh?minToHM(Math.round(d.totUsed/d.totCh))+'h':'—','',''];if(val)tot.push('',R(d.totTecCusto));
     secs.push({nome:'Horas por técnico',head,rows,tot,note:'FTE = horas ÷ capacidade do período (dias úteis × 8h). Horas atribuídas a contratos.'});
   }
-  if(tipo==='clientes'||tipo==='completo'){
-    const head=['Cliente','Empresa','Horas','Franquia (h/mês)','Uso %','Chamados'];if(val)head.push('Receita (R$)','Custo H.H (R$)','Margem');
+  if(tipo==='clientes'||tipo==='financeiro'){
+    const head=['Cliente','CC','Empresa','Horas','Franquia (h/mês)','Uso %','Chamados'];if(val)head.push('Receita (R$)','Custo H.H (R$)','Margem');
     const ch=getCustoHora();
     const rows=fCli().map(c=>{const cts=getClientContracts(c.nome),fr=cts.reduce((s,x)=>s+(x.franquia_horas||0),0),rec=cts.reduce((s,x)=>s+contractReceita(x,c.chamados),0);
+      const ccs=cts.map(x=>String(x.cc||'')).filter(Boolean).join(', ')||'—';
       const frH=(c.franq_minutos!=null?c.franq_minutos:c.horas_minutos)/60,uso=fr>0?Math.round(frH/fr*100):null,cst=Math.round(c.horas_minutos/60*ch);
-      const o=[c.nome,getClientEmpresa(c.nome)||'—',minToHM(c.horas_minutos)+'h',fr||'—',uso!=null?uso+'%':'—',c.chamados];
+      const o=[c.nome,ccs,getClientEmpresa(c.nome)||'—',minToHM(c.horas_minutos)+'h',fr||'—',uso!=null?uso+'%':'—',c.chamados];
       if(val)o.push(R(rec),R(cst),rec>0?Math.round((rec-cst)/rec*100)+'%':'—');return o});
-    secs.push({nome:'Resultado por cliente',head,rows,note:'Custo H.H = horas reais × custo-hora aplicado ('+fmtR(ch)+'/h).'});
+    secs.push({nome:'Resultado por cliente',head,rows,note:'Custo H.H = horas reais × custo-hora aplicado ('+fmtR(ch)+'/h). CC = centros de custo dos contratos do cliente.'});
   }
-  if(tipo==='avulsas'||tipo==='completo'){
-    const av=execRepAvulsas(),tot=av.reduce((s,a)=>s+(a.ch||0),0);
-    const g={};av.forEach(a=>{const k=(a.loc||'').split('|')[0].trim()||String(a.cc||'—');const o=g[k]||(g[k]={min:0,n:0});o.min+=(a.ch||0);o.n++});
-    secs.push({nome:'Horas avulsas — consolidação por cliente',head:['Cliente','Lançamentos','Horas a cobrar'],
-      rows:Object.entries(g).sort((a,b)=>b[1].min-a[1].min).map(([k,o])=>[k,o.n,minToHM(o.min)+'h']),
-      tot:['TOTAL',av.length,minToHM(tot)+'h'],note:'Atividades marcadas como "a cobrar" no Milldesk — fora da franquia.'});
-    secs.push({nome:'Horas avulsas — detalhe',head:['Chamado','Data','Técnico','Cliente','Horas','Assunto'],
-      rows:[...av].sort((a,b)=>(b.ch||0)-(a.ch||0)).map(a=>[a.tid||'—',(a.dataBR||brDate(a.iso)||'').slice(0,10),(a.ag||'—').split(' ').slice(0,2).join(' '),(a.loc||'').split('|')[0].trim(),minToHM(a.ch||0)+'h',(a.assunto||a.desc||'').slice(0,70)])});
+  // Contratos cobrados POR CHAMADO (ex.: Dominos Pulse): a fatura depende da quantidade, então vai o itemizado.
+  if(tipo==='financeiro'){
+    const porCh=CONTRACTS.filter(c=>c.status!=='arquivado'&&c.tipo_cobranca==='chamado'&&(COMPANY==='all'||c.empresa===COMPANY)&&(!CLI_SEL.size||CLI_SEL.has(c.cliente)));
+    const ccMap={};porCh.forEach(c=>{const k=String(c.cc||'').toLowerCase();if(k)ccMap[k]=c});
+    const seen={},itens=[];
+    (MD.tickets||[]).forEach(t=>{const k=String(t.cc||'').toLowerCase(),c=ccMap[k];if(!c||seen[t.id])return;seen[t.id]=1;itens.push({ct:c,t})});
+    const porCt={};itens.forEach(x=>{const id=x.ct.id;(porCt[id]=porCt[id]||{ct:x.ct,n:0}).n++});
+    const rh=['Cliente','CC','Contrato','Chamados'];if(val)rh.push('Valor / chamado','Total (R$)');
+    const rr=porCh.map(c=>{const n=(porCt[c.id]||{n:0}).n,o=[c.cliente,String(c.cc||'—'),c.nome||'',n];if(val)o.push(fmtR(c.valor_chamado||0),fmtR((c.valor_chamado||0)*n));return o});
+    const tn=itens.length,tv=porCh.reduce((s,c)=>s+((c.valor_chamado||0)*((porCt[c.id]||{n:0}).n)),0);
+    const rt=['TOTAL','','',tn];if(val)rt.push('',fmtR(tv));
+    secs.push({nome:'Chamados faturáveis — contratos por chamado',head:rh,rows:rr,tot:rt,note:'Contratos cujo faturamento é por chamado (não por franquia mensal). O total é a quantidade × o valor por chamado.'});
+    if(itens.length)secs.push({nome:'Chamados faturáveis — detalhe',head:['Cliente','CC','Chamado','Data','Status','Assunto'],
+      rows:itens.sort((a,b)=>String(a.ct.cliente).localeCompare(String(b.ct.cliente),'pt')).map(x=>[x.ct.cliente,String(x.ct.cc||'—'),x.t.id,String(x.t.start||'').split(' ')[0],x.t.st||'—',(x.t.t||'').slice(0,80)])});
+  }
+  if(tipo==='avulsas'||tipo==='financeiro'){
+    const av=finAvulsasData();
+    const tot=av.reduce((s,a)=>s+(a.realMin||0),0),totCob=av.reduce((s,a)=>s+(+a.cobrar||0),0),totFat=av.reduce((s,a)=>s+(a.faturarR||0),0);
+    const totPag=av.reduce((s,a)=>s+(+a.pagar||0),0),totPagR=av.reduce((s,a)=>s+(a.pagarR||0),0);
+    // A faturar por cliente (com CC)
+    const gc={};av.forEach(a=>{const k=(a.cliente||'-')+'§'+(a.cc||'');const o=gc[k]||(gc[k]={cliente:a.cliente,cc:a.cc,min:0,cobrar:0,fat:0,n:0});o.min+=(a.realMin||0);o.cobrar+=(+a.cobrar||0);o.fat+=(a.faturarR||0);o.n++});
+    const hf=['Cliente','CC','Lançamentos','Trabalhado','A cobrar (h)'];if(val)hf.push('A faturar (R$)');
+    const rf=Object.values(gc).sort((a,b)=>b.min-a.min).map(o=>{const r=[o.cliente,String(o.cc||'—'),o.n,minToHM(o.min)+'h',o.cobrar];if(val)r.push(fmtR(Math.round(o.fat)));return r});
+    const tf=['TOTAL','',av.length,minToHM(tot)+'h',totCob];if(val)tf.push(fmtR(Math.round(totFat)));
+    secs.push({nome:'Horas avulsas — a faturar por cliente',head:hf,rows:rf,tot:tf,note:'Atividades marcadas como "a cobrar" no Milldesk (fora da franquia). "A cobrar" aplica o mínimo de 4h e múltiplos de 4h.'});
+    // A pagar por técnico
+    const gt={};av.forEach(a=>{const k=a.ag||'-';const o=gt[k]||(gt[k]={min:0,pagar:0,pagarR:0,n:0});o.min+=(a.realMin||0);o.pagar+=(+a.pagar||0);o.pagarR+=(a.pagarR||0);o.n++});
+    const hp=['Técnico','Lançamentos','Trabalhado','A pagar (h)'];if(val)hp.push('A pagar (R$)');
+    const rp=Object.entries(gt).sort((a,b)=>b[1].min-a[1].min).map(([n,o])=>{const r=[n,o.n,minToHM(o.min)+'h',Math.round(o.pagar*100)/100];if(val)r.push(fmtR(Math.round(o.pagarR)));return r});
+    const tp=['TOTAL',av.length,minToHM(tot)+'h',Math.round(totPag*100)/100];if(val)tp.push(fmtR(Math.round(totPagR)));
+    secs.push({nome:'Horas avulsas — a pagar por técnico',head:hp,rows:rp,tot:tp});
+    secs.push({nome:'Horas avulsas — detalhe',head:['Chamado','CC','Cliente','Contrato','Status','Data','Início','Fim','H. comercial','Trabalhado','Técnico','A Cobrar (h)','A Pagar (h)','Assunto'],
+      rows:av.map(a=>[a.tid||'—',String(a.cc||'—'),a.cliente,a.contrato||'sem contrato',a.status||'—',(a.dataBR||brDate(a.iso)||'').slice(0,10),a.hi||'—',a.hf||'—',a.comercial==null?'—':(a.comercial?'Sim':'Não'),minToHM(a.realMin)+'h',a.ag||'—',a.cobrar,a.pagar,(a.assunto||a.desc||'').slice(0,70)])});
   }
   return{secoes:secs,d};
 }
@@ -1799,16 +1825,70 @@ function rExecRelatorios(){
     ${card('contratos','Todos os contratos: franquia, consumido, saldo, uso, chamados, fora de escopo e FTE.','file-text','#0f766e')}
     ${card('tecnicos','Produtividade por técnico: horas, chamados, h/chamado, FTE e em quantos contratos atuou.','users','#0891b2')}
     ${card('clientes','Resultado por cliente: horas, franquia, uso, chamados, receita, custo H.H e margem.','building-2','#7c3aed')}
-    ${card('avulsas','Horas a cobrar (fora da franquia): consolidação por cliente e o detalhe lançamento a lançamento.','receipt','#b45309')}
-    ${card('completo','Tudo em um arquivo: contratos + técnicos + clientes + avulsas.','layers','#854d0e')}
+    ${card('avulsas','Horas a cobrar (fora da franquia): a faturar por cliente, a pagar por técnico e o detalhe lançamento a lançamento.','receipt','#b45309')}
+    ${card('financeiro','O fechamento completo: contratos, técnicos, clientes, os <b>chamados faturáveis</b> dos contratos por chamado e as <b>horas avulsas</b> (a faturar e a pagar). Sempre com o CC.','landmark','#854d0e')}
   </div>`;
 }
 // ─── Área FINANCEIRO: painel estilo Lite, porém com TODOS os contratos (reusa o painel de contratos por CC) ───
-// ─── Área FINANCEIRO ─── Visão Geral (financeira + H.H, sem tecnicidade) · Performance · Relatórios
+// ─── Área FINANCEIRO ─── Visão Geral · Horas Avulsas · Performance · Relatórios
 function rFinanceiro(){
   if(FIN_SUB==='performance')return rAuditor('fin');
   if(FIN_SUB==='relatorios')return rExecRelatorios();
+  if(FIN_SUB==='avulsas')return rFinAvulsasTab();
   return rFinGeral();
+}
+// Horas avulsas de TODOS os clientes, no mesmo formato da Sustentação (que cobre só os 3 contratos gerenciados).
+// Reusa os mesmos ajustes salvos (a cobrar / a pagar / início-fim / validado), então os números batem com a Sustentação.
+function finAvulsasData(){
+  const tk={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t)tk[t.id]=t});
+  const avccM=lsGet('sbi_lite_avcc')||{},cobrarM=lsGet('sbi_lite_cobrar')||{},pagarM=lsGet('sbi_lite_pagar')||{},horaM=lsGet('sbi_lite_horaedit')||{};
+  const aprovM=(typeof getAprov==='function')?(getAprov()||{}):{};
+  const ctByCC={};(CONTRACTS||[]).filter(c=>c.status!=='arquivado').forEach(c=>{const k=String(c.cc||'').toLowerCase();if(k&&!ctByCC[k])ctByCC[k]=c});
+  return (MD.avulsas||[]).map(a=>{
+    const t=tk[a.tid],tloc=(t&&t.loc)||a.loc||'';
+    let cc=String(avccM[a.tid]||mdCC(tloc)||mdCC(a.loc)||'');
+    if(!cc&&typeof liteGuessCC==='function')cc=liteGuessCC(a.assunto||a.desc||'')||'';
+    const ct=ctByCC[String(cc).toLowerCase()];
+    const st=(t&&t.st)||'',closed=!!st&&(typeof mdIsOpen==='function'?!mdIsOpen(st):false);
+    const key=(typeof liteAprovKey==='function')?liteAprovKey(a):(a.tid+'|'+(a.iso||''));
+    const he=horaM[key]||{},hi=he.hi!=null?he.hi:a.hi,hf=he.hf!=null?he.hf:a.hf;
+    const cliente=String(tloc||a.loc||'').split('|')[0].trim()||'-';
+    const comercial=(typeof liteComercial==='function')?liteComercial(a.iso,hi):null;
+    const chH=(a.ch||0)/60,isEd=/eduardo\s*kalil/i.test(a.ag||'');
+    const cobrarDef=(typeof liteRound4==='function')?liteRound4(chH):chH,pagarDef=isEd?0:Math.round(chH*100)/100;
+    const cobrar=cobrarM[key]!=null?cobrarM[key]:cobrarDef,pagar=pagarM[key]!=null?pagarM[key]:pagarDef;
+    const vha=ct?(ct.valorHoraAvulsa!=null?ct.valorHoraAvulsa:((ct.franquia_horas>0&&ct.valor_mensal>0)?ct.valor_mensal/ct.franquia_horas:0)):0;
+    return{...a,hi,hf,cc,cliente,contrato:ct?(ct.nome||ct.cliente||''):'',vha,faturarR:(+cobrar||0)*vha,pagarR:(+pagar||0)*((typeof liteTechRate==='function')?liteTechRate(a.ag):0),
+      realMin:a.ch||0,status:st,closed,comercial,cobrar,pagar,aprov:aprovM[key]?true:a.aprov,aprovKey:key};
+  }).filter(a=>(!a.iso||atvInRange(a.iso))&&cliMatchFilter(a.cliente||String(a.cc||''))).sort((a,b)=>(b.iso||'').localeCompare(a.iso||''));
+}
+function rFinAvulsasTab(){
+  const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:.95rem;font-weight:800;color:#0f172a;">Horas avulsas (a cobrar)</span><span class="badge" style="background:#f3e8ff;color:#6b21a8;font-weight:700;">FORA DA FRANQUIA</span><span class="badge" style="background:#eef2ff;color:#3730a3;font-weight:700;">todos os clientes</span></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Atividades marcadas como <b>a cobrar</b> no Milldesk (relatório <b>Atividades com horas a cobrar</b>), de <b>todos os contratos</b>. Os ajustes de <b>A Cobrar</b>, <b>A Pagar</b> e <b>Início/Fim</b> são os mesmos da Sustentação — editar aqui altera lá também.</div></div>`;
+  if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk para ver as horas avulsas.</div>`;
+  const av=finAvulsasData();
+  if(!av.length)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhuma hora a cobrar no período/filtro.</div>`;
+  const totMin=av.reduce((s,a)=>s+(a.realMin||0),0),totCobrar=av.reduce((s,a)=>s+(+a.cobrar||0),0),totPagar=av.reduce((s,a)=>s+(+a.pagar||0),0);
+  const totFat=av.reduce((s,a)=>s+(a.faturarR||0),0),totPagR=av.reduce((s,a)=>s+(a.pagarR||0),0);
+  const kpis=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    ${kpiCard(minToHM(totMin)+'h','A cobrar Milldesk','#7c3aed','receipt','soma das horas do relatório','Soma do charge_hour das atividades marcadas como a cobrar.')}
+    ${kpiCard(fmt(totCobrar)+'h','A cobrar (faturável)','#166534','file-text','mín. 4h · múltiplos de 4h · '+fmtR(Math.round(totFat)),'Horas efetivamente faturadas ao cliente (arredondamento comercial), × o R$/h avulsa de cada contrato.')}
+    ${kpiCard(fmt(Math.round(totPagar*100)/100)+'h','A pagar (técnicos)','#b45309','wallet',fmtR(Math.round(totPagR))+' em mão de obra','Horas a pagar aos técnicos pelas avulsas × o custo-hora de cada um.')}
+    ${kpiCard(fmt(av.length),'Lançamentos','#0891b2','list-checks','no período/filtro')}
+  </div>`;
+  // A faturar por cliente (com CC) e A pagar por técnico
+  const gc={};av.forEach(a=>{const k=(a.cliente||'-')+'§'+(a.cc||'');const o=gc[k]||(gc[k]={cliente:a.cliente,cc:a.cc,min:0,cobrar:0,fat:0});o.min+=(a.realMin||0);o.cobrar+=(+a.cobrar||0);o.fat+=(a.faturarR||0)});
+  const gt={};av.forEach(a=>{const k=a.ag||'-';const o=gt[k]||(gt[k]={min:0,pagar:0,pagarR:0});o.min+=(a.realMin||0);o.pagar+=(+a.pagar||0);o.pagarR+=(a.pagarR||0)});
+  const cliRows=Object.values(gc).sort((a,b)=>b.min-a.min).map(o=>`<tr><td style="font-weight:600;">${esc(o.cliente)}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(String(o.cc||'—'))}</span></td><td style="text-align:right;">${minToHM(o.min)}h</td><td style="text-align:right;font-weight:800;color:#166534;">${fmt(o.cobrar)}h</td><td style="text-align:right;color:#166534;">${fmtR(Math.round(o.fat))}</td></tr>`).join('');
+  const tecRows=Object.entries(gt).sort((a,b)=>b[1].min-a[1].min).map(([n,o])=>`<tr><td style="font-weight:600;">${esc(techDisp(n))}</td><td style="text-align:right;">${minToHM(o.min)}h</td><td style="text-align:right;font-weight:800;color:#b45309;">${fmt(Math.round(o.pagar*100)/100)}h</td><td style="text-align:right;color:#b45309;">${fmtR(Math.round(o.pagarR))}</td></tr>`).join('');
+  const quadros=`<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div class="card overflow-x-auto">${ST('A faturar por cliente')}<table style="width:100%;font-size:.72rem;"><thead><tr><th>Cliente</th><th>CC</th><th style="text-align:right;">Trabalhado</th><th style="text-align:right;">A cobrar</th><th style="text-align:right;">R$</th></tr></thead><tbody>${cliRows}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td colspan="2">Total</td><td style="text-align:right;">${minToHM(totMin)}h</td><td style="text-align:right;color:#166534;">${fmt(totCobrar)}h</td><td style="text-align:right;color:#166534;">${fmtR(Math.round(totFat))}</td></tr></tfoot></table></div>
+    <div class="card overflow-x-auto">${ST('A pagar por técnico')}<table style="width:100%;font-size:.72rem;"><thead><tr><th>Técnico</th><th style="text-align:right;">Trabalhado</th><th style="text-align:right;">A pagar</th><th style="text-align:right;">R$</th></tr></thead><tbody>${tecRows}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td>Total</td><td style="text-align:right;">${minToHM(totMin)}h</td><td style="text-align:right;color:#b45309;">${fmt(Math.round(totPagar*100)/100)}h</td><td style="text-align:right;color:#b45309;">${fmtR(Math.round(totPagR))}</td></tr></tfoot></table></div>
+  </div>`;
+  const comBadge=c=>c==null?'<span style="color:#cbd5e1;">—</span>':(c?'<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:800;" title="Dentro do horário comercial — dificilmente é hora extra/avulsa, confira">Sim</span>':'<span class="badge" style="background:#dcfce7;color:#166534;font-weight:700;">Não</span>');
+  const det=av.map(a=>`<tr${a.comercial?' style="background:#fff7f7;"':''}><td style="font-weight:700;white-space:nowrap;">${esc(a.tid||'-')}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(String(a.cc||'—'))}</span></td><td style="font-size:.66rem;">${esc(a.cliente)}</td><td style="font-size:.64rem;color:#64748b;">${esc(a.contrato||'<span style=\"color:#991b1b\">sem contrato</span>')}</td><td><span class="badge" style="background:${a.closed?'#dcfce7':'#fef3c7'};color:${a.closed?'#166534':'#92400e'};font-weight:700;">${esc(a.status||'-')}</span></td><td style="white-space:nowrap;font-size:.66rem;">${esc((a.dataBR||brDate(a.iso)||'').slice(0,10))}</td><td style="white-space:nowrap;font-size:.66rem;">${esc(a.hi||'—')}</td><td style="white-space:nowrap;font-size:.66rem;">${esc(a.hf||'—')}</td><td>${comBadge(a.comercial)}</td><td style="white-space:nowrap;font-weight:700;">${minToHM(a.realMin)}h</td><td style="font-size:.66rem;white-space:nowrap;">${esc(techDisp(a.ag||'-'))}</td><td style="text-align:right;font-weight:800;color:#166534;white-space:nowrap;">${fmt(a.cobrar)}h</td><td style="text-align:right;font-weight:800;color:#b45309;white-space:nowrap;">${fmt(a.pagar)}h</td><td style="font-size:.64rem;color:#334155;">${esc((a.assunto||a.desc||'').slice(0,70))}</td></tr>`).join('');
+  const tabela=`<div class="card overflow-x-auto">${ST('Detalhe dos lançamentos ('+av.length+')')}<table style="width:100%;font-size:.7rem;"><thead><tr><th>Chamado</th><th>CC</th><th>Cliente</th><th>Contrato</th><th>Status</th><th>Data</th><th>Início</th><th>Fim</th><th title="Dentro do horário comercial (seg-sex 8-18, exceto feriado)">H. comercial</th><th>Trabalhado</th><th>Técnico</th><th style="text-align:right;">A Cobrar</th><th style="text-align:right;">A Pagar</th><th>Assunto</th></tr></thead><tbody>${det}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td colspan="9">Total (${av.length})</td><td>${minToHM(totMin)}h</td><td></td><td style="text-align:right;color:#166534;">${fmt(totCobrar)}h</td><td style="text-align:right;color:#b45309;">${fmt(Math.round(totPagar*100)/100)}h</td><td></td></tr></tfoot></table>
+  <div style="font-size:.59rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;">Fonte: relatório <b>Atividades com horas a cobrar</b> do Milldesk. <b>Horário comercial = Sim</b> (linha em vermelho) dificilmente é hora extra/avulsa — vale conferir. <b>Trabalhado</b> = horas a cobrar do Milldesk (bate com o card "A cobrar Milldesk"). <b>A Cobrar</b> = mínimo 4h e múltiplos de 4h; <b>A Pagar</b> = horas a cobrar do Milldesk. Os ajustes finos (editar horas, validar) ficam na <b>Sustentação → Horas Avulsas</b> e valem para as duas telas.</div></div>`;
+  return head+kpis+quadros+tabela;
 }
 // Visão Geral do Financeiro: dinheiro e horas do período, em linguagem de gestão.
 // Sem pilares/escopo/FTE por técnico — o detalhe técnico fica na aba Performance.
@@ -1851,7 +1931,8 @@ function rFinGeral(){
   }).join('')||'<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhum contrato com movimento no período.</td></tr>';
   const tRec=d.totVal,tCus=d.totCusto,tMg=tRec>0?Math.round((tRec-tCus)/tRec*100):null;
   const tabela=`<div class="card mb-4 overflow-x-auto">${ST('Resultado por cliente')}<table><thead><tr><th>Cliente / contrato</th><th>Empresa</th><th>H.H</th><th>Franquia</th><th>Uso</th><th>Avulsas</th><th>Receita</th><th>Custo H.H</th><th>Margem</th><th>Resultado</th></tr></thead><tbody>${rows}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;border-top:2px solid #cbd5e1;"><td colspan="2">TOTAL (${d.rows.length})</td><td>${minToHM(d.totUsed)}h</td><td>${minToHM(d.totFranq)}h</td><td>${d.totFranq?Math.round(d.totUsed/d.totFranq*100)+'%':'—'}</td><td style="color:#7c3aed;">${minToHM(avMin)}h</td><td style="color:#166534;">${fmtR(Math.round(tRec))}</td><td style="color:#854d0e;">${fmtR(Math.round(tCus))}</td><td style="color:${mgC(tMg)};">${tMg==null?'—':tMg+'%'}</td><td style="color:${(tRec-tCus)<0?'#dc2626':'#166534'};">${fmtR(Math.round(tRec-tCus))}</td></tr></tfoot></table><div style="font-size:.59rem;color:#94a3b8;margin-top:.5rem;">Receita = valor do contrato no período (mensal × meses, ou valor/chamado × chamados). Custo H.H = horas do contrato × custo-hora de quem trabalhou. O detalhe por técnico e por escopo está na aba <b>Performance</b>.</div></div>`;
-  return head+kpis+tabela+rFinAvulsas(av,avMin);
+  const avCard=`<div class="card" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;border-left:3px solid #7c3aed;"><div><div style="display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;"><span style="font-size:.85rem;font-weight:800;color:#0f172a;">Horas avulsas (a cobrar)</span><span class="badge" style="background:#f3e8ff;color:#6b21a8;font-weight:700;">FORA DA FRANQUIA</span></div><div style="font-size:.68rem;color:#64748b;margin-top:.2rem;"><b style="color:#7c3aed;">${fmt(av.length)} lançamentos</b> · <b style="color:#7c3aed;">${minToHM(avMin)}h</b> · <b style="color:#166534;">${fmtR(avFat)}</b> a faturar</div></div><button onclick="setSub('avulsas')" style="margin-left:auto;cursor:pointer;background:#7c3aed;color:#fff;border:none;border-radius:.45rem;padding:.45rem 1rem;font-size:.72rem;font-weight:800;white-space:nowrap;">Ver detalhes →</button></div>`;
+  return head+kpis+tabela+avCard;
 }
 // Bloco de avulsas do Financeiro — read-only, todos os clientes, inicia RECOLHIDO (<details> sem "open").
 function rFinAvulsas(av,avMin){
@@ -2871,14 +2952,14 @@ function liteReportSecoes(tipo){
   const hist3=liteCompWindows(MD_ATV_END).slice(0,3).map(w=>({label:w.label,d:liteAggWindow(w.s,w.e)}));
   const histNote='Últimos 3 meses (todas as atividades carregadas). Mês corrente é parcial (até hoje).';
   // Resumo por contrato (Executivo, Horas por Contrato, Completo)
-  if(tipo==='exec'||tipo==='contrato'||tipo==='completo'){
+  if(tipo==='exec'||tipo==='contrato'||tipo==='financeiro'){
     const head=['Contrato','CC','Tipo','Franquia (h)','Consumido','Saldo','Uso %','FTE','Chamados','Avulsas'];if(money)head.push('Receita (R$)','Custo HH (R$)','Margem');
     const rows=d.contratos.map(x=>{const av=(d.avulsasByCC&&d.avulsasByCC[x.ct.cc])||0,rec=x.valorP,cst=x.custoUsado,mg=rec?Math.round((rec-cst)/rec*100)+'%':'—';const r=[cNome(x),x.ct.cc,x.ct.tipo,x.ct.franquia,minToHM(x.used)+'h',hmSigned(x.saldo)+'h',x.uso+'%',x.fte.toFixed(1),x.chamados,minToHM(av)+'h'];if(money)r.push(fmtR(Math.round(rec)),fmtR(Math.round(cst)),mg);return r});
     const tot=['TOTAL','','','',minToHM(d.totUsed)+'h',hmSigned(d.totFranq-d.totUsed)+'h',(d.totFranq?Math.round(d.totUsed/d.totFranq*100):0)+'%',d.totFte.toFixed(1),'—',minToHM(d.avulsasMin)+'h'];if(money)tot.push(fmtR(Math.round(d.totVal)),fmtR(Math.round(d.totCusto)),'');
     secs.push({nome:'Resumo por contrato',head,rows,tot});
   }
   // Escopo (pilares) por contrato (Horas por Contrato, Completo)
-  if(tipo==='contrato'||tipo==='completo'){
+  if(tipo==='contrato'||tipo==='financeiro'){
     d.contratos.forEach(x=>{
       const head=['Pilar','Horas','Chamados','% do consumo'];if(money)head.push('Custo (R$)');
       const rows=x.pil.map(pl=>{const m=x.pilMin[pl.nome]||0;if(m<=0)return null;const r=[pl.nome,minToHM(m)+'h',x.pilTkN[pl.nome]||0,(x.used?Math.round(m/x.used*100):0)+'%'];if(money)r.push(fmtR(Math.round(x.pilVal[pl.nome]||0)));return r}).filter(Boolean);
@@ -2891,7 +2972,7 @@ function liteReportSecoes(tipo){
       tot:['TOTAL',...hist3.map(h=>minToHM(h.d.totUsed)+'h')],note:histNote});
   }
   // Comparativo: últimos 3 meses + ano (Executivo, Completo)
-  if(tipo==='exec'||tipo==='completo'){
+  if(tipo==='exec'||tipo==='financeiro'){
     const wins=liteCompWindows(MD_ATV_END),aggs=wins.map(w=>({w,d:liteAggWindow(w.s,w.e)}));
     const head=['Indicador',...aggs.map(a=>a.w.label)],mrow=(lbl,fn)=>[lbl,...aggs.map(a=>fn(a.d))];
     const rows=[mrow('H.H consumido',x=>minToHM(x.totUsed)+'h'),mrow('Horas avulsas',x=>minToHM(x.avulsasMin)+'h'),mrow('Chamados (c/ hora lançada)',x=>fmt(x.totCh)),mrow('FTE',x=>x.totFte.toFixed(1))];
@@ -2910,21 +2991,21 @@ function liteReportSecoes(tipo){
       note:`1 FTE = ${fp.bizMo} dias úteis × 8h = ${fp.bizMo*8}h/mês (capacidade de 1 pessoa full-time). Equipe = ${fp.dMes.totFte.toFixed(1)} FTE.`});
   }
   // Horas avulsas: consolidação (Executivo resumo, Horas Avulsas, Completo)
-  if(tipo==='exec'||tipo==='avulsas'||tipo==='completo'){
+  if(tipo==='exec'||tipo==='avulsas'||tipo==='financeiro'){
     const fatCli={},fatCliReal={},pagTec={},pagTecReal={};
     d.avulsas.forEach(a=>{const cli=(a.cliente||'-').split('/')[0].trim();fatCli[cli]=(fatCli[cli]||0)+(+a.cobrar||0);fatCliReal[cli]=(fatCliReal[cli]||0)+(a.realMin||0);const t=tecCurto(a.ag);pagTec[t]=(pagTec[t]||0)+(+a.pagar||0);pagTecReal[t]=(pagTecReal[t]||0)+(a.realMin||0)});
     secs.push({nome:'Avulsas — a faturar por cliente',head:['Cliente','Trabalhado','A cobrar'],rows:Object.entries(fatCli).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,minToHM(fatCliReal[k])+'h',v+'h']),tot:['TOTAL',minToHM(Object.values(fatCliReal).reduce((s,x)=>s+x,0))+'h',d.avulsasCobrarH+'h']});
     secs.push({nome:'Avulsas — a pagar por técnico',head:['Técnico','Trabalhado','A pagar'],rows:Object.entries(pagTec).sort((a,b)=>(pagTecReal[b[0]]||0)-(pagTecReal[a[0]]||0)).map(([k,v])=>[k,minToHM(pagTecReal[k])+'h',(Math.round(v*100)/100)+'h']),tot:['TOTAL',minToHM(Object.values(pagTecReal).reduce((s,x)=>s+x,0))+'h',(Math.round(d.avulsasPagarH*100)/100)+'h']});
   }
   // Horas avulsas: detalhe (Horas Avulsas, Completo)
-  if(tipo==='avulsas'||tipo==='completo'){
+  if(tipo==='avulsas'||tipo==='financeiro'){
     const head=['Chamado','CC','Cliente','Contrato','Status','Data','Início','Fim','Comercial','Trabalhado','Técnico','A Cobrar (h)','A Pagar (h)','Assunto','Validado'];
     const rows=d.avulsas.map(a=>[a.tid||'-',a.cc||'',a.cliente||'',a.contrato?a.contrato.split(/\s+[—-]\s+/).slice(1).join(' - ').trim()||a.contrato:'',a.status||'',a.dataBR?liteDateOnly(a.dataBR):brDate(a.iso),a.hi||'FALTANDO',a.hf||'FALTANDO',a.comercial==null?'-':a.comercial?'Sim':'Não',a.realMin?minToHM(a.realMin)+'h':'',tecCurto(a.ag),a.cobrar,a.pagar,a.assunto||a.desc||'',a.aprov===true?'Validado':'']);
     secs.push({nome:'Detalhe das horas avulsas (a cobrar)',head,rows});
     secs.push({nome:'Horas avulsas — últimos 3 meses',head:['Indicador',...hist3.map(h=>h.label)],rows:[['A cobrar (Milldesk)',...hist3.map(h=>minToHM(h.d.avulsasMin)+'h')],['A faturar (mín. 4h)',...hist3.map(h=>h.d.avulsasCobrarH+'h')],['Lançamentos',...hist3.map(h=>fmt(h.d.avulsas.length))]],note:histNote});
   }
   // Horas por técnico (Horas por Técnico, Completo)
-  if(tipo==='tecnico'||tipo==='completo'){
+  if(tipo==='tecnico'||tipo==='financeiro'){
     const head=['Técnico','Atividades','Horas'];if(money)head.push('Custo-hora (R$)','Valor (R$)');
     const rows=d.tecnicos.map(t=>{const r=[t.nome,t.n,minToHM(t.min)+'h'];if(money)r.push(t.rate?fmtR2(t.rate):'(sem salário)',t.rate?fmtR(Math.round(t.valor)):'-');return r});
     secs.push({nome:'Horas e valor por técnico',head,rows,tot:money?['TOTAL','',minToHM(d.totUsed)+'h','',fmtR(Math.round(d.totTecVal))]:['TOTAL','',minToHM(d.totUsed)+'h']});
@@ -2938,7 +3019,7 @@ function liteReportSecoes(tipo){
     secs.push({nome:'Horas por técnico — últimos 3 meses',head:['Técnico',...hist3.map(h=>h.label)],rows:hrows,tot:['EQUIPE',...hist3.map(h=>minToHM(h.d.totUsed)+'h')],note:histNote});
   }
   // Relatório Financeiro (Financeiro, Completo)
-  if(tipo==='financeiro'||tipo==='completo'){
+  if(tipo==='financeiro'||tipo==='financeiro'){
     if(money){
       const avR={};d.avulsas.forEach(a=>{avR[a.cc]=avR[a.cc]||{fat:0,pag:0};avR[a.cc].fat+=a.faturarR||0;avR[a.cc].pag+=a.pagarR||0});
       const head=['Contrato','Receita contratual','Avulsas a faturar','Custo HH','Custo avulsas','Margem (R$)','Margem %'];
@@ -2980,7 +3061,7 @@ window.liteReportPDF=function(tipo){
   const {secoes,d}=liteReportSecoes(tipo);
   const cell=c=>`<td>${String(c==null?'':c)}</td>`;
   const secHTML=secoes.map(s=>`<h2>${esc(s.nome)}</h2>${s.note?`<div class="note">${esc(s.note)}</div>`:''}<table><thead><tr>${s.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${s.rows.length?s.rows.map(r=>`<tr>${r.map(cell).join('')}</tr>`).join(''):`<tr><td colspan="${s.head.length}">—</td></tr>`}</tbody>${s.tot?`<tfoot><tr class="tot">${s.tot.map(cell).join('')}</tr></tfoot>`:''}</table>`).join('');
-  const showKpi=(tipo==='exec'||tipo==='completo'||tipo==='contrato'||tipo==='financeiro');
+  const showKpi=(tipo==='exec'||tipo==='financeiro'||tipo==='contrato'||tipo==='financeiro');
   const kpiStrip=showKpi?`<div class="kpis"><div class="kpi"><div class="v">${minToHM(d.totUsed)}h</div><div class="k">H.H consumido</div></div><div class="kpi"><div class="v">${d.totFte.toFixed(1)}</div><div class="k">FTE</div></div><div class="kpi"><div class="v">${minToHM(d.avulsasMin)}h</div><div class="k">Horas avulsas</div></div><div class="kpi"><div class="v">${fmt(d.totSolic)}</div><div class="k">Chamados</div></div>${LITE_VAL?`<div class="kpi"><div class="v">${fmtR(Math.round(d.receitaPer))}</div><div class="k">Receita período</div></div><div class="kpi"><div class="v">${fmtR(Math.round(d.totCusto+d.avulsasPagarR))}</div><div class="k">Custo total</div></div>`:''}</div>`:'';
   const now=new Date(),stampD=now.toLocaleDateString('pt-BR'),stampT=now.toLocaleTimeString('pt-BR').slice(0,5),perTxt=brDate(MD_ATV_START)+' a '+brDate(MD_ATV_END),title=(LITE_REPS[tipo]||tipo)+' - '+now.toISOString().slice(0,10);
   const css=`*{box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;margin:0;padding:26px 30px;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
