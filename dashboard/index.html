@@ -278,14 +278,14 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v166'
+const APP_VERSION='v167'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
 let TEC_SEL=new Set(),TEC_OPEN=false;// filtro de técnicos (multi): vazio = todos
 let TIPO_SEL=new Set(),TIPO_OPEN=false;// filtro de tipo de contrato (multi): vazio = todos
 const TIPO_LABELS={sustentacao:'Sustentação',reativo:'Reativo',chamado:'Chamado',interno:'Interno',projeto_avulso:'Projeto Avulso'};
-let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
+let SECTION='tech',EXEC_SUB='geral',TECH_SUB='chamados',ADMIN_SUB='contratos',FIN_SUB='geral',SEC_AUTH=false,APP_MODE='limited',LITE_SUB='painel'
 // Versão limitada: 3 contratos, só H.H (sem valores). Pilares = escopo dos contratos (para controlar trabalho fora de escopo).
 const LITE_PILARES={
   susten:[
@@ -491,7 +491,7 @@ const SECTION_SUBS={
   exec:[['geral','Visão Geral'],['operacao','Operação'],['relatorios','Relatórios'],['alertas','Alertas'],['sustentacao','Sustentação']],
   tech:[['chamados','Chamados & Atividades'],['parados','Chamados Parados'],['relacionados','Pai / Filho'],['avulsas','Horas Avulsas'],['auditor','Auditor'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências'],['checklists','Checklists']],
   admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['usuarios','Usuários'],['matriz','Matriz'],['custos','Custos Adicionais'],['discrep','Discrepâncias'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']],
-  fin:[]
+  fin:[['geral','Visão Geral'],['performance','Performance'],['relatorios','Relatórios']]
 }
 
 // ─── Técnicos excluídos das métricas (gestão/pré-venda, não entram em custo/FTE/alertas) ───
@@ -1079,8 +1079,8 @@ window.setSection=setSection
 function _cellKey(td){if(!td)return{s:''};const t=(td.innerText||'').trim();const hm=t.match(/^(\d+):(\d{2})h?$/);if(hm)return{n:(+hm[1])*60+(+hm[2])};if(/\d/.test(t)&&/^[+\-]?[\dR$.,%\s]+h?$/.test(t)){const num=parseFloat(t.replace(/[R$\s%h]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.'));if(!isNaN(num))return{n:num}}return{s:t.toLowerCase()}}
 function enableTableSort(){document.querySelectorAll('#main table').forEach(tb=>{const ths=tb.querySelectorAll('thead th');ths.forEach((th,i)=>{if(th._srt)return;th._srt=1;th.style.cursor='pointer';if(!/↕/.test(th.textContent))th.insertAdjacentHTML('beforeend',' <span style="opacity:.35;font-size:.7em;">↕</span>');th.addEventListener('click',()=>{const body=tb.querySelector('tbody');if(!body)return;const rows=[...body.children].filter(r=>r.children.length>i&&!r.querySelector('[colspan]'));const dir=th._d=(th._d===1?-1:1);ths.forEach(o=>{if(o!==th)o._d=0});rows.sort((a,b)=>{const ka=_cellKey(a.children[i]),kb=_cellKey(b.children[i]);if('n'in ka&&'n'in kb)return(ka.n-kb.n)*dir;return String('s'in ka?ka.s:ka.n).localeCompare(String('s'in kb?kb.s:kb.n),'pt')*dir});rows.forEach(r=>body.appendChild(r))})})})}
 try{const _srtMO=new MutationObserver(()=>{clearTimeout(window._srtT);window._srtT=setTimeout(enableTableSort,80)});const _m=document.getElementById('main');if(_m)_srtMO.observe(_m,{childList:true,subtree:true})}catch(e){}
-window.setSub=function(s){if(SECTION==='exec')EXEC_SUB=s;else if(SECTION==='tech')TECH_SUB=s;else ADMIN_SUB=s;renderSubTabs();renderContent()}
-function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:ADMIN_SUB;const subs=(SECTION_SUBS[SECTION]||[]).filter(([k])=>!(k==='sustentacao'&&!isAdminUser()));document.getElementById('subTabs').innerHTML=subs.map(([k,l])=>{let b='';if(k==='discrep'){const n=(typeof cadDiscrepCount==='function')?cadDiscrepCount():0;if(n)b=` <span style="background:#dc2626;color:#fff;border-radius:99px;padding:0 .32rem;font-size:.58rem;font-weight:800;">${n}</span>`}return`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}${b}</button>`}).join('')}
+window.setSub=function(s){if(SECTION==='exec')EXEC_SUB=s;else if(SECTION==='tech')TECH_SUB=s;else if(SECTION==='fin')FIN_SUB=s;else ADMIN_SUB=s;renderSubTabs();renderContent()}
+function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:SECTION==='fin'?FIN_SUB:ADMIN_SUB;const subs=(SECTION_SUBS[SECTION]||[]).filter(([k])=>!(k==='sustentacao'&&!isAdminUser()));document.getElementById('subTabs').innerHTML=subs.map(([k,l])=>{let b='';if(k==='discrep'){const n=(typeof cadDiscrepCount==='function')?cadDiscrepCount():0;if(n)b=` <span style="background:#dc2626;color:#fff;border-radius:99px;padding:0 .32rem;font-size:.58rem;font-weight:800;">${n}</span>`}return`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}${b}</button>`}).join('')}
 function renderContent(){
   if(!AUTH){const ls=document.getElementById('loginScreen');if(ls)ls.classList.remove('hidden');const ap=document.getElementById('app');if(ap)ap.classList.add('hidden');return}
   syncHeaderNav();
@@ -1696,12 +1696,14 @@ function rCadDiscrep(){
 }
 // ═══ CENTRAL DE RELATÓRIOS (Executiva) — todos os clientes, mesmo padrão dos relatórios da Sustentação ═══
 const EXEC_REPS={geral:'Relatório Executivo',contratos:'Contratos & Escopo',tecnicos:'Horas por Técnico',clientes:'Resultado por Cliente',avulsas:'Horas Avulsas',completo:'Relatório Completo'};
+// No Financeiro os valores sempre entram; na Executiva seguem o botão "Mostrar valores".
+const repVal=()=>SECTION==='fin'?true:((typeof EXEC_VAL==='undefined')?true:EXEC_VAL);
 function execRepAvulsas(){
   const s10=(MD_ATV_START||'').slice(0,10),e10=(MD_ATV_END||'').slice(0,10);
   return (MD.avulsas||[]).filter(a=>{const d=(a.iso||'').slice(0,10),inP=(!d)||((!s10||d>=s10)&&(!e10||d<=e10));return inP&&cliMatchFilter((a.loc||'').split('|')[0].trim()||String(a.cc||''))});
 }
 function execReportSecoes(tipo){
-  const val=(typeof EXEC_VAL==='undefined')?true:EXEC_VAL,d=_audData(),secs=[];
+  const val=repVal(),d=_audData(),secs=[];
   const R=v=>val?fmtR(Math.round(v)):'•••';
   if(tipo==='geral'||tipo==='contratos'||tipo==='completo'){
     const head=['Cliente','Contrato','CC','Franquia','Consumido','Saldo','Uso %','Chamados','Fora de escopo','FTE'];if(val)head.push('Receita (R$)','Custo H.H (R$)','Margem');
@@ -1747,7 +1749,7 @@ function execRepFile(tipo,ext){const nm=(EXEC_REPS[tipo]||tipo).replace(/[\\/:*?
 window.execReportXLS=function(tipo){
   if(!execRepGuard(tipo))return;
   const {secoes}=execReportSecoes(tipo),sep=';',q=v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`;
-  const val=(typeof EXEC_VAL==='undefined')?true:EXEC_VAL;
+  const val=repVal();
   const L=[q('Grupo Seniors — SeniorsBI · '+(EXEC_REPS[tipo]||tipo)),q('Período: '+brDate(MD_ATV_START)+' a '+brDate(MD_ATV_END)),q('Extraído em: '+new Date().toLocaleString('pt-BR'))+(val?'':' '+q('(valores ocultos)')),''];
   secoes.forEach(s=>{L.push(q(s.nome));if(s.note)L.push(q(s.note));L.push(s.head.map(q).join(sep));s.rows.forEach(r=>L.push(r.map(q).join(sep)));if(s.tot)L.push(s.tot.map(q).join(sep));L.push('')});
   const blob=new Blob(['﻿'+L.join('\r\n')],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -1755,7 +1757,7 @@ window.execReportXLS=function(tipo){
 };
 window.execReportPDF=function(tipo){
   if(!execRepGuard(tipo))return;
-  const {secoes,d}=execReportSecoes(tipo),val=(typeof EXEC_VAL==='undefined')?true:EXEC_VAL;
+  const {secoes,d}=execReportSecoes(tipo),val=repVal();
   const cell=c=>`<td>${esc(String(c==null?'':c))}</td>`;
   const secHTML=secoes.map(s=>`<h2>${esc(s.nome)}</h2>${s.note?`<div class="note">${esc(s.note)}</div>`:''}<table><thead><tr>${s.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${s.rows.length?s.rows.map(r=>`<tr>${r.map(cell).join('')}</tr>`).join(''):`<tr><td colspan="${s.head.length}">—</td></tr>`}</tbody>${s.tot?`<tfoot><tr class="tot">${s.tot.map(cell).join('')}</tr></tfoot>`:''}</table>`).join('');
   const usoTot=d.totFranq?Math.round(d.totUsed/d.totFranq*100):0;
@@ -1788,7 +1790,7 @@ window.execReportPDF=function(tipo){
   w.document.write(doc);w.document.close();setTimeout(()=>{try{w.focus();w.print()}catch(e){}},500);
 };
 function rExecRelatorios(){
-  const val=(typeof EXEC_VAL==='undefined')?true:EXEC_VAL;
+  const val=repVal();
   const card=(tipo,desc,ic,cor)=>`<div class="card" style="border-top:3px solid ${cor};"><div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;"><i data-lucide="${ic}" style="width:1rem;height:1rem;color:${cor};"></i><div style="font-size:.85rem;font-weight:800;color:#0f172a;">${EXEC_REPS[tipo]}</div></div><div style="font-size:.66rem;color:#64748b;margin-bottom:.7rem;min-height:2.4rem;">${desc}</div><div style="display:flex;gap:.4rem;"><button onclick="execReportXLS('${tipo}')" style="flex:1;cursor:pointer;background:#dcfce7;color:#166534;border:none;border-radius:.4rem;padding:.42rem;font-size:.7rem;font-weight:700;">⬇ Excel</button><button onclick="execReportPDF('${tipo}')" style="flex:1;cursor:pointer;background:#fee2e2;color:#991b1b;border:none;border-radius:.4rem;padding:.42rem;font-size:.7rem;font-weight:700;">⬇ PDF</button></div></div>`;
   const head=`<div class="card mb-4"><div style="font-size:.95rem;font-weight:800;color:#0f172a;">Relatórios</div><div style="font-size:.66rem;color:#64748b;margin-top:.25rem;">Relatórios de <b>todos os clientes</b> no período e filtros selecionados na barra do topo, com logo, cabeçalho e data de extração. <b>Excel</b> baixa CSV; <b>PDF</b> abre para imprimir/salvar. ${val?'Os valores em R$ <b>entram</b> (estão revelados).':'Os valores em R$ saem ocultos — use <b>Mostrar valores</b> no topo para incluí-los.'}</div></div>`;
   if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk para gerar os relatórios.</div>`;
@@ -1802,23 +1804,54 @@ function rExecRelatorios(){
   </div>`;
 }
 // ─── Área FINANCEIRO: painel estilo Lite, porém com TODOS os contratos (reusa o painel de contratos por CC) ───
+// ─── Área FINANCEIRO ─── Visão Geral (financeira + H.H, sem tecnicidade) · Performance · Relatórios
 function rFinanceiro(){
-  const head=`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;"><span style="font-size:1.1rem;font-weight:900;color:#0f172a;">Financeiro</span><span style="font-size:.68rem;color:#94a3b8;">todos os clientes · H.H, franquia, escopo, avulsas e resultado</span></div>`;
+  if(FIN_SUB==='performance')return rAuditor('fin');
+  if(FIN_SUB==='relatorios')return rExecRelatorios();
+  return rFinGeral();
+}
+// Visão Geral do Financeiro: dinheiro e horas do período, em linguagem de gestão.
+// Sem pilares/escopo/FTE por técnico — o detalhe técnico fica na aba Performance.
+function rFinGeral(){
+  const head=`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;"><span style="font-size:1.1rem;font-weight:900;color:#0f172a;">Financeiro — Visão Geral</span><span style="font-size:.68rem;color:#94a3b8;">todos os clientes · o que entra, o que custa e quantas horas foram gastas</span></div>`;
   if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk para ver o Financeiro.</div>`;
-  const st=companyStats('all');
-  // Avulsas (a cobrar) de TODOS os clientes no período — não só os 3 contratos gerenciados da Sustentação.
+  const st=companyStats('all'),ch=getCustoHora(),d=_audData();
   const s10=(MD_ATV_START||'').slice(0,10),e10=(MD_ATV_END||'').slice(0,10);
-  const av=(MD.avulsas||[]).filter(a=>{const d=(a.iso||'').slice(0,10),inP=(!d)||((!s10||d>=s10)&&(!e10||d<=e10));return inP&&cliMatchFilter((a.loc||'').split('|')[0].trim()||a.cc||'')});
+  const av=(MD.avulsas||[]).filter(a=>{const x=(a.iso||'').slice(0,10),inP=(!x)||((!s10||x>=s10)&&(!e10||x<=e10));return inP&&cliMatchFilter((a.loc||'').split('|')[0].trim()||a.cc||'')});
   const avMin=av.reduce((s,a)=>s+(a.ch||0),0);
-  const kpis=`<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">`+
-    kpiCard(minToHM(st.horas)+'h','H.H no período','#2B4C9B','clock',fmt(st.chamados)+' chamados')+
-    kpiCard(fmtR(st.receita),'Receita contratada','#166534','trending-up',st.numContratos+' contratos')+
-    kpiCard(fmtR(st.custo),'Custo (folha rateada)','#854d0e','wallet','proporcional ao período')+
-    kpiCard(st.margem==null?'—':st.margem+'%','Margem',st.margem==null?'#94a3b8':st.margem>=30?'#16a34a':st.margem>=0?'#f59e0b':'#dc2626','percent',st.margem==null?'sem receita':fmtR(st.receita-st.custo)+' líquido')+
-    kpiCard(minToHM(avMin)+'h','Avulsas a cobrar','#7c3aed','receipt',fmt(av.length)+' lanç. · fora da franquia')+
-    kpiCard(fmt(st.numClientes),'Clientes ativos','#0f766e','users','com hora no período')+
-    `</div>`;
-  return head+kpis+rFinAvulsas(av,avMin)+rExecContratos()+rAuditor('fin');
+  // Avulsas faturadas pelo R$/h avulsa de cada contrato
+  const avFat=Math.round(av.reduce((s,a)=>{const cli=(a.loc||'').split('|')[0].trim(),ct=(a.cc?mdContractForCC(a.cc):null)||getClientContracts(cli)[0];
+    const rate=ct?(ct.valorHoraAvulsa!=null?ct.valorHoraAvulsa:((ct.franquia_horas>0&&ct.valor_mensal>0)?ct.valor_mensal/ct.franquia_horas:0)):0;return s+(a.ch||0)/60*rate},0));
+  const custoHH=Math.round(st.horas/60*ch),custoAv=Math.round(avMin/60*ch);
+  const recTot=st.receita+avFat,custoTot=custoHH+custoAv,saldo=recTot-custoTot;
+  const mg=recTot>0?Math.round((recTot-custoTot)/recTot*100):null;
+  const franqMin=(D.clientes||[]).filter(c=>cliMatchFilter(c.nome)).reduce((s,c)=>s+cliFranquia(c.nome)*60,0);
+  const franqCons=(D.clientes||[]).filter(c=>cliMatchFilter(c.nome)).reduce((s,c)=>s+(c.franq_minutos||0),0);
+  const usoFr=franqMin?Math.round(franqCons/franqMin*100):null;
+  const mgC=v=>v==null?'#94a3b8':v>=30?'#16a34a':v>=0?'#f59e0b':'#dc2626';
+  const grp=(t,cards,cols)=>`<div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">${t}</div><div class="grid ${cols} gap-3 mb-4">${cards.join('')}</div>`;
+  const kpis=grp('Resultado do período',[
+    kpiCard(fmtR(recTot),'Receita total','#166534','dollar-sign',fmtR(st.receita)+' contratos + '+fmtR(avFat)+' avulsas','Valor mensal dos contratos ativos no período + as horas avulsas faturadas pelo R$/h avulsa de cada contrato.'),
+    kpiCard(fmtR(custoTot),'Custo das horas','#854d0e','coins',fmtR(custoHH)+' franquia + '+fmtR(custoAv)+' avulsas','Horas trabalhadas × custo-hora técnico aplicado ('+fmtR(ch)+'/h), somando as horas da franquia e as avulsas.'),
+    kpiCard(fmtR(saldo),'Saldo',saldo<0?'#dc2626':'#16a34a','scale','receita − custo das horas','Quanto sobra depois de pagar a mão de obra das horas gastas. Não inclui despesas gerais.'),
+    kpiCard(mg==null?'—':mg+'%','Margem',mgC(mg),'percent',mg==null?'sem receita':'sobre a receita total','(Receita total − Custo das horas) ÷ Receita total.')
+  ],'grid-cols-2 md:grid-cols-4')
+  +grp('Horas (H.H)',[
+    kpiCard(minToHM(st.horas)+'h','H.H consumido','#2B4C9B','clock',fmt(st.chamados)+' chamados no período','Horas realmente trabalhadas pelos técnicos no período.'),
+    kpiCard(usoFr!=null?usoFr+'%':'—','Uso da franquia',usoFr==null?'#94a3b8':usoFr>100?'#dc2626':usoFr>=80?'#f59e0b':'#16a34a','battery-charging',franqMin?minToHM(franqCons)+'h de '+minToHM(franqMin)+'h contratadas':'sem franquia','Horas consumidas dentro dos contratos mensais ÷ franquia contratada.'),
+    kpiCard(minToHM(avMin)+'h','Horas avulsas','#7c3aed','receipt',fmt(av.length)+' lanç. · '+fmtR(avFat)+' a faturar','Horas marcadas como "a cobrar" no Milldesk — fora da franquia, faturadas à parte.'),
+    kpiCard(fmtR(Math.round(ch))+'/h','Custo-hora aplicado','#0891b2','activity','base do custo das horas','Custo-hora técnico usado nos cálculos. Ajustável em Operação → Por Cliente.')
+  ],'grid-cols-2 md:grid-cols-4');
+  // Resultado por cliente — a leitura financeira, sem entrar em escopo/pilares
+  const rows=d.rows.map(r=>{
+    const mgr=r.valorP>0?Math.round((r.valorP-r.custoUsado)/r.valorP*100):null;
+    const avC=av.filter(a=>String(a.cc||'').toLowerCase()===String(r.cc).toLowerCase()).reduce((s,a)=>s+(a.ch||0),0);
+    const usoC=r.uso==null?'#64748b':r.uso>100?'#dc2626':r.uso>=80?'#f59e0b':'#16a34a';
+    return`<tr><td style="font-weight:700;">${esc(r.ct.cliente)}<br><span style="font-weight:500;color:#94a3b8;font-size:.58rem;">${esc(r.ct.nome||'')} · CC ${esc(r.cc)}</span></td><td>${empBadge(r.ct.empresa)}</td><td style="white-space:nowrap;">${minToHM(r.used)}h</td><td style="white-space:nowrap;color:#64748b;">${r.franqP?minToHM(r.franqP)+'h':'—'}</td><td style="font-weight:700;color:${usoC};">${r.uso!=null?r.uso+'%':'—'}</td><td style="color:#7c3aed;white-space:nowrap;">${avC?minToHM(avC)+'h':'—'}</td><td style="color:#166534;font-weight:700;white-space:nowrap;">${fmtR(Math.round(r.valorP))}</td><td style="color:#854d0e;white-space:nowrap;">${fmtR(Math.round(r.custoUsado))}</td><td style="font-weight:800;white-space:nowrap;color:${mgC(mgr)};">${mgr==null?'—':mgr+'%'}</td><td style="font-weight:700;white-space:nowrap;color:${(r.valorP-r.custoUsado)<0?'#dc2626':'#166534'};">${fmtR(Math.round(r.valorP-r.custoUsado))}</td></tr>`;
+  }).join('')||'<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhum contrato com movimento no período.</td></tr>';
+  const tRec=d.totVal,tCus=d.totCusto,tMg=tRec>0?Math.round((tRec-tCus)/tRec*100):null;
+  const tabela=`<div class="card mb-4 overflow-x-auto">${ST('Resultado por cliente')}<table><thead><tr><th>Cliente / contrato</th><th>Empresa</th><th>H.H</th><th>Franquia</th><th>Uso</th><th>Avulsas</th><th>Receita</th><th>Custo H.H</th><th>Margem</th><th>Resultado</th></tr></thead><tbody>${rows}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;border-top:2px solid #cbd5e1;"><td colspan="2">TOTAL (${d.rows.length})</td><td>${minToHM(d.totUsed)}h</td><td>${minToHM(d.totFranq)}h</td><td>${d.totFranq?Math.round(d.totUsed/d.totFranq*100)+'%':'—'}</td><td style="color:#7c3aed;">${minToHM(avMin)}h</td><td style="color:#166534;">${fmtR(Math.round(tRec))}</td><td style="color:#854d0e;">${fmtR(Math.round(tCus))}</td><td style="color:${mgC(tMg)};">${tMg==null?'—':tMg+'%'}</td><td style="color:${(tRec-tCus)<0?'#dc2626':'#166534'};">${fmtR(Math.round(tRec-tCus))}</td></tr></tfoot></table><div style="font-size:.59rem;color:#94a3b8;margin-top:.5rem;">Receita = valor do contrato no período (mensal × meses, ou valor/chamado × chamados). Custo H.H = horas do contrato × custo-hora de quem trabalhou. O detalhe por técnico e por escopo está na aba <b>Performance</b>.</div></div>`;
+  return head+kpis+tabela+rFinAvulsas(av,avMin);
 }
 // Bloco de avulsas do Financeiro — read-only, todos os clientes, inicia RECOLHIDO (<details> sem "open").
 function rFinAvulsas(av,avMin){
