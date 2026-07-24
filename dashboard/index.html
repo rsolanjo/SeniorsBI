@@ -278,7 +278,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v178'
+const APP_VERSION='v179'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -705,7 +705,9 @@ const lsSet=(k,v)=>localStorage.setItem(k,JSON.stringify(v))
 const getFuncs=()=>lsGet('sbi_funcs')||[]
 const setFuncs=v=>{FUNCS=v;lsSet('sbi_funcs',v)}
 const getContracts=()=>lsGet('sbi_contracts')||[]
-const setContracts=v=>{CONTRACTS=v;lsSet('sbi_contracts',v)}
+// Mexeu em contrato (CC, franquia, valor, status…) => os agregados por cliente (D.clientes/D.recursos)
+// precisam ser refeitos NA HORA, senão os painéis ficam com o número velho até o próximo sync.
+const setContracts=v=>{CONTRACTS=v;lsSet('sbi_contracts',v);try{if(MD&&MD.loaded&&typeof mdApplyFromAtivs==='function')mdApplyFromAtivs()}catch(e){}}
 const getAlertCfg=()=>lsGet('sbi_acfg')||{fte_min:60,fte_max:90,limite_pct:80,franquia_warn:85,dias_inat:3,tickets_rec:3,dias_rec:30,sobrecarga:10,checklist_hora:12,hora_max_atividade:8,hora_max_chamado:16}
 // ─── Checklists, Zabbix, docs de contrato, apontamentos ───
 const getChkDaily=()=>lsGet('sbi_chk_daily')||{}
@@ -785,7 +787,9 @@ async function rAlertasInc(){
 let CMP={a:'',b:'',SA:null,SB:null,loading:false}
 const getMD=()=>{const s=lsGet('sbi_md')||{};return{base:s.base||'https://v1.milldesk.com/api',key:s.key||''}}
 const setMD=v=>lsSet('sbi_md',v)
-const mdCC=loc=>{const p=String(loc||'').split('|');if(p.length<2)return'';const m=p[1].match(/\d+/);return m?m[0]:p[1].trim()}
+// CC FIEL ao Milldesk: captura também os hierárquicos com ponto ("2.2 - Serviços internos" => "2.2").
+// Antes o /\d+/ pegava só o primeiro grupo e devolvia "2", o que não casava com contrato nenhum.
+const mdCC=loc=>{const p=String(loc||'').split('|');if(p.length<2)return'';const m=p[1].match(/\d+(?:\.\d+)*/);return m?m[0]:p[1].trim()}
 const mdDate=s=>{if(!s)return null;const p=String(s).split('/');return p.length===3?new Date(+p[2],+p[1]-1,+p[0]):null}
 const mdNorm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[0-9]+/g,' ').replace(/[^a-z ]+/g,' ').replace(/\s+/g,' ').trim().split(' ').filter(w=>w.length>2).slice(0,6).join(' ')
 const stripHtml=s=>String(s==null?'':s).replace(/<[^>]+>/g,' ').replace(/&[a-z#0-9]+;/gi,' ').replace(/\s+/g,' ').trim()
@@ -1690,17 +1694,26 @@ window.discVincular=function(loc){
   const L=String(loc||''),cc=String(mdCC(L)||'').trim(),cli=L.split('|')[0].trim();
   const cts=CONTRACTS.filter(c=>c.status!=='arquivado').sort((a,b)=>String(a.cliente||'').localeCompare(String(b.cliente||''),'pt'));
   const sug=cts.filter(c=>{const n=_norm(c.cliente);return n&&(n===_norm(cli)||n.includes(_norm(cli))||_norm(cli).includes(n))});
-  const linha=c=>`<tr><td style="font-weight:600;">${esc(c.cliente)}</td><td style="font-size:.66rem;color:#64748b;">${esc(c.nome||'')}</td><td><span class="badge" style="background:#f1f5f9;color:#64748b;font-weight:700;">${esc(String(c.cc||'—'))}</span></td><td><button onclick="discAplicarCC('${c.id}','${esc(cc)}')" style="cursor:pointer;background:#2B4C9B;color:#fff;border:none;border-radius:.35rem;padding:.22rem .6rem;font-size:.65rem;font-weight:800;">usar CC ${esc(cc)}</button></td></tr>`;
+  const linha=c=>`<tr><td style="font-weight:600;">${esc(c.cliente)}</td><td style="font-size:.66rem;color:#64748b;">${esc(c.nome||'')}</td><td><span class="badge" style="background:#f1f5f9;color:#64748b;font-weight:700;">${esc(String(c.cc||'—'))}</span></td><td><button onclick="discAplicarCC('${c.id}',(document.getElementById('dvCC')||{}).value||'${esc(cc)}')" style="cursor:pointer;background:#2B4C9B;color:#fff;border:none;border-radius:.35rem;padding:.22rem .6rem;font-size:.65rem;font-weight:800;">aplicar CC</button></td></tr>`;
   liteOpenModal('Vincular "'+esc(L)+'" a um contrato',
-    `<div style="font-size:.68rem;color:#64748b;margin-bottom:.6rem;">Escolha o contrato que corresponde a este local. O <b>CC do contrato passa a ser "${esc(cc)}"</b> e as horas deste local entram nele. Use quando o contrato já existe mas está com o centro de custo errado ou em branco.</div>
+    `<div style="font-size:.68rem;color:#64748b;margin-bottom:.6rem;">Escolha o contrato que corresponde a este local. O <b>CC do contrato</b> passa a ser o do campo abaixo e as horas deste local entram nele. Use quando o contrato já existe mas está com o centro de custo errado ou em branco.</div>
+    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;background:#eff6ff;border:1px solid #dbeafe;border-radius:.5rem;padding:.5rem .65rem;margin-bottom:.7rem;">
+      <span style="font-size:.68rem;font-weight:700;color:#1d4ed8;">CC a aplicar:</span>
+      <input id="dvCC" value="${esc(cc)}" style="width:9rem;padding:.32rem .5rem;border:1px solid #93c5fd;border-radius:.4rem;font-size:.8rem;font-family:monospace;font-weight:700;">
+      <button onclick="document.getElementById('dvCC').value='${esc(cc)}'" style="cursor:pointer;background:#fff;border:1px solid #dbeafe;color:#2B4C9B;border-radius:.35rem;padding:.25rem .6rem;font-size:.65rem;font-weight:800;">↺ usar o do Milldesk (${esc(cc)})</button>
+      <span style="font-size:.62rem;color:#64748b;">o padrão é o CC lido do local; edite se o seu cadastro usa outro número</span>
+    </div>
     ${sug.length?`<div style="font-size:.62rem;font-weight:800;color:#166534;text-transform:uppercase;margin-bottom:.3rem;">Sugestões pelo nome do cliente</div><table style="width:100%;font-size:.72rem;margin-bottom:.8rem;"><tbody>${sug.map(linha).join('')}</tbody></table>`:''}
     <div style="font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:.3rem;">Todos os contratos ativos</div>
     <div style="overflow-x:auto;max-height:45vh;"><table style="width:100%;font-size:.72rem;"><thead><tr><th>Cliente</th><th>Contrato</th><th>CC atual</th><th>Ação</th></tr></thead><tbody>${cts.map(linha).join('')}</tbody></table></div>`);
 };
 window.discAplicarCC=function(id,cc){
   const c=CONTRACTS.find(x=>x.id===id);if(!c)return;
+  cc=String(cc||'').trim();if(!cc){toast('Informe o centro de custo.',false);return}
   const antigo=c.cc||'(vazio)';c.cc=cc;setContracts(CONTRACTS);liteCloseModal();
-  toast('CC de '+c.cliente+' alterado de '+antigo+' para '+cc+'.');renderContent();
+  // conta na hora quantas horas passaram a casar, p/ o usuário ver que surtiu efeito
+  let min=0;try{(MD.ativs||[]).forEach(a=>{if(String(mdCC(a.loc||'')).toLowerCase()===cc.toLowerCase()&&atvInRange(mdActISO(a.start)))min+=(a.wh||0)})}catch(e){}
+  toast('CC de '+c.cliente+': '+antigo+' → '+cc+(min?' · '+minToHM(min)+'h atribuídas agora':''));renderContent();
 };
 window.discArquivar=function(id){
   const c=CONTRACTS.find(x=>x.id===id);if(!c)return;
