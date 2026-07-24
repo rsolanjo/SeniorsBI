@@ -278,7 +278,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v174'
+const APP_VERSION='v175'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -405,6 +405,7 @@ window.setAppMode=function(m){
 }
 // ===== LOGIN / PERFIS via Supabase Auth (login no servidor; perfil no banco público.profiles; admin gerencia pela função admin-users) =====
 const SBI_ROLES={
+  owner:     {lbl:'Dono do sistema', areas:['exec','fin','tech','adm'], val:true, manage:true, owner:true},// enxerga tudo; nenhum admin mexe nele
   admin:     {lbl:'Administrador', areas:['exec','fin','tech','adm'], val:true, manage:true},// Lite virou sub-aba "Sustentação" dentro da Executiva
   executivo: {lbl:'Executivo',     areas:['exec'],                            val:true},
   financeiro:{lbl:'Financeiro',    areas:['fin'],                             val:true},
@@ -424,6 +425,10 @@ function roleAreas(){const out=[];authRoles().forEach(r=>((SBI_ROLES[r]||{}).are
 function authRoles(){if(!AUTH)return[];return[AUTH.role,...(AUTH.extra_roles||[])].filter((v,i,a)=>v&&SBI_ROLES[v]&&a.indexOf(v)===i)}
 function canVal(){return authRoles().some(r=>(SBI_ROLES[r]||{}).val)}
 function isAdminUser(){return authRoles().some(r=>(SBI_ROLES[r]||{}).manage)}
+// Dono do sistema: além de tudo que o admin faz, é o único que mexe em Discrepâncias,
+// Config Alertas e nos logs — e nenhum admin consegue alterar/excluir a conta dele.
+function isOwnerUser(){return authRoles().some(r=>(SBI_ROLES[r]||{}).owner)}
+const OWNER_ONLY_SUBS=['discrep','alertcfg','log'];
 // carrega o perfil (papel) do usuário logado a partir da sessão do Supabase
 async function loadAuthProfile(){
   try{
@@ -1101,7 +1106,7 @@ function _cellKey(td){if(!td)return{s:''};const t=(td.innerText||'').trim();cons
 function enableTableSort(){document.querySelectorAll('#main table').forEach(tb=>{const ths=tb.querySelectorAll('thead th');ths.forEach((th,i)=>{if(th._srt)return;th._srt=1;th.style.cursor='pointer';if(!/↕/.test(th.textContent))th.insertAdjacentHTML('beforeend',' <span style="opacity:.35;font-size:.7em;">↕</span>');th.addEventListener('click',()=>{const body=tb.querySelector('tbody');if(!body)return;const rows=[...body.children].filter(r=>r.children.length>i&&!r.querySelector('[colspan]'));const dir=th._d=(th._d===1?-1:1);ths.forEach(o=>{if(o!==th)o._d=0});rows.sort((a,b)=>{const ka=_cellKey(a.children[i]),kb=_cellKey(b.children[i]);if('n'in ka&&'n'in kb)return(ka.n-kb.n)*dir;return String('s'in ka?ka.s:ka.n).localeCompare(String('s'in kb?kb.s:kb.n),'pt')*dir});rows.forEach(r=>body.appendChild(r))})})})}
 try{const _srtMO=new MutationObserver(()=>{clearTimeout(window._srtT);window._srtT=setTimeout(enableTableSort,80)});const _m=document.getElementById('main');if(_m)_srtMO.observe(_m,{childList:true,subtree:true})}catch(e){}
 window.setSub=function(s){if(SECTION==='exec')EXEC_SUB=s;else if(SECTION==='tech')TECH_SUB=s;else if(SECTION==='fin')FIN_SUB=s;else ADMIN_SUB=s;renderSubTabs();renderContent()}
-function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:SECTION==='fin'?FIN_SUB:ADMIN_SUB;const subs=(SECTION_SUBS[SECTION]||[]).filter(([k])=>!(k==='sustentacao'&&!isAdminUser()));document.getElementById('subTabs').innerHTML=subs.map(([k,l])=>{let b='';if(k==='discrep'){const n=(typeof cadDiscrepCount==='function')?cadDiscrepCount():0;if(n)b=` <span style="background:#dc2626;color:#fff;border-radius:99px;padding:0 .32rem;font-size:.58rem;font-weight:800;">${n}</span>`}return`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}${b}</button>`}).join('')}
+function renderSubTabs(){const cur=SECTION==='exec'?EXEC_SUB:SECTION==='tech'?TECH_SUB:SECTION==='fin'?FIN_SUB:ADMIN_SUB;const subs=(SECTION_SUBS[SECTION]||[]).filter(([k])=>!(k==='sustentacao'&&!isAdminUser())&&!(SECTION==='admin'&&OWNER_ONLY_SUBS.includes(k)&&!isOwnerUser()));document.getElementById('subTabs').innerHTML=subs.map(([k,l])=>{let b='';if(k==='discrep'){const n=(typeof cadDiscrepCount==='function')?cadDiscrepCount():0;if(n)b=` <span style="background:#dc2626;color:#fff;border-radius:99px;padding:0 .32rem;font-size:.58rem;font-weight:800;">${n}</span>`}return`<button class="sub-tab ${cur===k?'active':''}" onclick="setSub('${k}')">${l}${b}</button>`}).join('')}
 function renderContent(){
   if(!AUTH){const ls=document.getElementById('loginScreen');if(ls)ls.classList.remove('hidden');const ap=document.getElementById('app');if(ap)ap.classList.add('hidden');return}
   syncHeaderNav();
@@ -1138,7 +1143,9 @@ function renderContent(){
     else{el.innerHTML=rProd();lucide.createIcons()}
   }else{
     const sync={contratos:rContratos,funcionarios:rFuncionarios,matriz:rMatriz,checklists:rChecklists,custos:rCustos,discrep:rCadDiscrep,'sla-edit':rSLAAdmin,alertcfg:rAlertCfg}
-    if(ADMIN_SUB==='log')rIngest().then(h=>{el.innerHTML=h;lucide.createIcons()})
+    // trava de verdade: mesmo digitando/forçando o sub, quem não é dono não entra
+    if(OWNER_ONLY_SUBS.includes(ADMIN_SUB)&&!isOwnerUser()){el.innerHTML='<div class="card" style="color:#dc2626;padding:1.5rem;text-align:center;font-weight:700;">Área restrita ao dono do sistema.</div>';lucide.createIcons()}
+    else if(ADMIN_SUB==='log')rIngest().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else if(ADMIN_SUB==='usuarios'){el.innerHTML=rUsuariosShell();lucide.createIcons();carregarUsuarios()}
     else{el.innerHTML=(sync[ADMIN_SUB]||rContratos)();lucide.createIcons()}
   }
@@ -1969,11 +1976,12 @@ async function fnUsers(action,payload){
   if(data&&data.error)throw new Error(data.error);
   return data;
 }
-const USR_ROLES=[['admin','Administrador'],['executivo','Executivo'],['financeiro','Financeiro'],['tecnico','Técnico']];
+const USR_ROLES=[['owner','Dono do sistema'],['admin','Administrador'],['executivo','Executivo'],['financeiro','Financeiro'],['tecnico','Técnico']];
 function rUsuariosShell(){
   if(!isAdminUser())return `<div class="card" style="color:#dc2626;padding:1.5rem;text-align:center;font-weight:700;">Acesso restrito ao administrador.</div>`;
-  const opts=USR_ROLES.map(([k,l])=>`<option value="${k}">${l}</option>`).join('');
-  const exNew=USR_ROLES.map(([k,l])=>`<label style="display:inline-flex;align-items:center;gap:.25rem;font-size:.68rem;margin-right:.6rem;cursor:pointer;"><input type="checkbox" name="uExtra" value="${k}" style="accent-color:#2B4C9B;">${l}</label>`).join('');
+  const _roles=USR_ROLES.filter(([k])=>k!=='owner'||isOwnerUser());// só o dono cria/concede o perfil dono
+  const opts=_roles.filter(([k])=>k!=='owner').map(([k,l])=>`<option value="${k}">${l}</option>`).join('');
+  const exNew=_roles.filter(([k])=>k!=='owner').map(([k,l])=>`<label style="display:inline-flex;align-items:center;gap:.25rem;font-size:.68rem;margin-right:.6rem;cursor:pointer;"><input type="checkbox" name="uExtra" value="${k}" style="accent-color:#2B4C9B;">${l}</label>`).join('');
   return `<div class="card mb-4"><div style="font-size:.95rem;font-weight:800;color:#0f172a;">Usuários & acessos</div><div style="font-size:.66rem;color:#64748b;margin-top:.25rem;">Só o administrador cria usuários, troca senha e muda perfil. O <b>perfil principal</b> define a área de entrada: <b>Admin</b> = tudo · <b>Executivo</b> = Executiva · <b>Financeiro</b> = Financeiro · <b>Técnico</b> = Técnica. Os <b>perfis extras</b> SOMAM acessos — ex.: um técnico que também precisa ver o Financeiro. Senhas são tratadas no servidor (Supabase Auth), nunca ficam no navegador.</div></div>
   <div class="card mb-4"><div style="font-size:.8rem;font-weight:800;margin-bottom:.6rem;">Novo usuário</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.5rem;align-items:end;">
@@ -1986,7 +1994,7 @@ function rUsuariosShell(){
     <div style="margin-top:.6rem;"><label class="kpi-lbl">Perfis extras (opcional)</label><div style="margin-top:.2rem;">${exNew}</div></div>
     <div id="uMsg" style="font-size:.7rem;font-weight:700;margin-top:.5rem;"></div></div>
   <div class="card overflow-x-auto mb-4"><div style="font-size:.8rem;font-weight:800;margin-bottom:.5rem;">Usuários (<span id="uCount">…</span>)</div><div id="uList" style="color:#94a3b8;font-size:.75rem;">Carregando…</div></div>
-  <div class="card overflow-x-auto"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;"><div style="font-size:.8rem;font-weight:800;">Log de acesso</div><span style="font-size:.64rem;color:#64748b;">quem entrou e saiu, com data/hora e dispositivo</span><button onclick="carregarAcessos()" style="margin-left:auto;cursor:pointer;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;border-radius:.4rem;padding:.25rem .7rem;font-size:.68rem;font-weight:800;">⟳ Atualizar</button></div><div id="aList" style="color:#94a3b8;font-size:.75rem;">Carregando…</div></div>`;
+  ${isOwnerUser()?`<div class="card overflow-x-auto"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;"><div style="font-size:.8rem;font-weight:800;">Log de acesso</div><span class="badge" style="background:#fef9c3;color:#854d0e;font-weight:800;">👑 só o dono</span><span style="font-size:.64rem;color:#64748b;">quem entrou e saiu, com data/hora e dispositivo</span><button onclick="carregarAcessos()" style="margin-left:auto;cursor:pointer;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;border-radius:.4rem;padding:.25rem .7rem;font-size:.68rem;font-weight:800;">⟳ Atualizar</button></div><div id="aList" style="color:#94a3b8;font-size:.75rem;">Carregando…</div></div>`:''}`;
 }
 // Log de acesso (só admin lê — a policy do banco garante isso mesmo se alguém chamar por fora)
 async function carregarAcessos(){
@@ -2005,15 +2013,21 @@ async function carregarUsuarios(){
   const list=document.getElementById('uList');if(!list)return;
   try{
     const d=await fnUsers('list'),us=d.users||[];const cnt=document.getElementById('uCount');if(cnt)cnt.textContent=us.length;
-    const rows=us.map(u=>{const sel=USR_ROLES.map(([k,l])=>`<option value="${k}" ${u.role===k?'selected':''}>${l}</option>`).join('');const eu=esc(u.email||'').replace(/'/g,"\\'");
+    const souOwner=!!d.callerIsOwner;
+    const rows=us.map(u=>{const ehOwner=u.role==='owner',trava=ehOwner&&!souOwner;// owner só é mexido pelo próprio owner
+      const opts2=USR_ROLES.filter(([k])=>k!=='owner'||souOwner);
+      const sel=opts2.map(([k,l])=>`<option value="${k}" ${u.role===k?'selected':''}>${l}</option>`).join('');const eu=esc(u.email||'').replace(/'/g,"\\'");
       const ext=Array.isArray(u.extra_roles)?u.extra_roles:[];
-      const exBoxes=USR_ROLES.filter(([k])=>k!==u.role).map(([k,l])=>`<label style="display:inline-flex;align-items:center;gap:.2rem;font-size:.64rem;margin-right:.45rem;cursor:pointer;white-space:nowrap;"><input type="checkbox" data-ex="${u.id}" value="${k}" ${ext.includes(k)?'checked':''} onchange="usrSetExtra('${u.id}')" style="accent-color:#7c3aed;">${l}</label>`).join('');
+      const exBoxes=trava?'<span style="font-size:.62rem;color:#94a3b8;">—</span>':opts2.filter(([k])=>k!==u.role).map(([k,l])=>`<label style="display:inline-flex;align-items:center;gap:.2rem;font-size:.64rem;margin-right:.45rem;cursor:pointer;white-space:nowrap;"><input type="checkbox" data-ex="${u.id}" value="${k}" ${ext.includes(k)?'checked':''} onchange="usrSetExtra('${u.id}')" style="accent-color:#7c3aed;">${l}</label>`).join('');
       const areas=(function(){const s=[];[u.role,...ext].forEach(r=>((SBI_ROLES[r]||{}).areas||[]).forEach(a=>{if(!s.includes(a))s.push(a)}));return s.map(a=>(SBI_AREAS[a]||{}).lbl||a).join(' · ')})();
-      return `<tr style="${u.active?'':'opacity:.55;'}"><td style="font-weight:600;">${esc(u.nome||'-')}</td><td style="font-size:.68rem;color:#64748b;">${esc(u.email||'')}</td><td><select onchange="usrSetRole('${u.id}',this.value)" style="font-size:.7rem;padding:.2rem .3rem;border:1px solid #e2e8f0;border-radius:.3rem;">${sel}</select></td><td style="min-width:14rem;">${exBoxes}</td><td style="font-size:.62rem;color:#166534;font-weight:700;">${esc(areas)}</td><td>${u.active?'<span class="badge badge-g">ativo</span>':'<span class="badge badge-r">inativo</span>'}</td><td><div style="display:flex;gap:.3rem;flex-wrap:wrap;"><button onclick="usrPass('${u.id}','${eu}')" class="act-btn act-edit">Senha</button><button onclick="usrToggle('${u.id}',${u.active?'false':'true'})" class="act-btn">${u.active?'Desativar':'Ativar'}</button><button onclick="usrDel('${u.id}','${eu}')" class="act-btn act-del">Excluir</button></div></td></tr>`;
+      const nome=`${esc(u.nome||'-')}${ehOwner?' <span class="badge" style="background:#fef9c3;color:#854d0e;font-weight:800;" title="Dono do sistema — protegido">👑 dono</span>':''}`;
+      const perfilCel=trava?`<span class="badge" style="background:#fef9c3;color:#854d0e;font-weight:800;">Dono do sistema</span>`:`<select onchange="usrSetRole('${u.id}',this.value)" style="font-size:.7rem;padding:.2rem .3rem;border:1px solid #e2e8f0;border-radius:.3rem;">${sel}</select>`;
+      const acoes=trava?'<span style="font-size:.62rem;color:#94a3b8;" title="Só o próprio dono do sistema pode alterar esta conta">protegido</span>':`<div style="display:flex;gap:.3rem;flex-wrap:wrap;"><button onclick="usrPass('${u.id}','${eu}')" class="act-btn act-edit">Senha</button><button onclick="usrToggle('${u.id}',${u.active?'false':'true'})" class="act-btn">${u.active?'Desativar':'Ativar'}</button>${ehOwner?'':`<button onclick="usrDel('${u.id}','${eu}')" class="act-btn act-del">Excluir</button>`}</div>`;
+      return `<tr style="${u.active?'':'opacity:.55;'}${ehOwner?'background:#fffbeb;':''}"><td style="font-weight:600;">${nome}</td><td style="font-size:.68rem;color:#64748b;">${esc(u.email||'')}</td><td>${perfilCel}</td><td style="min-width:14rem;">${exBoxes}</td><td style="font-size:.62rem;color:#166534;font-weight:700;">${esc(areas)}</td><td>${u.active?'<span class="badge badge-g">ativo</span>':'<span class="badge badge-r">inativo</span>'}</td><td>${acoes}</td></tr>`;
     }).join('');
     list.innerHTML=`<table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil principal</th><th>Perfis extras</th><th title="Abas que a pessoa enxerga com a soma dos perfis">Acessa</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:1rem;">Nenhum usuário.</td></tr>'}</tbody></table>`;
   }catch(e){list.innerHTML=`<div style="color:#dc2626;padding:1rem;">Erro ao listar: ${esc(e.message)}</div>`}
-  carregarAcessos();
+  if(isOwnerUser())carregarAcessos();
 }
 window.usrSetExtra=async function(id){
   const ex=[...document.querySelectorAll(`input[data-ex="${id}"]:checked`)].map(i=>i.value);
