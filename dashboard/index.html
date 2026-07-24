@@ -278,7 +278,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v173'
+const APP_VERSION='v174'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1979,7 +1979,7 @@ function rUsuariosShell(){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.5rem;align-items:end;">
       <div><label class="kpi-lbl">Nome</label><input id="uNome" class="fi" placeholder="Nome"></div>
       <div><label class="kpi-lbl">E-mail</label><input id="uEmail" type="email" class="fi" placeholder="pessoa@empresa.com"></div>
-      <div><label class="kpi-lbl">Senha inicial</label><input id="uPass" type="text" class="fi" placeholder="mín. 6 caracteres"></div>
+      <div><label class="kpi-lbl">Senha inicial</label><div style="display:flex;gap:.25rem;align-items:stretch;"><input id="uPass" type="text" class="fi" placeholder="mín. 6 caracteres" style="flex:1;min-width:0;font-family:monospace;"><button type="button" onclick="usrGerarSenha()" title="Gerar senha aleatória forte" style="cursor:pointer;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;border-radius:.42rem;padding:0 .55rem;font-size:.78rem;font-weight:800;">⟳</button><button type="button" onclick="usrCopiarSenha()" title="Copiar a senha" style="cursor:pointer;background:#dcfce7;color:#166534;border:none;border-radius:.42rem;padding:0 .55rem;font-size:.78rem;font-weight:800;">⧉</button></div></div>
       <div><label class="kpi-lbl">Perfil principal</label><select id="uRole" class="fi">${opts}</select></div>
       <button onclick="usrCreate()" style="cursor:pointer;background:#2B4C9B;color:#fff;border:none;border-radius:.45rem;padding:.5rem 1rem;font-size:.75rem;font-weight:800;">Criar</button>
     </div>
@@ -2033,7 +2033,46 @@ window.usrCreate=async function(){
 };
 window.usrSetRole=async function(id,role){try{await fnUsers('setRole',{id,role});toast('Perfil atualizado.')}catch(e){toast('Erro: '+e.message,false);carregarUsuarios()}};
 window.usrToggle=async function(id,active){try{await fnUsers('setActive',{id,active});carregarUsuarios()}catch(e){toast('Erro: '+e.message,false)}};
-window.usrPass=function(id,email){const p=prompt('Nova senha para '+email+' (mín. 6 caracteres):');if(p==null)return;if(p.length<6){toast('Senha mínima de 6 caracteres.',false);return}fnUsers('setPassword',{id,password:p}).then(()=>toast('Senha alterada.')).catch(e=>toast('Erro: '+e.message,false))};
+// Senha aleatória forte. Sem caracteres ambíguos (0/O, 1/l/I) para não errar ao ditar/digitar.
+function senhaAleatoria(n){
+  const A='ABCDEFGHJKLMNPQRSTUVWXYZ',a='abcdefghijkmnopqrstuvwxyz',d='23456789',s='!@#$%&*?';
+  const todos=A+a+d+s,len=n||14,buf=new Uint32Array(len);
+  (window.crypto||window.msCrypto).getRandomValues(buf);
+  // garante ao menos um de cada tipo
+  const base=[A[buf[0]%A.length],a[buf[1]%a.length],d[buf[2]%d.length],s[buf[3]%s.length]];
+  for(let i=4;i<len;i++)base.push(todos[buf[i]%todos.length]);
+  const mix=new Uint32Array(base.length);(window.crypto||window.msCrypto).getRandomValues(mix);
+  for(let i=base.length-1;i>0;i--){const j=mix[i]%(i+1);const t=base[i];base[i]=base[j];base[j]=t}
+  return base.join('');
+}
+async function copiarTexto(txt){
+  try{await navigator.clipboard.writeText(txt);return true}
+  catch(e){try{const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();return ok}catch(e2){return false}}
+}
+window.usrGerarSenha=function(){const el=document.getElementById('uPass');if(!el)return;el.value=senhaAleatoria(14);el.type='text';toast('Senha gerada — copie antes de criar o usuário.')};
+window.usrCopiarSenha=async function(){const el=document.getElementById('uPass');if(!el||!el.value){toast('Nada para copiar.',false);return}
+  const ok=await copiarTexto(el.value);toast(ok?'Senha copiada.':'Não consegui copiar — selecione e copie manualmente.',ok)};
+// Troca de senha: modal com senha já gerada, botões de gerar e copiar
+window.usrPass=function(id,email){
+  const inicial=senhaAleatoria(14);
+  liteOpenModal('Nova senha — '+esc(email),
+   `<div style="font-size:.68rem;color:#64748b;margin-bottom:.6rem;">Gere uma senha aleatória (ou digite uma), <b>copie e entregue à pessoa</b>. Ela não fica salva em lugar nenhum do navegador — depois de fechar, só trocando de novo.</div>
+    <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;">
+      <input id="upNova" type="text" value="${esc(inicial)}" style="flex:1;min-width:14rem;padding:.45rem .6rem;border:1px solid #e2e8f0;border-radius:.45rem;font-size:.85rem;font-family:monospace;letter-spacing:.03em;">
+      <button onclick="document.getElementById('upNova').value=senhaAleatoria(14)" title="Gerar outra" style="cursor:pointer;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;border-radius:.42rem;padding:.42rem .7rem;font-size:.72rem;font-weight:800;">⟳ Gerar</button>
+      <button onclick="upCopiar()" title="Copiar para a área de transferência" style="cursor:pointer;background:#dcfce7;color:#166534;border:none;border-radius:.42rem;padding:.42rem .7rem;font-size:.72rem;font-weight:800;">⧉ Copiar</button>
+    </div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.1rem;">
+      <button onclick="liteCloseModal()" style="padding:.45rem 1rem;background:#f1f5f9;color:#64748b;border:none;border-radius:.45rem;font-weight:700;cursor:pointer;">Cancelar</button>
+      <button onclick="upSalvar('${id}')" style="padding:.45rem 1.3rem;background:#2B4C9B;color:#fff;border:none;border-radius:.45rem;font-weight:700;cursor:pointer;">Salvar senha</button>
+    </div>`);
+};
+window.upCopiar=async function(){const el=document.getElementById('upNova');if(!el||!el.value)return;const ok=await copiarTexto(el.value);toast(ok?'Senha copiada.':'Não consegui copiar — selecione e copie manualmente.',ok)};
+window.upSalvar=function(id){
+  const el=document.getElementById('upNova'),p=el?el.value:'';
+  if(!p||p.length<6){toast('Senha mínima de 6 caracteres.',false);return}
+  fnUsers('setPassword',{id,password:p}).then(()=>{liteCloseModal();toast('Senha alterada.')}).catch(e=>toast('Erro: '+e.message,false));
+};
 window.usrDel=function(id,email){confirmAction('Excluir o usuário '+email+'? A conta e o acesso serão removidos permanentemente.',()=>{fnUsers('delete',{id}).then(()=>{toast('Usuário excluído.');carregarUsuarios()}).catch(e=>toast('Erro: '+e.message,false))})};
 function rExecGeral(){
   const g=companyStats('all'),K=execKpiStats(),A=execActAgg(),auto=buildAutoAlerts().concat(buildMdAlerts()).concat(buildChamadoHorasAlerts()),totalCusto=D.recursos.reduce((s,r)=>s+getSalario(r.nome,r.nivel),0)*mdPeriodFactor()
