@@ -278,7 +278,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v177'
+const APP_VERSION='v178'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1275,6 +1275,17 @@ window.ctxSaveEscopo=function(id){
 window.ctxResetEscopo=function(id){const c=CONTRACTS.find(x=>x.id===id);if(!c)return;delete c.pilaresEdit;setContracts(CONTRACTS);liteCloseModal();toast('Escopo restaurado ao padrão.');renderContent()};
 function ctxToggle(id){const e=document.getElementById('ctx-exp-'+id);if(!e)return;e.style.display=e.style.display==='none'?'block':'none';if(window.lucide)lucide.createIcons()}
 window.atuPessoas=function(bucket,namesPipe){const names=(namesPipe||'').split('|').filter(Boolean);const html=`<div style="font-size:.72rem;color:#334155;">${names.map(n=>`<div style="padding:.28rem .1rem;border-bottom:1px solid #f1f5f9;">${esc(n)}</div>`).join('')||'<div style="color:#94a3b8;padding:.4rem;">Nenhuma pessoa.</div>'}</div><div style="font-size:.6rem;color:#94a3b8;margin-top:.5rem;">${names.length} pessoa(s) com horas atribuídas a esta frente no período.</div>`;liteOpenModal('Pessoas — '+bucket,html)};
+// Detalhe do balde "Interno / Não atribuído" do Custo por atuação — clientes cujas horas não caem
+// em 4Seniors/S4SYS/Porto Virtual. São horas REAIS: aqui dá pra ver de quais chamados vieram.
+let _ATU_NA=[];
+window.atuNaoAtribuido=function(){
+  const L=_ATU_NA||[],tot=L.reduce((s,x)=>s+x.min,0),todos=[...new Set(L.flatMap(x=>x.tids))];
+  const rows=L.map(x=>`<tr><td style="font-weight:600;">${esc(x.cliente)}</td><td>${x.cc?`<span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(x.cc)}</span>`:'<span class="badge" style="background:#f1f5f9;color:#64748b;">sem CC</span>'}</td><td style="white-space:nowrap;font-weight:700;">${minToHM(x.min)}h</td><td><span onclick="liteChamadosPopup('${esc(String(x.cliente).replace(/['"\\]/g,''))}','${x.tids.join(',')}')" title="Ver os chamados" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:#7c3aed;font-weight:800;">${x.tids.length}</span></td><td style="font-size:.64rem;color:#64748b;">${esc(x.tecs.map(t=>String(t).split(' ').slice(0,2).join(' ')).join(', ').slice(0,70))}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:1rem;">Nenhuma hora não atribuída — só custo de quem não lançou hora.</td></tr>';
+  liteOpenModal('Interno / Não atribuído — '+minToHM(tot)+'h',
+   `<div style="font-size:.68rem;color:#64748b;margin-bottom:.6rem;line-height:1.6;">Horas <b>reais</b> de clientes que não caem em 4Seniors, S4SYS nem Porto Virtual — normalmente centro de custo interno ou cliente sem contrato cadastrado. Elas <b>não são rateadas a nenhuma empresa</b>, por isso o custo aqui é indireto. Este balde também soma o <b>salário de quem não lançou nenhuma hora</b> no período.<br>Para atribuir, cadastre/corrija o contrato em <b>Admin → Discrepâncias</b>.</div>
+    <div style="display:flex;gap:.4rem;margin-bottom:.6rem;"><button onclick="liteChamadosPopup('Todos os chamados não atribuídos','${todos.join(',')}')" style="cursor:pointer;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;border-radius:.4rem;padding:.3rem .7rem;font-size:.68rem;font-weight:800;">Ver todos os ${todos.length} chamados</button></div>
+    <div style="overflow-x:auto;max-height:58vh;"><table style="width:100%;font-size:.72rem;"><thead><tr><th>Cliente</th><th>CC</th><th>Horas</th><th>Chamados</th><th>Técnicos</th></tr></thead><tbody>${rows}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td colspan="2">Total</td><td>${minToHM(tot)}h</td><td>${todos.length}</td><td></td></tr></tfoot></table></div>`);
+};
 // Listas por trás dos KPIs da Visão Geral (estourando em H.H / financeiro / técnicos / pendentes) — alimentam os popups.
 let _GE_POP={hh:[],fin:[],tec:[],pend:[]};
 window.geEstourandoModal=function(tipo){
@@ -2186,13 +2197,20 @@ function rExecGeral(){
   // _pe (Custo por atuação) respeita os filtros ativos; _tcMin (Receita real do topFunc) fica cheio.
   const _tipoOkAtu=TIPO_SEL.size?new Set((D.clientes||[]).map(c=>c.nome).filter(n=>getClientContracts(n).some(tipoMatchCt))):null;
   const _atuFiltrado=!!(CLI_SEL.size||TEC_SEL.size||TIPO_SEL.size||COMPANY!=='all');
+  // Detalhe do que cai em "Interno / Não atribuído": são horas REAIS, de clientes que não mapeiam
+  // para 4Seniors/S4SYS/Porto Virtual. Guardamos cliente/CC/chamados p/ dar drill-down.
+  const _naDet={};
   mdEnrichedAtivs().forEach(a=>{const k=normName(a.ag),wh=a.wh||0;if(wh<=0)return;
     const tc=_tcMin[k]=_tcMin[k]||{};tc[a.cliente]=(tc[a.cliente]||0)+wh;
     if(cliMatchFilter(a.cliente)&&tecMatchFilter(a.ag)&&(!_tipoOkAtu||_tipoOkAtu.has(a.cliente))){
       const empRaw=getClientEmpresa(a.cliente),emp=EMPS.includes(empRaw)?empRaw:'Interno / Gestão';
       const pe=_pe[k]=_pe[k]||{};pe[emp]=(pe[emp]||0)+wh;
+      if(emp==='Interno / Gestão'){const key=(a.cliente||'—')+'§'+(a.cc||'');
+        const o=_naDet[key]||(_naDet[key]={cliente:a.cliente||'—',cc:a.cc||'',min:0,tids:new Set(),tecs:new Set()});
+        o.min+=wh;o.tids.add(a.tid);o.tecs.add(a.ag);}
     }
   });
+  _ATU_NA=Object.values(_naDet).map(o=>({...o,tids:[...o.tids],tecs:[...o.tecs]})).sort((a,b)=>b.min-a.min);
   const cliRate=nome=>{const fr=cliFranquia(nome),vl=cliValor(nome);return(fr>0&&vl>0)?vl/fr:0};// R$/h do contrato = valor mensal ÷ franquia
   const recRealDe=nome=>{const m=_tcMin[normName(nome)]||{};return Math.round(Object.entries(m).reduce((s,[cli,mn])=>s+(mn/60)*cliRate(cli),0))};
   // Top funcionários sensível ao filtro: quando há filtro, as horas e a receita real do técnico contam SÓ os clientes do filtro.
@@ -2259,7 +2277,9 @@ ${pnl('Empresa (total)','técnico + demais departamentos',custoEmp,'Custo total'
 </div>
 <div class="card mb-4 overflow-x-auto">${ST('Custo por atuação (empresa)')}<table><thead><tr><th>Empresa / Frente <sup title="Empresa inferida pelo cliente das atividades do Milldesk. Horas sem cliente/contrato e quem não lançou horas no período caem em Interno / Gestão (custo indireto). Despesas gerais aparecem por departamento." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Pessoas <sup title="Pessoas distintas que lançaram horas nessa empresa no período (uma pessoa pode aparecer em mais de uma)." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>Horas no período</th><th>Custo (salário rateado) <sup title="O salário de cada pessoa (proporcional ao período) é rateado pelas horas reais que ela lançou em cada empresa — resolve o acúmulo de função: quem atua em S4SYS e 4Seniors entra proporcional nas duas." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th><th>% da receita <sup title="Custo ÷ receita da empresa. Interno / Gestão é custo indireto, não atrela a receita." style="cursor:help;color:#6366f1;font-weight:800;">ⓘ</sup></th></tr></thead><tbody>${
 BUCKETS.map(b=>{const o=_atu[b],isInt=b==='Interno / Gestão',rec=isInt?0:companyStats(b).receita,p=rec>0?Math.round(o.custo/rec*100):null;
- return`<tr><td style="font-weight:600;">${esc(b)}</td><td>${o.pes.size?`<span onclick="atuPessoas('${esc(b)}','${esc([...o.pes].sort().join('|'))}')" title="Clique para ver os nomes" style="cursor:pointer;text-decoration:underline dotted;color:#2B4C9B;font-weight:700;">${o.pes.size}</span>`:'0'}</td><td style="color:#64748b;">${o.min?minToHM(o.min)+'h':'<span style="color:#cbd5e1;">-</span>'}</td><td style="color:#854d0e;font-weight:700;">${fmtR(Math.round(o.custo))}</td><td style="font-weight:700;color:${p!=null&&p>50?'#dc2626':'#64748b'};">${p!=null?p+'%':(isInt?'<span title="Custo indireto — não atrela a uma empresa/receita" style="color:#94a3b8;">indireto</span>':'-')}</td></tr>`}).join('')
+ const lbl=isInt?'Interno / Não atribuído':b;
+ const horaCel=o.min?(isInt?`<span onclick="atuNaoAtribuido()" title="Ver de quais clientes e chamados vêm estas horas" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;color:#b45309;font-weight:800;">${minToHM(o.min)}h</span>`:minToHM(o.min)+'h'):'<span style="color:#cbd5e1;">-</span>';
+ return`<tr><td style="font-weight:600;">${esc(lbl)}</td><td>${o.pes.size?`<span onclick="atuPessoas('${esc(lbl)}','${esc([...o.pes].sort().join('|'))}')" title="Clique para ver os nomes" style="cursor:pointer;text-decoration:underline dotted;color:#2B4C9B;font-weight:700;">${o.pes.size}</span>`:'0'}</td><td style="color:#64748b;">${horaCel}</td><td style="color:#854d0e;font-weight:700;">${fmtR(Math.round(o.custo))}</td><td style="font-weight:700;color:${p!=null&&p>50?'#dc2626':'#64748b'};">${p!=null?p+'%':(isInt?'<span title="Custo indireto — não atrela a uma empresa/receita" style="color:#94a3b8;">indireto</span>':'-')}</td></tr>`}).join('')
 +Object.entries(_dep).map(([k,v])=>`<tr><td style="font-weight:600;">${esc(k)} <span style="font-size:.58rem;color:#94a3b8;">(despesa)</span></td><td style="color:#cbd5e1;">-</td><td style="color:#cbd5e1;">-</td><td style="color:#854d0e;font-weight:700;">${fmtR(Math.round(v))}</td><td style="font-weight:700;color:#64748b;">${receita>0?Math.round(v/receita*100)+'%':'-'}</td></tr>`).join('')
 ||''}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td colspan="3" style="text-align:right;">TOTAL</td><td style="color:#854d0e;">${fmtR(Math.round(custoEmp))}</td><td>${receita>0?Math.round(custoEmp/receita*100)+'%':'-'}</td></tr></tfoot></table></div>
 <div id="demo-empresas" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">${empCards}</div>
