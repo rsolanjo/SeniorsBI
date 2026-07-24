@@ -278,7 +278,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v176'
+const APP_VERSION='v177'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1509,8 +1509,9 @@ function _audContratos(acts){
     const nl=normName(String(a.loc).split('|')[0]);if(!nl)return null;
     const bate=v=>{const n=normName(v||'');return !!(n&&(n===nl||n.includes(nl)||nl.includes(n)))};
     return lista.find(c=>bate(c.cliente))||lista.find(c=>bate(c.empresa))||null};
-  const byCtr={};acts.forEach(a=>{const c=contratoDe(a);if(c)(byCtr[c.id]=byCtr[c.id]||[]).push(a)});
-  return ctsAtivos.map(ct=>{
+  // Guarda o que NÃO casou com contrato — sem isso o total do Auditor não fecha com o Milldesk.
+  const byCtr={},orfas=[];acts.forEach(a=>{const c=contratoDe(a);if(c)(byCtr[c.id]=byCtr[c.id]||[]).push(a);else orfas.push(a)});
+  const out=ctsAtivos.map(ct=>{
     const cc=String(ct.cc||''),A=byCtr[ct.id]||[];
     const used=A.reduce((s,a)=>s+a.wh,0),franqP=(ct.franquia_horas||0)*60*mf;
     const uso=franqP?Math.round(used/franqP*100):null,saldo=franqP-used;
@@ -1523,6 +1524,8 @@ function _audContratos(acts){
     const semEscopo=_porChamado(ct)&&!(ct.pilaresEdit&&ct.pilaresEdit.length);
     return{ct,cc,used,franqP,uso,saldo,foraMin:semEscopo?0:foraMin,foraTkN:foraTk.size,custoUsado,valorP,fte,chamados:nCh,tecMin,tecTk,semEscopo};
   }).filter(r=>r.used>0&&cliMatchFilter(r.ct.cliente)&&tipoMatchCt(r.ct)&&(!TEC_SEL.size||Object.keys(r.tecMin).some(n=>tecMatchFilter(n)))).sort((a,b)=>b.used-a.used);
+  out._orfas=orfas;// horas sem contrato — expostas no Auditor p/ o total fechar com o Milldesk
+  return out;
 }
 // Dados consolidados do auditor: contratos + técnicos (reconciliados a partir dos MESMOS contratos) + tendência 3 meses.
 function _audData(){
@@ -1539,7 +1542,15 @@ function _audData(){
   // Tendência: 3 últimos meses (min por técnico e por CC), a partir de TODAS as atividades carregadas
   const wins=liteCompWindows(MD_ATV_END).slice(0,3),allActs=_audActs(true);
   const hist=wins.map(w=>{const inW=allActs.filter(a=>a.iso>=w.s&&a.iso<=w.e),tec={},ccm={};inW.forEach(a=>{const f=matchFuncByAgent(a.ag),nm=f?f.nome:a.ag;tec[nm]=(tec[nm]||0)+a.wh;ccm[a.cc]=(ccm[a.cc]||0)+a.wh});return{label:w.label,tec,ccm}});
-  return{rows,tecnicos,totUsed,totFranq,totFora,totCusto,totVal,totCh:totCh.size,totTecCusto,capFTE,hist};
+  // Horas SEM contrato: o Milldesk tem mais horas do que os contratos absorvem. Precisam aparecer,
+  // senão o Auditor "perde" horas e ninguém entende por que não bate com o relatório do Milldesk.
+  const orf=rows._orfas||[];
+  const naMin=orf.reduce((s,a)=>s+(a.wh||0),0),naTec={},naLoc={};
+  orf.forEach(a=>{const f=matchFuncByAgent(a.ag),n=f?f.nome:a.ag;naTec[n]=(naTec[n]||0)+(a.wh||0);
+    const o=naLoc[a.loc]||(naLoc[a.loc]={loc:a.loc,cc:a.cc,min:0,tids:new Set()});o.min+=(a.wh||0);o.tids.add(a.tid)});
+  const naLocArr=Object.values(naLoc).map(o=>({...o,tids:[...o.tids]})).sort((a,b)=>b.min-a.min);
+  return{rows,tecnicos,totUsed,totFranq,totFora,totCusto,totVal,totCh:totCh.size,totTecCusto,capFTE,hist,
+    naMin,naTec,naLoc:naLocArr,totMilldesk:totUsed+naMin};
 }
 // Render do Auditor por PERFIL: mode 'tech' (sem R$), 'exec' (R$ s/ margem/situação), 'fin' (completo).
 function rAuditor(mode,opts){
@@ -1557,7 +1568,7 @@ function rAuditor(mode,opts){
   const bar=(pct,cor)=>`<div style="height:.32rem;background:#f1f5f9;border-radius:999px;overflow:hidden;margin-top:.2rem;"><div style="height:100%;width:${Math.max(0,Math.min(100,pct))}%;background:${cor};border-radius:999px;"></div></div>`;
   const trend=arr=>{const mx=Math.max(1,...arr.map(v=>v||0));return `<div style="display:flex;align-items:flex-end;gap:.18rem;height:1.5rem;">${arr.map((v,i)=>`<div title="${esc(d.hist[i].label)}: ${minToHM(v||0)}h" style="width:.5rem;height:${Math.max(8,Math.round((v||0)/mx*100))}%;background:${i===2?'#2B4C9B':'#c7d2fe'};border-radius:1px;cursor:help;"></div>`).join('')}</div>`};
   const trendInfo='Horas dos últimos 3 meses (o mês corrente, à direita e em azul forte, é parcial — vai até hoje). Passe o mouse nas barras para ver mês e horas.';
-  const kc=[kpiCard(minToHM(d.totUsed)+'h','H.H no período','#2B4C9B','clock',usoTot+'% da franquia'),
+  const kc=[kpiCard(minToHM(d.totUsed)+'h','H.H no período','#2B4C9B','clock',d.naMin?`de ${minToHM(d.totMilldesk)}h no Milldesk · ${minToHM(d.naMin)}h sem contrato`:usoTot+'% da franquia','Horas que casaram com algum contrato. O que sobra do total do Milldesk está no bloco de horas sem contrato.'),
     kpiCard(totFte.toFixed(1),'FTE equipe','#0891b2','users',d.tecnicos.length+' técnicos'),
     kpiCard(fmt(d.totCh),'Chamados c/ hora','#0f766e','ticket'),
     kpiCard(minToHM(d.totFora)+'h','Fora de escopo',foraP>15?'#b45309':'#94a3b8','triangle-alert',foraP+'% das horas'),
@@ -1569,7 +1580,8 @@ function rAuditor(mode,opts){
     const pct=d.totUsed?Math.round(t.min/d.totUsed*100):0;
     const hs=d.hist.map(h=>h.tec[t.nome]||0);
     const fteCor=t.fte>=1?'#991b1b':t.fte>=.75?'#92400e':'#334155';
-    return `<tr><td style="color:#94a3b8;font-weight:700;">${i+1}</td><td style="font-weight:700;color:#0f172a;">${esc((t.nome||'').split(' ').slice(0,2).join(' '))}</td><td style="font-weight:800;color:#2B4C9B;white-space:nowrap;">${minToHM(t.min)}h</td><td style="min-width:5.5rem;"><span style="font-size:.62rem;color:#64748b;font-weight:700;">${pct}%</span>${bar(pct,'#2B4C9B')}</td><td style="font-weight:700;color:#7c3aed;">${fmt(t.ch)}</td><td style="white-space:nowrap;color:#334155;">${t.ch?minToHM(Math.round(t.min/t.ch))+'h':'-'}</td><td style="font-weight:800;color:${fteCor};">${t.fte.toFixed(2)}</td><td style="color:#334155;">${t.nCt}</td>${showVal?`<td style="white-space:nowrap;color:#854d0e;">${t.rate?fmtR(Math.round(t.rate))+'/h':'<span style="color:#cbd5e1;">sem sal.</span>'}</td><td style="font-weight:700;color:#166534;white-space:nowrap;">${t.rate?money(t.custo):'-'}</td>`:''}<td>${trend(hs)}</td></tr>`;
+    const na=d.naTec[t.nome]||0;
+    return `<tr><td style="color:#94a3b8;font-weight:700;">${i+1}</td><td style="font-weight:700;color:#0f172a;">${esc((t.nome||'').split(' ').slice(0,2).join(' '))}</td><td style="font-weight:800;color:#2B4C9B;white-space:nowrap;">${minToHM(t.min)}h${na?`<br><span style="font-size:.55rem;font-weight:600;color:#b45309;" title="Horas em locais sem contrato cadastrado — não entram em nenhuma franquia">+${minToHM(na)}h s/ contrato</span>`:''}</td><td style="min-width:5.5rem;"><span style="font-size:.62rem;color:#64748b;font-weight:700;">${pct}%</span>${bar(pct,'#2B4C9B')}</td><td style="font-weight:700;color:#7c3aed;">${fmt(t.ch)}</td><td style="white-space:nowrap;color:#334155;">${t.ch?minToHM(Math.round(t.min/t.ch))+'h':'-'}</td><td style="font-weight:800;color:${fteCor};">${t.fte.toFixed(2)}</td><td style="color:#334155;">${t.nCt}</td>${showVal?`<td style="white-space:nowrap;color:#854d0e;">${t.rate?fmtR(Math.round(t.rate))+'/h':'<span style="color:#cbd5e1;">sem sal.</span>'}</td><td style="font-weight:700;color:#166534;white-space:nowrap;">${t.rate?money(t.custo):'-'}</td>`:''}<td>${trend(hs)}</td></tr>`;
   }).join('');
   const tecCard=`<div class="card overflow-x-auto mb-4"><div style="font-size:.85rem;font-weight:800;color:#0f172a;margin-bottom:.5rem;">Performance por técnico</div><table><thead><tr><th>#</th><th>Técnico</th><th>Horas</th><th>% do total</th><th title="Chamados distintos atendidos">Chamados</th><th title="Horas ÷ chamados">h/chamado</th><th title="Horas ÷ capacidade do período (dias úteis × 8h)">FTE</th><th title="Em quantos contratos atuou">Contratos</th>${showVal?'<th>Custo-hora</th><th>Custo</th>':''}<th title="${esc(trendInfo)}">Tendência ⓘ</th></tr></thead><tbody>${tecRows}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td></td><td>Total</td><td style="color:#2B4C9B;">${minToHM(d.totUsed)}h</td><td>100%</td><td style="color:#7c3aed;">${fmt(d.totCh)}</td><td>${d.totCh?minToHM(Math.round(d.totUsed/d.totCh))+'h':'-'}</td><td style="color:#0891b2;">${totFte.toFixed(2)}</td><td></td>${showVal?`<td></td><td style="color:#166534;">${money(d.totTecCusto)}</td>`:''}<td></td></tr></tfoot></table></div>`;
   // Performance por contrato
@@ -1581,10 +1593,17 @@ function rAuditor(mode,opts){
     return `<tr><td style="font-weight:700;color:#0f172a;">${esc(x.ct.cliente)}<br><span style="font-weight:500;color:#94a3b8;font-size:.58rem;">CC ${esc(x.cc)}</span></td><td style="white-space:nowrap;color:#64748b;">${x.franqP?minToHM(x.franqP)+'h':'—'}</td><td style="white-space:nowrap;font-weight:800;color:#2B4C9B;">${minToHM(x.used)}h</td><td style="min-width:5.5rem;"><span style="font-size:.62rem;font-weight:800;color:${usoCor};">${x.uso!=null?x.uso+'%':'—'}</span>${bar(x.uso||0,usoCor)}</td><td style="white-space:nowrap;font-weight:700;color:${x.saldo<0?'#dc2626':'#166534'};">${x.franqP?hmSigned(x.saldo)+'h':'—'}</td><td style="font-weight:700;color:#7c3aed;">${fmt(x.chamados)}</td><td style="white-space:nowrap;color:${fp>15?'#b45309':'#94a3b8'};font-weight:${fp>15?'800':'600'};">${x.semEscopo?'<span style="color:#6d28d9;">avulso</span>':minToHM(x.foraMin)+'h <span style="font-size:.58rem;">('+fp+'%)</span>'}</td><td style="font-weight:700;color:${x.fte>=1?'#991b1b':'#334155'};">${(x.fte||0).toFixed(2)}</td>${showVal?`<td style="white-space:nowrap;color:#166534;">${money(x.valorP)}</td><td style="white-space:nowrap;color:#854d0e;">${money(x.custoUsado)}</td>`:''}${showMargem?`<td style="font-weight:800;white-space:nowrap;color:${mg==null?'#94a3b8':mg>=30?'#16a34a':mg>=0?'#f59e0b':'#dc2626'};">${mg==null?'—':mg+'%'}</td>`:''}${showSit?`<td>${dg?`<span class="badge" style="background:${dg.cor}1a;color:${dg.cor};font-weight:800;white-space:nowrap;">${esc(dg.s)}</span>`:'—'}</td>`:''}<td>${trend(hs)}</td></tr>`;
   }).join('');
   const ctCard=`<div class="card overflow-x-auto mb-4"><div style="font-size:.85rem;font-weight:800;color:#0f172a;margin-bottom:.5rem;">Performance por contrato</div><table><thead><tr><th>Contrato</th><th title="Franquia do período">Franquia</th><th>Consumido</th><th>Uso</th><th>Saldo</th><th title="Chamados com hora lançada">Chamados</th><th title="Horas fora dos pilares do contrato">Fora de escopo</th><th title="Carga do contrato (soma dos técnicos)">FTE</th>${showVal?'<th>Receita</th><th>Custo H.H</th>':''}${showMargem?'<th>Margem</th>':''}${showSit?'<th>Situação</th>':''}<th title="${esc(trendInfo)}">Tendência ⓘ</th></tr></thead><tbody>${ctRows}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td>Total</td><td>${minToHM(d.totFranq)}h</td><td style="color:#2B4C9B;">${minToHM(d.totUsed)}h</td><td style="color:${usoTot>=100?'#dc2626':usoTot>=90?'#f59e0b':'#166534'};">${usoTot}%</td><td style="color:${(d.totFranq-d.totUsed)<0?'#dc2626':'#166534'};">${hmSigned(d.totFranq-d.totUsed)}h</td><td style="color:#7c3aed;">${fmt(d.totCh)}</td><td style="color:#b45309;">${minToHM(d.totFora)}h (${foraP}%)</td><td style="color:#0891b2;">${totFte.toFixed(2)}</td>${showVal?`<td style="color:#166534;">${money(d.totVal)}</td><td style="color:#854d0e;">${money(d.totCusto)}</td>`:''}${showMargem?`<td style="color:${margem==null?'#94a3b8':margem>=30?'#16a34a':margem>=0?'#f59e0b':'#dc2626'};">${margem==null?'—':margem+'%'}</td>`:''}${showSit?'<td></td>':''}<td></td></tr></tfoot></table></div>`;
-  const nota=`<div class="card" style="font-size:.62rem;color:#64748b;line-height:1.6;"><b style="color:#0f172a;">Como ler:</b> <b>FTE</b> = horas ÷ capacidade do período (dias úteis × 8h); ≥1 no técnico = sobrecarga. <b>h/chamado</b> = tempo médio por chamado. <b>Fora de escopo</b> = horas em atividades que não casam com nenhum pilar do contrato (acima de 15% merece revisão).${showMargem?' <b>Margem</b> = (receita − custo de mão de obra) ÷ receita.':''} <b>Tendência</b> = horas nos 3 últimos meses (passe o mouse). Os técnicos são a soma das horas atribuídas aos contratos — por isso os totais batem com o painel de contratos.</div>`;
+  const nota=`<div class="card" style="font-size:.62rem;color:#64748b;line-height:1.6;"><b style="color:#0f172a;">Como ler:</b> <b>FTE</b> = horas ÷ capacidade do período (dias úteis × 8h); ≥1 no técnico = sobrecarga. <b>h/chamado</b> = tempo médio por chamado. <b>Fora de escopo</b> = horas em atividades que não casam com nenhum pilar do contrato (acima de 15% merece revisão).${showMargem?' <b>Margem</b> = (receita − custo de mão de obra) ÷ receita.':''} <b>Tendência</b> = horas nos 3 últimos meses (passe o mouse). Os técnicos são a soma das horas <b>atribuídas a contratos</b> — o que não casou com nenhum contrato aparece no bloco laranja acima (e como "s/ contrato" na coluna Horas), para o total fechar com o relatório do Milldesk.</div>`;
+  // ── Conciliação com o Milldesk: total do relatório = atribuído a contratos + não atribuído ──
+  const _q=s=>esc(String(s||'').replace(/['"\\]/g,''));
+  const naRows=d.naLoc.map(o=>`<tr><td style="font-weight:600;">${esc(o.loc)}</td><td>${o.cc?`<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:800;">${esc(o.cc)}</span>`:'<span class="badge" style="background:#f1f5f9;color:#64748b;">sem CC</span>'}</td><td style="font-weight:700;white-space:nowrap;">${minToHM(o.min)}h</td><td><span onclick="liteChamadosPopup('${_q('Sem contrato — '+o.loc)}','${o.tids.join(',')}')" title="Ver os chamados" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:#7c3aed;font-weight:800;">${o.tids.length}</span></td></tr>`).join('');
+  const concil=d.naMin?`<div class="card mb-4" style="background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #b45309;overflow-x:auto;">
+    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="triangle-alert" style="width:1rem;height:1rem;color:#b45309;"></i><span style="font-size:.8rem;font-weight:800;color:#92400e;">${minToHM(d.naMin)}h sem contrato — por isso o total aqui não bate com o Milldesk</span></div>
+    <div style="font-size:.68rem;color:#475569;margin:.45rem 0 .6rem;line-height:1.6;">O relatório do Milldesk soma <b>${minToHM(d.totMilldesk)}h</b> no período. Deste total, <b style="color:#2B4C9B;">${minToHM(d.totUsed)}h</b> casaram com algum contrato (é o que as tabelas abaixo medem) e <b style="color:#b45309;">${minToHM(d.naMin)}h</b> ficaram em locais cujo centro de custo não existe em nenhum contrato — essas horas não entram em franquia, custo por contrato nem faturamento. Resolva em <b>Admin → Discrepâncias</b>.</div>
+    <table style="width:100%;font-size:.7rem;"><thead><tr><th>Local no Milldesk</th><th>CC extraído</th><th>Horas</th><th>Chamados</th></tr></thead><tbody>${naRows}</tbody><tfoot><tr style="font-weight:800;background:#fef3c7;"><td colspan="2">Total sem contrato</td><td>${minToHM(d.naMin)}h</td><td></td></tr></tfoot></table></div>`:'';
   // soTabelas: usado dentro de Equipe & Entrega, onde H.H/FTE já aparecem — mostra só o que é NOVO.
-  if(opts&&opts.soTabelas)return tecCard+ctCard+nota;
-  return head+kpis+tecCard+ctCard+nota;
+  if(opts&&opts.soTabelas)return concil+tecCard+ctCard+nota;
+  return head+kpis+concil+tecCard+ctCard+nota;
 }
 // ═══ DISCREPÂNCIAS DE CADASTRO (Admin) — locais (centros de custo) e técnicos que mudaram no Milldesk ═══
 // Guarda uma "foto" do que existia e compara com o que veio no último sync: o que é NOVO, o que SUMIU e o que foi RENOMEADO.
