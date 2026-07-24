@@ -278,7 +278,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v170'
+const APP_VERSION='v171'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -418,9 +418,12 @@ const SBI_AREAS={
   adm:{lbl:'Admin',mode:'full',section:'admin'}
 };
 let AUTH=null, CUR_AREA='lite';
-function roleAreas(){return AUTH?((SBI_ROLES[AUTH.role]||{}).areas||[]):[]}
-function canVal(){return !!(AUTH&&(SBI_ROLES[AUTH.role]||{}).val)}
-function isAdminUser(){return !!(AUTH&&(SBI_ROLES[AUTH.role]||{}).manage)}
+function roleAreas(){const out=[];authRoles().forEach(r=>((SBI_ROLES[r]||{}).areas||[]).forEach(a=>{if(!out.includes(a))out.push(a)}));return out}
+// Um usuário tem o perfil PRINCIPAL (role) e pode ter perfis EXTRAS (extra_roles) — ex.: um técnico
+// que também precisa enxergar o Financeiro. O acesso é a UNIÃO dos perfis.
+function authRoles(){if(!AUTH)return[];return[AUTH.role,...(AUTH.extra_roles||[])].filter((v,i,a)=>v&&SBI_ROLES[v]&&a.indexOf(v)===i)}
+function canVal(){return authRoles().some(r=>(SBI_ROLES[r]||{}).val)}
+function isAdminUser(){return authRoles().some(r=>(SBI_ROLES[r]||{}).manage)}
 // carrega o perfil (papel) do usuário logado a partir da sessão do Supabase
 async function loadAuthProfile(){
   try{
@@ -428,9 +431,16 @@ async function loadAuthProfile(){
     if(!session)return false;
     const {data:prof,error}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
     if(error||!prof||!prof.active||!SBI_ROLES[prof.role]){AUTH=null;return false}
-    AUTH={id:prof.id,email:prof.email||session.user.email,nome:prof.nome||prof.email||session.user.email,role:prof.role};
+    AUTH={id:prof.id,email:prof.email||session.user.email,nome:prof.nome||prof.email||session.user.email,role:prof.role,extra_roles:Array.isArray(prof.extra_roles)?prof.extra_roles:[]};
     return true;
   }catch(e){AUTH=null;return false}
+}
+// Log de acesso — grava em public.acessos (RLS: cada um insere o próprio; só o admin lê).
+async function logAcesso(evento){
+  try{
+    if(!AUTH||!AUTH.id)return;
+    await sb.from('acessos').insert({user_id:AUTH.id,email:AUTH.email||'',nome:AUTH.nome||'',role:AUTH.role||'',extra_roles:AUTH.extra_roles||[],evento:evento||'login',user_agent:String(navigator.userAgent||'').slice(0,300)});
+  }catch(e){/* log não pode atrapalhar o uso do app */}
 }
 window.doLogin=async function(){
   const email=(document.getElementById('loginUser').value||'').trim(),pass=document.getElementById('loginPass').value||'',err=document.getElementById('loginErr');
@@ -441,13 +451,14 @@ window.doLogin=async function(){
   const ok=await loadAuthProfile();
   if(!ok){err.textContent='Login ok, mas sem perfil ativo. Fale com o administrador.';await sb.auth.signOut();return}
   err.textContent='';document.getElementById('loginPass').value='';
+  logAcesso('login');
   applyAuth();
   // com RLS, o loadMeses do boot (anon) volta vazio; agora autenticado, recarrega e re-renderiza
   try{await loadMeses()}catch(e){}
   if(getMD().key){if(!MD.loaded)mdSync()}else if(MES){try{await loadMonth(MES)}catch(e){}}
   renderContent();
 };
-window.doLogout=async function(){try{await sb.auth.signOut()}catch(e){}AUTH=null;LITE_VAL=false;
+window.doLogout=async function(){try{await logAcesso('logout')}catch(e){}try{await sb.auth.signOut()}catch(e){}AUTH=null;LITE_VAL=false;
   const ls=document.getElementById('loginScreen');if(ls)ls.classList.remove('hidden');
   const ap=document.getElementById('app');if(ap)ap.classList.add('hidden');
   const lu=document.getElementById('loginUser');if(lu)lu.value='';
@@ -1962,33 +1973,62 @@ const USR_ROLES=[['admin','Administrador'],['executivo','Executivo'],['financeir
 function rUsuariosShell(){
   if(!isAdminUser())return `<div class="card" style="color:#dc2626;padding:1.5rem;text-align:center;font-weight:700;">Acesso restrito ao administrador.</div>`;
   const opts=USR_ROLES.map(([k,l])=>`<option value="${k}">${l}</option>`).join('');
-  return `<div class="card mb-4"><div style="font-size:.95rem;font-weight:800;color:#0f172a;">Usuários & acessos</div><div style="font-size:.66rem;color:#64748b;margin-top:.25rem;">Só o administrador cria usuários, troca senha e muda perfil. O <b>perfil</b> define o que a pessoa vê: <b>Admin</b> = tudo · <b>Executivo</b> = Executiva · <b>Financeiro</b> = contratos · <b>Técnico</b> = Técnica. Senhas são tratadas no servidor (Supabase Auth), nunca ficam no navegador.</div></div>
+  const exNew=USR_ROLES.map(([k,l])=>`<label style="display:inline-flex;align-items:center;gap:.25rem;font-size:.68rem;margin-right:.6rem;cursor:pointer;"><input type="checkbox" name="uExtra" value="${k}" style="accent-color:#2B4C9B;">${l}</label>`).join('');
+  return `<div class="card mb-4"><div style="font-size:.95rem;font-weight:800;color:#0f172a;">Usuários & acessos</div><div style="font-size:.66rem;color:#64748b;margin-top:.25rem;">Só o administrador cria usuários, troca senha e muda perfil. O <b>perfil principal</b> define a área de entrada: <b>Admin</b> = tudo · <b>Executivo</b> = Executiva · <b>Financeiro</b> = Financeiro · <b>Técnico</b> = Técnica. Os <b>perfis extras</b> SOMAM acessos — ex.: um técnico que também precisa ver o Financeiro. Senhas são tratadas no servidor (Supabase Auth), nunca ficam no navegador.</div></div>
   <div class="card mb-4"><div style="font-size:.8rem;font-weight:800;margin-bottom:.6rem;">Novo usuário</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.5rem;align-items:end;">
       <div><label class="kpi-lbl">Nome</label><input id="uNome" class="fi" placeholder="Nome"></div>
       <div><label class="kpi-lbl">E-mail</label><input id="uEmail" type="email" class="fi" placeholder="pessoa@empresa.com"></div>
       <div><label class="kpi-lbl">Senha inicial</label><input id="uPass" type="text" class="fi" placeholder="mín. 6 caracteres"></div>
-      <div><label class="kpi-lbl">Perfil</label><select id="uRole" class="fi">${opts}</select></div>
+      <div><label class="kpi-lbl">Perfil principal</label><select id="uRole" class="fi">${opts}</select></div>
       <button onclick="usrCreate()" style="cursor:pointer;background:#2B4C9B;color:#fff;border:none;border-radius:.45rem;padding:.5rem 1rem;font-size:.75rem;font-weight:800;">Criar</button>
-    </div><div id="uMsg" style="font-size:.7rem;font-weight:700;margin-top:.5rem;"></div></div>
-  <div class="card overflow-x-auto"><div style="font-size:.8rem;font-weight:800;margin-bottom:.5rem;">Usuários (<span id="uCount">…</span>)</div><div id="uList" style="color:#94a3b8;font-size:.75rem;">Carregando…</div></div>`;
+    </div>
+    <div style="margin-top:.6rem;"><label class="kpi-lbl">Perfis extras (opcional)</label><div style="margin-top:.2rem;">${exNew}</div></div>
+    <div id="uMsg" style="font-size:.7rem;font-weight:700;margin-top:.5rem;"></div></div>
+  <div class="card overflow-x-auto mb-4"><div style="font-size:.8rem;font-weight:800;margin-bottom:.5rem;">Usuários (<span id="uCount">…</span>)</div><div id="uList" style="color:#94a3b8;font-size:.75rem;">Carregando…</div></div>
+  <div class="card overflow-x-auto"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;"><div style="font-size:.8rem;font-weight:800;">Log de acesso</div><span style="font-size:.64rem;color:#64748b;">quem entrou e saiu, com data/hora e dispositivo</span><button onclick="carregarAcessos()" style="margin-left:auto;cursor:pointer;background:#eef2ff;color:#2B4C9B;border:1px solid #dbeafe;border-radius:.4rem;padding:.25rem .7rem;font-size:.68rem;font-weight:800;">⟳ Atualizar</button></div><div id="aList" style="color:#94a3b8;font-size:.75rem;">Carregando…</div></div>`;
+}
+// Log de acesso (só admin lê — a policy do banco garante isso mesmo se alguém chamar por fora)
+async function carregarAcessos(){
+  const el=document.getElementById('aList');if(!el)return;
+  el.innerHTML='<span style="color:#94a3b8;">Carregando…</span>';
+  try{
+    const d=await fnUsers('acessos',{limit:200}),ac=d.acessos||[];
+    const evB=e=>{const m={login:['entrou','#166534','#dcfce7'],logout:['saiu','#64748b','#f1f5f9'],negado:['negado','#991b1b','#fee2e2']}[e]||[e,'#64748b','#f1f5f9'];return`<span class="badge" style="background:${m[2]};color:${m[1]};font-weight:800;">${m[0]}</span>`};
+    const disp=ua=>{const s=String(ua||'');const so=/Windows/i.test(s)?'Windows':/Android/i.test(s)?'Android':/iPhone|iPad/i.test(s)?'iOS':/Mac/i.test(s)?'macOS':/Linux/i.test(s)?'Linux':'—';const nav=/Edg\//i.test(s)?'Edge':/Chrome\//i.test(s)?'Chrome':/Firefox\//i.test(s)?'Firefox':/Safari\//i.test(s)?'Safari':'';return so+(nav?' · '+nav:'')};
+    const rows=ac.map(a=>{const dt=a.at?new Date(a.at):null;const ex=(a.extra_roles||[]).length?' <span style="color:#7c3aed;font-weight:700;">+'+(a.extra_roles||[]).join(', ')+'</span>':'';
+      return`<tr><td style="white-space:nowrap;font-size:.68rem;">${dt?dt.toLocaleString('pt-BR'):'—'}</td><td style="font-weight:600;">${esc(a.nome||'—')}</td><td style="font-size:.68rem;color:#64748b;">${esc(a.email||'')}</td><td style="font-size:.66rem;">${esc(a.role||'—')}${ex}</td><td>${evB(a.evento)}</td><td style="font-size:.64rem;color:#94a3b8;" title="${esc(a.user_agent||'')}">${esc(disp(a.user_agent))}</td></tr>`}).join('');
+    el.innerHTML=`<table><thead><tr><th>Quando</th><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Evento</th><th>Dispositivo</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:1rem;">Nenhum acesso registrado ainda.</td></tr>'}</tbody></table><div style="font-size:.59rem;color:#94a3b8;margin-top:.4rem;">Mostrando os 200 acessos mais recentes. O registro é gravado no login e no logout; fechar o navegador sem sair não gera "saiu".</div>`;
+  }catch(e){el.innerHTML=`<div style="color:#dc2626;padding:1rem;">Erro ao listar: ${esc(e.message)}</div>`}
 }
 async function carregarUsuarios(){
   const list=document.getElementById('uList');if(!list)return;
   try{
     const d=await fnUsers('list'),us=d.users||[];const cnt=document.getElementById('uCount');if(cnt)cnt.textContent=us.length;
     const rows=us.map(u=>{const sel=USR_ROLES.map(([k,l])=>`<option value="${k}" ${u.role===k?'selected':''}>${l}</option>`).join('');const eu=esc(u.email||'').replace(/'/g,"\\'");
-      return `<tr style="${u.active?'':'opacity:.55;'}"><td style="font-weight:600;">${esc(u.nome||'-')}</td><td style="font-size:.68rem;color:#64748b;">${esc(u.email||'')}</td><td><select onchange="usrSetRole('${u.id}',this.value)" style="font-size:.7rem;padding:.2rem .3rem;border:1px solid #e2e8f0;border-radius:.3rem;">${sel}</select></td><td>${u.active?'<span class="badge badge-g">ativo</span>':'<span class="badge badge-r">inativo</span>'}</td><td><div style="display:flex;gap:.3rem;flex-wrap:wrap;"><button onclick="usrPass('${u.id}','${eu}')" class="act-btn act-edit">Senha</button><button onclick="usrToggle('${u.id}',${u.active?'false':'true'})" class="act-btn">${u.active?'Desativar':'Ativar'}</button><button onclick="usrDel('${u.id}','${eu}')" class="act-btn act-del">Excluir</button></div></td></tr>`;
+      const ext=Array.isArray(u.extra_roles)?u.extra_roles:[];
+      const exBoxes=USR_ROLES.filter(([k])=>k!==u.role).map(([k,l])=>`<label style="display:inline-flex;align-items:center;gap:.2rem;font-size:.64rem;margin-right:.45rem;cursor:pointer;white-space:nowrap;"><input type="checkbox" data-ex="${u.id}" value="${k}" ${ext.includes(k)?'checked':''} onchange="usrSetExtra('${u.id}')" style="accent-color:#7c3aed;">${l}</label>`).join('');
+      const areas=(function(){const s=[];[u.role,...ext].forEach(r=>((SBI_ROLES[r]||{}).areas||[]).forEach(a=>{if(!s.includes(a))s.push(a)}));return s.map(a=>(SBI_AREAS[a]||{}).lbl||a).join(' · ')})();
+      return `<tr style="${u.active?'':'opacity:.55;'}"><td style="font-weight:600;">${esc(u.nome||'-')}</td><td style="font-size:.68rem;color:#64748b;">${esc(u.email||'')}</td><td><select onchange="usrSetRole('${u.id}',this.value)" style="font-size:.7rem;padding:.2rem .3rem;border:1px solid #e2e8f0;border-radius:.3rem;">${sel}</select></td><td style="min-width:14rem;">${exBoxes}</td><td style="font-size:.62rem;color:#166534;font-weight:700;">${esc(areas)}</td><td>${u.active?'<span class="badge badge-g">ativo</span>':'<span class="badge badge-r">inativo</span>'}</td><td><div style="display:flex;gap:.3rem;flex-wrap:wrap;"><button onclick="usrPass('${u.id}','${eu}')" class="act-btn act-edit">Senha</button><button onclick="usrToggle('${u.id}',${u.active?'false':'true'})" class="act-btn">${u.active?'Desativar':'Ativar'}</button><button onclick="usrDel('${u.id}','${eu}')" class="act-btn act-del">Excluir</button></div></td></tr>`;
     }).join('');
-    list.innerHTML=`<table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:1rem;">Nenhum usuário.</td></tr>'}</tbody></table>`;
+    list.innerHTML=`<table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil principal</th><th>Perfis extras</th><th title="Abas que a pessoa enxerga com a soma dos perfis">Acessa</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:1rem;">Nenhum usuário.</td></tr>'}</tbody></table>`;
   }catch(e){list.innerHTML=`<div style="color:#dc2626;padding:1rem;">Erro ao listar: ${esc(e.message)}</div>`}
+  carregarAcessos();
 }
+window.usrSetExtra=async function(id){
+  const ex=[...document.querySelectorAll(`input[data-ex="${id}"]:checked`)].map(i=>i.value);
+  try{await fnUsers('setExtraRoles',{id,extra_roles:ex});toast('Perfis extras atualizados.');
+    if(AUTH&&AUTH.id===id){AUTH.extra_roles=ex;syncHeaderNav();renderContent()}
+    carregarUsuarios();
+  }catch(e){toast('Erro: '+e.message,false);carregarUsuarios()}
+};
 window.usrCreate=async function(){
   const msg=document.getElementById('uMsg'),nome=document.getElementById('uNome').value.trim(),email=document.getElementById('uEmail').value.trim(),password=document.getElementById('uPass').value,role=document.getElementById('uRole').value;
   if(!email||!password){msg.style.color='#dc2626';msg.textContent='Preencha e-mail e senha.';return}
   if(password.length<6){msg.style.color='#dc2626';msg.textContent='Senha mínima de 6 caracteres.';return}
   msg.style.color='#64748b';msg.textContent='Criando…';
-  try{await fnUsers('create',{email,password,nome,role});msg.style.color='#166534';msg.textContent='Usuário criado com sucesso.';['uNome','uEmail','uPass'].forEach(id=>document.getElementById(id).value='');carregarUsuarios()}
+  const extra_roles=[...document.querySelectorAll('input[name="uExtra"]:checked')].map(i=>i.value).filter(r=>r!==role);
+  try{await fnUsers('create',{email,password,nome,role,extra_roles});msg.style.color='#166534';msg.textContent='Usuário criado com sucesso.';['uNome','uEmail','uPass'].forEach(id=>document.getElementById(id).value='');document.querySelectorAll('input[name="uExtra"]').forEach(i=>i.checked=false);carregarUsuarios()}
   catch(e){msg.style.color='#dc2626';msg.textContent='Erro: '+e.message}
 };
 window.usrSetRole=async function(id,role){try{await fnUsers('setRole',{id,role});toast('Perfil atualizado.')}catch(e){toast('Erro: '+e.message,false);carregarUsuarios()}};
