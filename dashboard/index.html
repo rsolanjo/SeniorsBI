@@ -278,7 +278,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v175'
+const APP_VERSION='v176'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -504,9 +504,9 @@ const ALERT_GRP={FTE:'profissional',Horas:'profissional',Grupo:'profissional',Fr
 const alertGrp=a=>a.grp||ALERT_GRP[a.cat]||'cliente'
 const GRP_META={profissional:{lbl:'Profissional',ic:'user-cog',cor:'#2B4C9B'},cliente:{lbl:'Cliente',ic:'building-2',cor:'#7c3aed'},usuario:{lbl:'Chamado',ic:'ticket',cor:'#E04622'},custo:{lbl:'Custo',ic:'dollar-sign',cor:'#854d0e'}}
 const SECTION_SUBS={
-  exec:[['geral','Visão Geral'],['operacao','Operação'],['relatorios','Relatórios'],['alertas','Alertas'],['sustentacao','Sustentação']],
+  exec:[['geral','Visão Geral'],['operacao','Operação'],['relatorios','Relatórios'],['alertas','Alertas']],
   tech:[['chamados','Chamados & Atividades'],['avulsas','Horas Avulsas'],['equipe','Equipe & Entrega'],['alertas','Alertas & Inconsistências']],
-  admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['usuarios','Usuários'],['matriz','Matriz'],['checklists','Checklists'],['custos','Custos Adicionais'],['discrep','Discrepâncias'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']],
+  admin:[['contratos','Contratos'],['funcionarios','Funcionários'],['usuarios','Usuários'],['matriz','Matriz'],['checklists','Checklists'],['sustentacao','Sustentação'],['custos','Custos Adicionais'],['discrep','Discrepâncias'],['sla-edit','SLA Mensal'],['alertcfg','Config Alertas'],['log','Log']],
   fin:[['geral','Visão Geral'],['avulsas','Horas Avulsas'],['performance','Performance'],['relatorios','Relatórios']]
 }
 
@@ -1123,14 +1123,13 @@ function renderContent(){
     rLimitado().then(h=>{el.innerHTML=chrome+h;if(window.lucide)lucide.createIcons()});return}
   if(_nav)_nav.style.display=(roleAreas().length>1)?'flex':'none';if(_st)_st.style.display=''
   {const _evb=document.getElementById('execValBtn');if(_evb)_evb.innerHTML=(SECTION==='exec')?`<button onclick="toggleExecVal()" style="cursor:pointer;border:none;border-radius:.42rem;padding:.24rem .6rem;font-size:.68rem;font-weight:800;background:${EXEC_VAL?'#fef9c3':'#e0e7ff'};color:${EXEC_VAL?'#854d0e':'#3730a3'};white-space:nowrap;">${EXEC_VAL?'👁 Ocultar valores':'👁 Mostrar valores'}</button>`:''}
-  {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display=(SECTION==='admin'||(SECTION==='exec'&&EXEC_SUB==='sustentacao'))?'none':'';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
+  {const _h=document.getElementById('appHeader'),_fb=document.getElementById('filterBar');if(_h)_h.style.display='';if(_fb)_fb.style.display=(SECTION==='admin')?'none':'';const _s4=document.getElementById('logoS4'),_pv=document.getElementById('logoPV'),_cb=document.getElementById('compBar');if(_s4)_s4.style.display='';if(_pv)_pv.style.display='';if(_cb)_cb.style.display='contents'}
   renderFilters();
   if(TIME==='comparar'){renderCompare();return}
-  const standalone=SECTION==='admin'||SECTION==='fin'||(SECTION==='exec'&&EXEC_SUB==='sustentacao')||(SECTION==='tech'&&['chamados','avulsas'].includes(TECH_SUB))
+  const standalone=SECTION==='admin'||SECTION==='fin'||(SECTION==='tech'&&['chamados','avulsas'].includes(TECH_SUB))
   if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…</div>';return}
   if(SECTION==='fin'){el.innerHTML=rFinanceiro();lucide.createIcons()}
   else if(SECTION==='exec'){
-    if(EXEC_SUB==='sustentacao'){renderSustentacao(el);return}
     const sync={geral:rExecGeral,operacao:rExecOperacao,clientes:rExecClientes,custohora:rExecCustoHora,tecnico:rExecTecnico,relatorios:rExecRelatorios,alertas:rExecRiscosFull}
     MONEY_MASK=!EXEC_VAL;// oculta R$ só enquanto renderiza o executivo
     try{el.innerHTML=(sync[EXEC_SUB]||rExecGeral)()}finally{MONEY_MASK=false}
@@ -1145,6 +1144,7 @@ function renderContent(){
     const sync={contratos:rContratos,funcionarios:rFuncionarios,matriz:rMatriz,checklists:rChecklists,custos:rCustos,discrep:rCadDiscrep,'sla-edit':rSLAAdmin,alertcfg:rAlertCfg}
     // trava de verdade: mesmo digitando/forçando o sub, quem não é dono não entra
     if(OWNER_ONLY_SUBS.includes(ADMIN_SUB)&&!isOwnerUser()){el.innerHTML='<div class="card" style="color:#dc2626;padding:1.5rem;text-align:center;font-weight:700;">Área restrita ao dono do sistema.</div>';lucide.createIcons()}
+    else if(ADMIN_SUB==='sustentacao'){renderSustentacao(el);return}
     else if(ADMIN_SUB==='log')rIngest().then(h=>{el.innerHTML=h;lucide.createIcons()})
     else if(ADMIN_SUB==='usuarios'){el.innerHTML=rUsuariosShell();lucide.createIcons();carregarUsuarios()}
     else{el.innerHTML=(sync[ADMIN_SUB]||rContratos)();lucide.createIcons()}
@@ -1772,7 +1772,8 @@ function execReportSecoes(tipo){
       rows:itens.sort((a,b)=>String(a.ct.cliente).localeCompare(String(b.ct.cliente),'pt')).map(x=>[x.ct.cliente,String(x.ct.cc||'—'),x.t.id,String(x.t.start||'').split(' ')[0],x.t.st||'—',(x.t.t||'').slice(0,80)])});
   }
   if(tipo==='avulsas'||tipo==='financeiro'){
-    const av=finAvulsasData();
+    // faturamento só do que a Técnica validou
+    const av=finAvulsasData().filter(a=>a.aprov===true);
     const tot=av.reduce((s,a)=>s+(a.realMin||0),0),totCob=av.reduce((s,a)=>s+(+a.cobrar||0),0),totFat=av.reduce((s,a)=>s+(a.faturarR||0),0);
     const totPag=av.reduce((s,a)=>s+(+a.pagar||0),0),totPagR=av.reduce((s,a)=>s+(a.pagarR||0),0);
     // A faturar por cliente (com CC)
@@ -1781,7 +1782,7 @@ function execReportSecoes(tipo){
     const hf=['Cliente','CC','Lançamentos','Trabalhado','A cobrar'];if(val)hf.push('A faturar (R$)');
     const rf=Object.values(gc).sort((a,b)=>b.min-a.min).map(o=>{const r=[o.cliente,String(o.cc||'—'),o.n,minToHM(o.min)+'h',hDec(o.cobrar)+'h'];if(val)r.push(fmtR(Math.round(o.fat)));return r});
     const tf=['TOTAL','',av.length,minToHM(tot)+'h',hDec(totCob)+'h'];if(val)tf.push(fmtR(Math.round(totFat)));
-    secs.push({nome:'Horas avulsas — a faturar por cliente',head:hf,rows:rf,tot:tf,note:'Atividades marcadas como "a cobrar" no Milldesk (fora da franquia). "A cobrar" aplica o mínimo de 4h e múltiplos de 4h.'});
+    secs.push({nome:'Horas avulsas — a faturar por cliente',head:hf,rows:rf,tot:tf,note:'Somente lançamentos JÁ VALIDADOS pela Técnica. "A cobrar" aplica o mínimo de 4h e múltiplos de 4h.'});
     // A pagar por técnico
     const gt={};av.forEach(a=>{const k=a.ag||'-';const o=gt[k]||(gt[k]={min:0,pagar:0,pagarR:0,n:0});o.min+=(a.realMin||0);o.pagar+=(+a.pagar||0);o.pagarR+=(a.pagarR||0);o.n++});
     const hp=['Técnico','Lançamentos','Trabalhado','A pagar'];if(val)hp.push('A pagar (R$)');
@@ -1869,7 +1870,8 @@ function rFinanceiro(){
 function finAvulsasData(){
   const tk={};(MD.tickets||[]).concat(MD.backlogFull||[]).forEach(t=>{if(t)tk[t.id]=t});
   const avccM=lsGet('sbi_lite_avcc')||{},cobrarM=lsGet('sbi_lite_cobrar')||{},pagarM=lsGet('sbi_lite_pagar')||{},horaM=lsGet('sbi_lite_horaedit')||{};
-  const aprovM=(typeof getAprov==='function')?(getAprov()||{}):{};
+  // validação da Técnica — MESMO store da Sustentação (sbi_lite_aprov, via liteToggleAprov)
+  const aprovM=(typeof getLiteAprov==='function')?(getLiteAprov()||{}):{};
   const ctByCC={};(CONTRACTS||[]).filter(c=>c.status!=='arquivado').forEach(c=>{const k=String(c.cc||'').toLowerCase();if(k&&!ctByCC[k])ctByCC[k]=c});
   return (MD.avulsas||[]).map(a=>{
     const t=tk[a.tid],tloc=(t&&t.loc)||a.loc||'';
@@ -1892,13 +1894,18 @@ function finAvulsasData(){
 function rFinAvulsasTab(){
   const head=`<div class="card mb-4"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><span style="font-size:.95rem;font-weight:800;color:#0f172a;">Horas avulsas (a cobrar)</span><span class="badge" style="background:#f3e8ff;color:#6b21a8;font-weight:700;">FORA DA FRANQUIA</span><span class="badge" style="background:#eef2ff;color:#3730a3;font-weight:700;">todos os clientes</span></div><div style="font-size:.66rem;color:#64748b;margin-top:.35rem;">Atividades marcadas como <b>a cobrar</b> no Milldesk (relatório <b>Atividades com horas a cobrar</b>), de <b>todos os contratos</b>. Os ajustes de <b>A Cobrar</b>, <b>A Pagar</b> e <b>Início/Fim</b> são os mesmos da Sustentação — editar aqui altera lá também.</div></div>`;
   if(!MD.loaded)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:2rem;">Sincronize o Milldesk para ver as horas avulsas.</div>`;
-  const av=finAvulsasData();
-  if(!av.length)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhuma hora a cobrar no período/filtro.</div>`;
+  const todas=finAvulsasData();
+  if(!todas.length)return head+`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhuma hora a cobrar no período/filtro.</div>`;
+  // Só o que a Técnica VALIDOU entra como pronto para faturar. O resto fica visível como pendente.
+  const av=todas.filter(a=>a.aprov===true),pendentes=todas.filter(a=>a.aprov!==true);
+  const pendMin=pendentes.reduce((s,a)=>s+(a.realMin||0),0);
+  const alerta=pendentes.length?`<div class="card mb-4" style="background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #b45309;"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="clock" style="width:1rem;height:1rem;color:#b45309;"></i><span style="font-size:.78rem;font-weight:800;color:#92400e;">${pendentes.length} lançamento(s) aguardando validação da Técnica — ${minToHM(pendMin)}h</span></div><div style="font-size:.66rem;color:#b45309;margin-top:.3rem;line-height:1.5;">Esses <b>não entram</b> nos números abaixo. O gestor de TI precisa conferir início/fim e marcar <b>Validado</b> em <b>Técnica → Horas Avulsas</b> para liberar o faturamento.<br>${pendentes.slice(0,8).map(a=>'#'+esc(a.tid)+' '+esc(a.cliente)+' ('+minToHM(a.realMin)+'h)').join(' · ')}${pendentes.length>8?' …':''}</div></div>`:'';
+  if(!av.length)return head+alerta+`<div class="card" style="text-align:center;color:#94a3b8;padding:1.5rem;">Nenhuma hora <b>validada</b> ainda no período/filtro.</div>`;
   const totMin=av.reduce((s,a)=>s+(a.realMin||0),0),totCobrar=av.reduce((s,a)=>s+(+a.cobrar||0),0),totPagar=av.reduce((s,a)=>s+(+a.pagar||0),0);
   const totFat=av.reduce((s,a)=>s+(a.faturarR||0),0),totPagR=av.reduce((s,a)=>s+(a.pagarR||0),0);
   const hDec=h=>minToHM(Math.round((+h||0)*60));// horas decimais → H:MM (5,67h = 5:40h)
   const kpis=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-    ${kpiCard(minToHM(totMin)+'h','A cobrar Milldesk','#7c3aed','receipt','soma das horas do relatório','Soma do charge_hour das atividades marcadas como a cobrar.')}
+    ${kpiCard(minToHM(totMin)+'h','A cobrar Milldesk','#7c3aed','receipt','validado pela Técnica'+(pendentes.length?' · '+minToHM(pendMin)+'h pendente':''),'Soma do charge_hour das atividades marcadas como a cobrar — apenas as já validadas pela Técnica.')}
     ${kpiCard(hDec(totCobrar)+'h','A cobrar (faturável)','#166534','file-text','mín. 4h · múltiplos de 4h · '+fmtR(Math.round(totFat)),'Horas efetivamente faturadas ao cliente (arredondamento comercial), × o R$/h avulsa de cada contrato.')}
     ${kpiCard(hDec(totPagar)+'h','A pagar (técnicos)','#b45309','wallet',fmtR(Math.round(totPagR))+' em mão de obra','Horas a pagar aos técnicos pelas avulsas (o que ele efetivamente trabalhou) × o custo-hora de cada um.')}
     ${kpiCard(fmt(av.length),'Lançamentos','#0891b2','list-checks','no período/filtro')}
@@ -1916,7 +1923,7 @@ function rFinAvulsasTab(){
   const det=av.map(a=>`<tr${a.comercial?' style="background:#fff7f7;"':''}><td style="font-weight:700;white-space:nowrap;">${esc(a.tid||'-')}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(String(a.cc||'—'))}</span></td><td style="font-size:.66rem;">${esc(a.cliente)}</td><td style="font-size:.64rem;color:#64748b;">${a.contrato?esc(a.contrato):'<span style="color:#991b1b;font-weight:700;">sem contrato</span>'}</td><td><span class="badge" style="background:${a.closed?'#dcfce7':'#fef3c7'};color:${a.closed?'#166534':'#92400e'};font-weight:700;">${esc(a.status||'-')}</span></td><td style="white-space:nowrap;font-size:.66rem;">${esc((a.dataBR||brDate(a.iso)||'').slice(0,10))}</td><td style="white-space:nowrap;font-size:.66rem;">${esc(a.hi||'—')}</td><td style="white-space:nowrap;font-size:.66rem;">${esc(a.hf||'—')}</td><td>${comBadge(a.comercial)}</td><td style="white-space:nowrap;font-weight:700;">${minToHM(a.realMin)}h</td><td style="font-size:.66rem;white-space:nowrap;">${(techDisp(a.ag||'-'))}</td><td style="text-align:right;font-weight:800;color:#166534;white-space:nowrap;">${hDec(a.cobrar)}h</td><td style="text-align:right;font-weight:800;color:#b45309;white-space:nowrap;">${hDec(a.pagar)}h</td><td style="font-size:.64rem;color:#334155;">${esc((a.assunto||a.desc||'').slice(0,70))}</td></tr>`).join('');
   const tabela=`<div class="card overflow-x-auto">${ST('Detalhe dos lançamentos ('+av.length+')')}<table style="width:100%;font-size:.7rem;"><thead><tr><th>Chamado</th><th>CC</th><th>Cliente</th><th>Contrato</th><th>Status</th><th>Data</th><th>Início</th><th>Fim</th><th title="Dentro do horário comercial (seg-sex 8-18, exceto feriado)">H. comercial</th><th>Trabalhado</th><th>Técnico</th><th style="text-align:right;">A Cobrar</th><th style="text-align:right;">A Pagar</th><th>Assunto</th></tr></thead><tbody>${det}</tbody><tfoot><tr style="font-weight:800;background:#f8fafc;"><td colspan="9">Total (${av.length})</td><td>${minToHM(totMin)}h</td><td></td><td style="text-align:right;color:#166534;">${hDec(totCobrar)}h</td><td style="text-align:right;color:#b45309;">${hDec(totPagar)}h</td><td></td></tr></tfoot></table>
   <div style="font-size:.59rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;">Fonte: relatório <b>Atividades com horas a cobrar</b> do Milldesk. <b>Horário comercial = Sim</b> (linha em vermelho) dificilmente é hora extra/avulsa — vale conferir. <b>Trabalhado</b> = horas a cobrar do Milldesk (bate com o card "A cobrar Milldesk"). <b>A Cobrar</b> = mínimo 4h e múltiplos de 4h; <b>A Pagar</b> = horas a cobrar do Milldesk. Os ajustes finos (editar horas, validar) ficam na <b>Sustentação → Horas Avulsas</b> e valem para as duas telas.</div></div>`;
-  return head+kpis+quadros+tabela;
+  return head+alerta+kpis+quadros+tabela;
 }
 // Visão Geral do Financeiro: dinheiro e horas do período, em linguagem de gestão.
 // Sem pilares/escopo/FTE por técnico — o detalhe técnico fica na aba Performance.
@@ -2531,14 +2538,19 @@ function rTecAvulsas(){
   const gRows=Object.entries(g).sort((a,b)=>b[1].min-a[1].min).map(([k,o])=>`<tr style="border-top:1px solid #f8fafc;"><td style="font-weight:600;color:#334155;">${esc(k)}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(String(o.cc||'—'))}</span></td><td style="text-align:right;color:#64748b;">${fmt(o.n)}</td><td style="text-align:right;font-weight:700;color:#7c3aed;">${minToHM(o.min)}h</td></tr>`).join('');
   // Início/Fim editáveis: o Milldesk não traz esses horários. Gravam no MESMO lugar da Sustentação
   // (sbi_lite_horaedit), então o que for preenchido aqui também vale lá.
-  const horaM=lsGet('sbi_lite_horaedit')||{};
+  const horaM=lsGet('sbi_lite_horaedit')||{},aprovM=(typeof getLiteAprov==='function')?(getLiteAprov()||{}):{};
   const timeIn=(v,key,campo)=>`<input type="time" value="${esc(v||'')}" onchange="liteSetHora('${key}','${campo}',this.value)" title="${v?'Editar':'Faltando no Milldesk — preencha aqui'}" style="width:5.3rem;font-size:.62rem;padding:.1rem .15rem;border:1px solid ${v?'#e2e8f0':'#fca5a5'};border-radius:.3rem;color:#334155;background:${v?'#fff':'#fff7f7'};">`;
+  let nVal=0;
   const rows=[...av].sort((a,b)=>(b.ch||0)-(a.ch||0)).map(a=>{
     const key=liteAprovKey(a),he=horaM[key]||{},hi=he.hi!=null?he.hi:a.hi,hf=he.hf!=null?he.hf:a.hf;
+    const ok=!!aprovM[key];if(ok)nVal++;
     const com=(typeof liteComercial==='function')?liteComercial(a.iso,hi):null;
     const comB=com==null?'<span style="color:#cbd5e1;">—</span>':(com?'<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:800;" title="Dentro do horário comercial — dificilmente é hora extra/avulsa, confira">Sim</span>':'<span class="badge" style="background:#dcfce7;color:#166534;font-weight:700;">Não</span>');
-    return`<tr${com?' style="background:#fff7f7;"':''}><td style="font-weight:700;">#${esc(a.tid||'-')}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(String(a.cc||'—'))}</span></td><td style="white-space:nowrap;font-size:.64rem;color:#64748b;">${esc((a.dataBR||brDate(a.iso)||'').slice(0,10))}</td><td>${timeIn(hi,key,'hi')}</td><td>${timeIn(hf,key,'hf')}</td><td>${comB}</td><td style="font-size:.65rem;">${esc((a.ag||'-').split(' ').slice(0,2).join(' '))}</td><td style="font-size:.64rem;color:#334155;">${esc((a.loc||'').split('|')[0].trim())}</td><td style="text-align:right;font-weight:700;color:#7c3aed;white-space:nowrap;">${minToHM(a.ch||0)}h</td><td style="font-size:.63rem;color:#475569;">${esc((a.assunto||a.desc||'-').slice(0,60))}</td></tr>`}).join('');
-  return head+kpis+`<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><div class="card overflow-x-auto">${ST('Por cliente')}<table style="width:100%;font-size:.68rem;border-collapse:collapse;"><thead><tr style="color:#94a3b8;text-align:left;"><th>Cliente</th><th>CC</th><th style="text-align:right;">Lanç.</th><th style="text-align:right;">Horas</th></tr></thead><tbody>${gRows}</tbody><tfoot><tr style="font-weight:800;border-top:2px solid #e2e8f0;"><td>Total</td><td></td><td style="text-align:right;">${fmt(av.length)}</td><td style="text-align:right;color:#7c3aed;">${minToHM(totMin)}h</td></tr></tfoot></table></div></div><div class="card overflow-x-auto">${ST('Detalhe ('+av.length+')')}<table><thead><tr><th>Chamado</th><th>CC</th><th>Data</th><th>Início</th><th>Fim</th><th title="Dentro do horário comercial (seg-sex 8-18, exceto feriado)">H. comercial</th><th>Técnico</th><th>Cliente</th><th style="text-align:right;">Horas</th><th>Assunto</th></tr></thead><tbody>${rows}</tbody></table><div style="font-size:.59rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;"><b>Início/Fim</b> não vêm do Milldesk — preencha aqui (campo em vermelho = faltando). O que você digitar vale também na <b>Sustentação → Horas Avulsas</b> e recalcula o <b>horário comercial</b>. Linha em vermelho = lançamento dentro do expediente, que dificilmente é hora avulsa.</div></div>`;
+    const chk=`<label style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;white-space:nowrap;"><input type="checkbox" ${ok?'checked':''} onchange="liteToggleAprov('${key}')" style="accent-color:#16a34a;width:1.05rem;height:1.05rem;cursor:pointer;"><span style="font-size:.62rem;font-weight:700;color:${ok?'#166534':'#94a3b8'};">${ok?'Validado':'validar'}</span></label>`;
+    return`<tr${com?' style="background:#fff7f7;"':''}><td style="font-weight:700;">#${esc(a.tid||'-')}</td><td><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">${esc(String(a.cc||'—'))}</span></td><td style="white-space:nowrap;font-size:.64rem;color:#64748b;">${esc((a.dataBR||brDate(a.iso)||'').slice(0,10))}</td><td>${timeIn(hi,key,'hi')}</td><td>${timeIn(hf,key,'hf')}</td><td>${comB}</td><td style="font-size:.65rem;">${esc((a.ag||'-').split(' ').slice(0,2).join(' '))}</td><td style="font-size:.64rem;color:#334155;">${esc((a.loc||'').split('|')[0].trim())}</td><td style="text-align:right;font-weight:700;color:#7c3aed;white-space:nowrap;">${minToHM(a.ch||0)}h</td><td style="font-size:.63rem;color:#475569;">${esc((a.assunto||a.desc||'-').slice(0,60))}</td><td>${chk}</td></tr>`}).join('');
+  const pend=av.length-nVal;
+  const aviso=`<div class="card mb-4" style="background:${pend?'#fffbeb':'#f0fdf4'};border:1px solid ${pend?'#fde68a':'#dcfce7'};"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;"><i data-lucide="${pend?'clipboard-check':'check-circle'}" style="width:1rem;height:1rem;color:${pend?'#b45309':'#166534'};"></i><span style="font-size:.78rem;font-weight:800;color:${pend?'#92400e':'#166534'};">${pend?pend+' lançamento(s) aguardando sua validação':'Tudo validado — o Financeiro já pode faturar'}</span><span style="font-size:.66rem;color:#64748b;">${nVal} de ${av.length} validados</span></div><div style="font-size:.66rem;color:#475569;margin-top:.35rem;line-height:1.5;">Confira <b>Início/Fim</b> e as horas de cada lançamento e marque <b>Validado</b>. Só o que você validar entra como <b>pronto para faturar</b> no Financeiro — o resto fica lá como <b>aguardando validação</b>.</div></div>`;
+  return head+kpis+aviso+`<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><div class="card overflow-x-auto">${ST('Por cliente')}<table style="width:100%;font-size:.68rem;border-collapse:collapse;"><thead><tr style="color:#94a3b8;text-align:left;"><th>Cliente</th><th>CC</th><th style="text-align:right;">Lanç.</th><th style="text-align:right;">Horas</th></tr></thead><tbody>${gRows}</tbody><tfoot><tr style="font-weight:800;border-top:2px solid #e2e8f0;"><td>Total</td><td></td><td style="text-align:right;">${fmt(av.length)}</td><td style="text-align:right;color:#7c3aed;">${minToHM(totMin)}h</td></tr></tfoot></table></div></div><div class="card overflow-x-auto">${ST('Detalhe ('+av.length+')')}<table><thead><tr><th>Chamado</th><th>CC</th><th>Data</th><th>Início</th><th>Fim</th><th title="Dentro do horário comercial (seg-sex 8-18, exceto feriado)">H. comercial</th><th>Técnico</th><th>Cliente</th><th style="text-align:right;">Horas</th><th>Assunto</th><th title="Marque depois de conferir — libera para o Financeiro">Validado</th></tr></thead><tbody>${rows}</tbody></table><div style="font-size:.59rem;color:#94a3b8;margin-top:.5rem;line-height:1.5;"><b>Início/Fim</b> não vêm do Milldesk — preencha aqui (campo em vermelho = faltando). O que você digitar vale também na <b>Sustentação → Horas Avulsas</b> e recalcula o <b>horário comercial</b>. Linha em vermelho = lançamento dentro do expediente, que dificilmente é hora avulsa. <b>Validado</b> = conferido pela Técnica e liberado para o Financeiro faturar.</div></div>`;
 }
 window.setParadoDias=function(n){PARADO_DIAS=+n||3;if(SECTION==='tech'&&TECH_SUB==='parados')renderContent()};
 function rChamadosParados(){
