@@ -278,7 +278,7 @@ const SUPABASE_URL='https://ovciyobdpcawghdynqiw.supabase.co'
 const SUPABASE_KEY='sb_publishable_cYFH5HvS-KKiMehCSHFOUg_7MX7e0s7'
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-const APP_VERSION='v171'
+const APP_VERSION='v172'
 let D={},MES=null,MESES_LIST=[]
 let COMPANY='all',TIME='mensal'
 let CLI_SEL=new Set(),CLI_OPEN=false;// filtro de clientes (multi-seleção): vazio = todos
@@ -1120,7 +1120,7 @@ function renderContent(){
   renderFilters();
   if(TIME==='comparar'){renderCompare();return}
   const standalone=SECTION==='admin'||SECTION==='fin'||(SECTION==='exec'&&EXEC_SUB==='sustentacao')||(SECTION==='tech'&&['chamados','parados','relacionados','avulsas','auditor','checklists'].includes(TECH_SUB))
-  if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…<div style="font-size:.7rem;margin-top:.5rem;">A seção <b>Admin</b> e a <b>Fila de Chamados</b> (Milldesk) já estão disponíveis.</div></div>';return}
+  if((!MES||!D.recursos)&&!standalone){el.innerHTML='<div style="color:#94a3b8;font-size:.875rem;padding:2rem;text-align:center;">Aguardando dados do banco…</div>';return}
   if(SECTION==='fin'){el.innerHTML=rFinanceiro();lucide.createIcons()}
   else if(SECTION==='exec'){
     if(EXEC_SUB==='sustentacao'){renderSustentacao(el);return}
